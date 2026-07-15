@@ -2,13 +2,13 @@
   "name": "e-learning-web",
   "private": true,
   "workspaces": [
-    "apps/frontend",
-    "apps/admin",
-    "apps/backend"
+    "apps/Frontend",
+    "apps/Admin",
+    "apps/Backend"
   ],
   "scripts": {
-    "dev:frontend": "npm run dev --workspace=frontend",
-    "dev:admin": "npm run dev --workspace=admin",
-    "dev:backend": "npm run dev --workspace=backend"
+    "dev:frontend": "npm run dev --workspace=Frontend",
+    "dev:admin": "npm run dev --workspace=Admin",
+    "dev:backend": "npm run dev --workspace=Backend"
   }
 }
