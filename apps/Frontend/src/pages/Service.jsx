@@ -18,11 +18,11 @@ function Service() {
           {/* Left - Text Content */}
           <div className="space-y-4 sm:space-y-5 md:space-y-6">
             <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold leading-tight">
-              โค้ชภาษาอังกฤษส่วนตัว — ฝึกฝนด้วยแนวทางที่ถูกต้อง แม่นยำ และมั่นใจ
+              Personal English Coaching — Learn With Real Guidance, Not Guesswork
             </h1>
             
             <p className="text-gray-600 text-xs sm:text-sm md:text-base lg:text-lg leading-relaxed">
-              ดูแลแบบตัวต่อตัวเพื่ออัปเกรดทักษะการพูด แกรมม่า และความมั่นใจ ผ่านการฝึกฝนที่เน้นการใช้งานจริงและมีผู้เชี่ยวชาญคอยไกด์อย่างใกล้ชิด — ครบเครื่องทั้งเพื่อการใช้ชีวิตประจำวัน การสอบ และการทำงาน
+              Get one-on-one support to improve speaking, grammar, and confidence with practical, guided practice you can use in daily life, exams, or work.
             </p>
 
             {/* Contact via LINE Button */}

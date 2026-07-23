@@ -27,7 +27,7 @@ function Hero() {
           </h1>
 
           <p className="text-[#8B6F61] mt-5 text-base md:text-xl leading-relaxed">
-            เรียนอังกฤษแบบสบายๆ ใช้ได้จริง สนุกได้ทุกการเรียนรู้
+            Where English learning feels relaxed, practical, and enjoyable.
           </p>
 
           {/* CTA */}
@@ -36,7 +36,7 @@ function Hero() {
             className="mt-8 bg-black text-white px-8 py-3 rounded-xl font-medium 
             hover:bg-gray-800 transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
           >
-            ดูคอร์สเรียน →
+            Explore Courses →
           </button>
 
           {/* Divider */}
@@ -45,12 +45,12 @@ function Hero() {
           {/* OFFER */}
           <div className="mt-6">
             <h3 className="font-semibold text-gray-800 mb-2 text-base">
-              คอร์สและบริการของเรา:
+              Our Courses and Services:
             </h3>
             <ul className="space-y-2 text-gray-700 text-sm">
-              <li>• ติวสอนตัวต่อตัว ทั้งแบบ online และ onsite</li>
-              <li>• ฝึกทำโจทย์เตรียมสอบ TCAS TOEIC IELTS</li>
-              <li>• คอร์สสนทนา ฟังพูด</li>
+              <li>• One-on-One English Coaching</li>
+              <li>• IELTS Preparation Guidance</li>
+              <li>• Conversational English Training</li>
             </ul>
           </div>
 

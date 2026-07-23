@@ -18,7 +18,7 @@ function Instructors() {
             className="text-xs sm:text-sm md:text-base lg:text-lg max-w-5xl mx-auto px-2"
             style={{ color: "#8B6F61" }}
           >
-            เก่งภาษาอังกฤษไปกับทีมผู้สอนที่พร้อมซัพพอร์ตคุณในทุกย่างก้าว ด้วยการสอนที่เป็นกันเอง เน้นบทสนทนาที่ใช้ได้จริง และบทเรียนที่ช่วยเสริมสร้างความมั่นใจ — ทั้งหมดนี้ออกแบบมาเพื่อช่วยให้คุณพัฒนาไปอีกขั้น
+            Friendly teaching, real conversations, and confidence-building lessons — all designed to help you grow.
           </p>
         </div>
 
@@ -44,7 +44,7 @@ function Instructors() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end items-center p-4 sm:p-5 md:p-6">
                 <h4 className="text-white font-semibold text-sm sm:text-base md:text-lg text-center">
-                  Kru Ploy
+                  Kru Patiln
                 </h4>
                 <p className="text-white/90 text-xs sm:text-sm text-center mt-1">
                   Instructor
@@ -66,7 +66,7 @@ function Instructors() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end items-center p-4 sm:p-5 md:p-6">
                 <h4 className="text-white font-semibold text-sm sm:text-base md:text-lg text-center">
-                   Kru Mind
+                   Dreen Po
                 </h4>
                 <p className="text-white/90 text-xs sm:text-sm text-center mt-1">
                   Instructor
@@ -79,14 +79,14 @@ function Instructors() {
         {/* What Will You Get Section */}
         <div className="rounded-2xl p-4 sm:p-6 md:p-8 max-w-3xl mx-auto mt-8 sm:mt-10">
           <h3 className="text-center text-lg sm:text-xl md:text-2xl font-semibold text-gray-800 mb-4 sm:mb-6">
-            สิ่งที่นักเรียนจะได้รับ:
+            What will you get:
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5 md:gap-6">
             {[
-              "เคลียร์ชัดทุกหลักไวยากรณ์ ด้วยวิธีสอนที่เข้าใจง่าย","ดูแลใกล้ชิดทุกย่างก้าว พร้อมคำแนะนำจากผู้สอนที่ใส่ใจ",
-              "กล้าถาม กล้าตอบ จนกลายเป็นคนใหม่ที่มั่นใจกว่าเดิม",
-              "บรรยากาศการเรียนที่เป็นมิตร สนุกสนาน และไม่กดดัน",
+              "Clear grammar explained in a simple way","Ask questions and grow your confidence",
+              "Step-by-step guidance from supportive instructors",
+              "Learn in a friendly, pressure-free environment",
             ].map((text, i) => (
               <div key={i} className="flex items-start gap-3">
                 <div

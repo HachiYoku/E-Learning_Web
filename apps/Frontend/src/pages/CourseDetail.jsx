@@ -209,7 +209,7 @@ function CourseDetail() {
                     onClick={() => navigate(`/enroll/${course.id}`)}
                     className="w-full sm:w-auto bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-bold py-3 sm:py-4 px-8 sm:px-12 rounded-full transition-colors text-sm sm:text-base md:text-lg"
                   >
-                    สมัครเรียนเลย 
+                    Enroll Now 
                   </button>
                 
               </div>
@@ -309,27 +309,27 @@ function CourseDetail() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 md:gap-12 items-center">
               <div>
                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4">
-                  ทำไมต้องเลือกเรียนภาษาอังกฤษออนไลน์กับ Mind Ploy English?
+                  Why Choose English Kafé Online Courses?
                 </h2>
 
 
                 <p className="text-gray-600 text-sm sm:text-base leading-relaxed mb-6 sm:mb-8">
-                  Mind Ploy English ออกแบบมาเพื่อผู้เรียนที่ต้องการเห็นผลลัพธ์จริง สร้างความมั่นใจได้จริง และใช้งานสื่อสารได้จริงในชีวิตประจำวัน เราเน้นการเรียนที่ เข้าใจง่าย เป็นระบบ และเห็นผล เพื่อให้คุณรู้เป้าหมายที่ชัดเจน และพัฒนาตัวเองได้อย่างถูกจุดในทุกๆ วัน
+                  Mind Ploy English is designed for learners who want real progress, real confidence, and real communication skills.
                 </p>
 
                 <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">
-                  จุดเด่นที่ทำให้เราแตกต่าง
+                  What Makes Us Different?
                 </h3>
 
                 <ul className="space-y-3 sm:space-y-4">
                   {[
-                    "บทเรียนชัดเจน เข้าใจง่าย: เรียนรู้แบบเป็นขั้นตอน (Step-by-step) เนื้อหาเรียงลำดับมาอย่างดี ทำให้การเรียนเป็นเรื่องง่ายและไม่น่าเบื่อ",
-                    "เน้นการสื่อสารที่ใช้ได้จริง: มุ่งเน้นทักษะการพูดและการสื่อสารที่หยิบไปใช้ในสถานการณ์จริงได้ทันที",
-                    "เส้นทางการเรียนรู้เป็นระบบ: วางแผนการเรียนให้อย่างชัดเจน เพื่อให้คุณเห็นพัฒนาการที่ก้าวหน้าอย่างมั่นคง",
-                    "อิสระแห่งการเรียนรู้: รูปแบบวิดีโอออนไลน์ เรียนได้ทุกที่ ทุกเวลา ตามความสะดวกของคุณ",
-                    "ไวยากรณ์ฉบับย่อยง่าย: อธิบายแกรมม่าด้วยภาษาง่ายๆ ตัดความซับซ้อนทิ้ง ให้คุณเข้าใจได้โดยไม่สับสน",
-                    "สร้างความมั่นใจในทุกบทเรียน: ทุกการฝึกฝนออกแบบมาเพื่อทลายความกลัว และเสริมความมั่นใจให้กล้าใช้ภาษาอังกฤษ",
-                    "ครอบคลุมทุกระดับ: รองรับตั้งแต่ผู้ที่ไม่มีพื้นฐาน ไปจนถึงผู้เรียนระดับสูงที่ต้องการต่อยอดทักษะ",
+                    'Clear, step-by-step lessons that are easy to follow',
+                    'Practical speaking and real-life communication focus',
+                    'Structured learning paths for steady progress',
+                    'Self-paced videos — learn anytime, anywhere',
+                    'Simple grammar explanations without confusion',
+                    'Confidence-building practice in every lesson',
+                    'Designed for beginners to advanced learners'
                   ].map((item, index) => (
                     <li key={index} className="flex items-start gap-3 sm:gap-4">
                       <div className="flex-shrink-0 w-5 sm:w-6 h-5 sm:h-6 bg-black rounded-full flex items-center justify-center mt-0.5">

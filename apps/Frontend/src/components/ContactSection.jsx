@@ -23,7 +23,7 @@ function ContactSection() {
                 <Mail />
               </div>
               <p className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 break-all">
-                mindployenglish@gmail.com
+                JohnDoe@gmail.com
               </p>
             </div>
 
@@ -33,7 +33,7 @@ function ContactSection() {
                 <MapIcon />
               </div>
               <p className="text-gray-900 font-semibold text-sm sm:text-base leading-relaxed">
-                355 สันโค้งหลวง ซอย 6 Tambon Rop Wiang,<br />
+                mabsi, djaskndka,  dksan,<br />
                 Mueang Chiang Rai District, Chiang Rai 57000, Thailand
               </p>
             </div>

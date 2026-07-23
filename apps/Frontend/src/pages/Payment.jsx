@@ -217,7 +217,7 @@ function Payment() {
             {/* Right — Payment Section */}
             <div className="bg-white rounded-3xl p-5 sm:p-7 md:p-8 shadow-lg">
               <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-5 sm:mb-6 md:mb-8">
-                การชำระเงิน
+                Click to upload receipt
               </h3>
 
               {/* Step Indicator */}

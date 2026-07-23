@@ -63,13 +63,13 @@ function CourseCard({ id, image, title, description, price, rating }) {
             onClick={handleViewDetails}
             className="flex-1 px-3 py-2 md:py-2.5 border-2 border-[#F8B2C0] text-gray-700 font-semibold text-xs md:text-sm rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
           >
-            ดูรายละเอียด
+            View details
           </button>
           <button 
             onClick={() => navigate(`/enroll/${id}`)}
             className="flex-1 px-3 py-2 md:py-2.5 bg-[#F8B2C0] text-gray-900 font-semibold text-xs md:text-sm rounded-lg hover:bg-[#F8C2C0] transition-colors"
           >
-            สมัครเรียนเลย
+            Enroll Now
           </button>
         </div>
       </div>
