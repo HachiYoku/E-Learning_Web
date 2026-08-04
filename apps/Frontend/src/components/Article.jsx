@@ -13,6 +13,7 @@ function Article() {
   const [articles, setArticles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -44,18 +45,39 @@ function Article() {
     };
   }, []);
 
+  // Auto-scroll animation
+  useEffect(() => {
+    if (!isAutoScrolling || !scrollContainerRef.current || articles.length === 0) return;
+
+    const interval = setInterval(() => {
+      const container = scrollContainerRef.current;
+      if (container) {
+        container.scrollLeft += 2;
+        // Reset to beginning when reaching the end
+        if (container.scrollLeft >= container.scrollWidth - container.clientWidth - 10) {
+          container.scrollLeft = 0;
+        }
+      }
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, [isAutoScrolling, articles.length]);
+
   const handleMouseDown = (e) => {
     setIsDown(true);
+    setIsAutoScrolling(false);
     setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
     setScrollLeft(scrollContainerRef.current.scrollLeft);
   };
 
   const handleMouseLeave = () => {
     setIsDown(false);
+    setIsAutoScrolling(true);
   };
 
   const handleMouseUp = () => {
     setIsDown(false);
+    setIsAutoScrolling(true);
   };
 
   const speed = 1.5; // adjust here anytime
@@ -70,6 +92,7 @@ function Article() {
 
   const handleTouchStart = (e) => {
     setIsDown(true);
+    setIsAutoScrolling(false);
     setStartX(e.touches[0].pageX - scrollContainerRef.current.offsetLeft);
     setScrollLeft(scrollContainerRef.current.scrollLeft);
   };
@@ -83,6 +106,7 @@ function Article() {
 
   const handleTouchEnd = () => {
     setIsDown(false);
+    setIsAutoScrolling(true);
   };
 
   const handleWheel = (e) => {
