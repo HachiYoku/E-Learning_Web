@@ -1,6 +1,7 @@
 const Course = require("../models/courseModel");
 const Enrollment = require("../models/enrollmentModel");
 const Payment = require("../models/paymentModel");
+const { createNotification } = require("./notificationController");
 const { uploadStream } = require("../services/uploadStream");
 
 const createPayment = async (req, res) => {
@@ -115,6 +116,24 @@ const approvePayment = async (req, res) => {
         setDefaultsOnInsert: true,
       }
     );
+
+    const course = await Course.findById(payment.courseId).select("title");
+
+    await createNotification({
+      userId: payment.userId,
+      type: "payment",
+      title: "Payment approved",
+      message: `Your payment for ${course?.title || "the course"} has been approved. You now have access to the course.`,
+      link: "/my-courses",
+    });
+
+    await createNotification({
+      userId: payment.userId,
+      type: "enrollment",
+      title: "Enrollment confirmed",
+      message: `You are now enrolled in ${course?.title || "the course"}. Start learning today!`,
+      link: "/my-courses",
+    });
 
     return res.status(200).json({
       message: "Payment approved and enrollment created successfully",

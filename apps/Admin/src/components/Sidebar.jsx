@@ -34,11 +34,11 @@ function Sidebar({ isOpen = true }) {
       <div className="p-6 border-b bg-pink-100 border-pink-200 flex items-center justify-center gap-2">
         {isOpen ? (
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <img src="/images/Logo.PNG" alt="English Kafé" className="w-10 rounded-lg h-10 object-contain shrink-0" />
-            <h1 className="text-sm font-bold text-gray-900 whitespace-nowrap">Mind Ploy English</h1>
+            <img src="/images/Logo.png" alt="Thai Talk Tips" className="w-10 rounded-lg h-10 object-contain shrink-0" />
+            <h1 className="text-sm font-bold text-gray-900 whitespace-nowrap">Thai Talk Tips</h1>
           </div>
         ) : (
-          <img src="/images/Logo.PNG" alt="English Kafé" className="w-10 rounded-lg h-10 object-contain shrink-0 mx-auto" />
+          <img src="/images/Logo.png" alt="Thai Talk Tips" className="w-10 rounded-lg h-10 object-contain shrink-0 mx-auto" />
         )}
       </div>
 

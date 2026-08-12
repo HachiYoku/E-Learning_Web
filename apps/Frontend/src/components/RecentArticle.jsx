@@ -1,4 +1,4 @@
-const logo = '/Nav/Logo.PNG'
+const logo = '/Nav/Logo.png'
 
 function RecentArticle({ title, description, authorName, date, showReadMore = true, onReadMore }) {
   return (
@@ -16,10 +16,10 @@ function RecentArticle({ title, description, authorName, date, showReadMore = tr
           <div className="flex items-center gap-2 mb-1">
             <img 
               src={logo}
-              alt="mindployenglish" 
+              alt="thaitalktips" 
               className="h-6 w-auto border-1 border-[#F5C6D8] rounded-md "
             />
-            <span className="text-xs font-semibold text-gray-900">{authorName || 'mindployenglish'}</span>
+            <span className="text-xs font-semibold text-gray-900">{authorName || 'thaitalktips'}</span>
           </div>
           <p className="text-gray-600 text-xs">{date}</p>
         </div>

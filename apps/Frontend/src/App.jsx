@@ -12,6 +12,7 @@ import Payment from "./pages/Payment"
 import MyCourses from "./pages/MyCourses"
 import MyCourseOrder from "./pages/MyCourseOrder"
 import MyProfile from "./pages/MyProfile"
+import Notifications from "./pages/Notifications"
 import CourseLessons from "./pages/CourseLessons"
 import OrderStatus from "./pages/OrderStatus"
 import Blog from "./pages/Blog"
@@ -41,6 +42,7 @@ function App() {
           <Route path="/my-courses" element={<MyCourses />} />
           <Route path="/my-course-order" element={<MyCourseOrder />} />
           <Route path="/my-profile" element={<MyProfile />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/order-status/:orderId" element={<OrderStatus />} />
           <Route path="/course-lessons/:courseId" element={<CourseLessons />} />
         </Route>

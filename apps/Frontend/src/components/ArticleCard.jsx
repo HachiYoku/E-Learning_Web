@@ -1,7 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const defaultAuthorLogo = "/Nav/Logo.PNG";
+const defaultAuthorLogo = "/Nav/Logo.png";
 const fallbackImage =
   "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800&h=600&fit=crop";
 

@@ -91,6 +91,9 @@ app.use('/enrollments', enrollmentRoutes)
 const blogRoutes = require('./routes/blog')
 app.use('/blogs', blogRoutes)
 
+const notificationRoutes = require('./routes/notification')
+app.use('/notifications', notificationRoutes)
+
 app.get('/', (req, res) => {
   res.send('Hello English Kafe!')
 })

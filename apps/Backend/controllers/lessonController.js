@@ -1,5 +1,7 @@
 const Course = require("../models/courseModel");
 const Lesson = require("../models/lessonModel");
+const Enrollment = require("../models/enrollmentModel");
+const { createNotification } = require("./notificationController");
 
 const createLesson = async (req, res) => {
   try {
@@ -23,6 +25,22 @@ const createLesson = async (req, res) => {
       videoUrl,
       order,
     });
+
+    const enrollments = await Enrollment.find({ courseId }).select("userId");
+
+    if (enrollments.length > 0) {
+      const notifications = enrollments.map(({ userId }) => ({
+        userId,
+        type: "course",
+        title: "New lesson added",
+        message: `A new lesson, "${lesson.title}", has been added to ${course.title}.`,
+        link: `/course-lessons/${courseId}`,
+      }));
+
+      await Promise.all(
+        notifications.map((payload) => createNotification(payload))
+      );
+    }
 
     return res.status(201).json(lesson);
   } catch (error) {

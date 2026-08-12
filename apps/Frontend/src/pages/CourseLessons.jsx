@@ -1,10 +1,53 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { fetchCourseById } from '../services/courseService'
 import { fetchLessonsByCourse } from '../services/lessonService'
+
+function getEmbedUrl(src) {
+  if (!src) {
+    return ''
+  }
+
+  try {
+    const url = new URL(src)
+
+    if (url.hostname.includes('youtu.be')) {
+      const videoId = url.pathname.replace('/', '')
+      const params = new URLSearchParams(url.search)
+      params.set('autoplay', '1')
+      return `https://www.youtube.com/embed/${videoId}?${params.toString()}`
+    }
+
+    if (url.hostname.includes('youtube.com')) {
+      const videoId = url.searchParams.get('v')
+
+      if (videoId) {
+        const params = new URLSearchParams(url.search)
+        params.delete('v')
+        params.set('autoplay', '1')
+        return `https://www.youtube.com/embed/${videoId}?${params.toString()}`
+      }
+    }
+
+    if (url.hostname.includes('drive.google.com')) {
+      const fileMatch = url.pathname.match(/\/file\/d\/([^/]+)/)
+      const openId = url.searchParams.get('id')
+      const fileId = fileMatch?.[1] || openId
+
+      if (fileId) {
+        const params = new URLSearchParams({ embedded: 'true' })
+        return `https://drive.google.com/file/d/${fileId}/preview?${params.toString()}`
+      }
+    }
+  } catch {
+    return ''
+  }
+
+  return src
+}
 
 function CourseLessons() {
   const { courseId } = useParams()
@@ -13,6 +56,9 @@ function CourseLessons() {
   const [lessons, setLessons] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [activeLesson, setActiveLesson] = useState(null)
+
+  const activeVideoUrl = useMemo(() => getEmbedUrl(activeLesson?.videoUrl), [activeLesson])
 
   useEffect(() => {
     async function loadCourseLessons() {
@@ -145,12 +191,11 @@ function CourseLessons() {
                 ) : (
                   <div className="space-y-3">
                     {lessons.map((lesson) => (
-                      <a
+                      <button
                         key={lesson.id}
-                        href={lesson.videoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-pink-300 transition-all group cursor-pointer"
+                        type="button"
+                        onClick={() => lesson.videoUrl && setActiveLesson(lesson)}
+                        className="w-full flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-pink-300 transition-all group cursor-pointer text-left"
                       >
                         <div className="flex items-center gap-4 text-left flex-1">
                           <span className="text-gray-500 font-semibold text-sm w-8">
@@ -163,7 +208,7 @@ function CourseLessons() {
                         <span className="text-gray-400 group-hover:text-pink-400 transition-colors text-xl">
                           →
                         </span>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -172,6 +217,37 @@ function CourseLessons() {
           </div>
         </div>
       </div>
+
+      {activeLesson ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6"
+          onClick={() => setActiveLesson(null)}
+        >
+          <div
+            className="relative w-full max-w-4xl overflow-hidden rounded-3xl bg-black shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveLesson(null)}
+              className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-lg font-bold text-gray-900 transition hover:bg-white"
+              aria-label="Close video"
+            >
+              ×
+            </button>
+
+            <div className="aspect-video w-full">
+              <iframe
+                src={activeVideoUrl || activeLesson.videoUrl}
+                title={activeLesson.title}
+                className="h-full w-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <Footer />
     </div>

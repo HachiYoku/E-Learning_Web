@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { resendVerification } from '../services/authService'
 const logo = '/login/Login-logo.png'
 
@@ -18,6 +19,7 @@ function Login() {
   const [error, setError] = useState('')
   const [infoMessage, setInfoMessage] = useState(location.state?.registrationMessage || '')
   const { login, logout, isAuthenticated } = useAuth()
+  const { showToast } = useToast()
 
   const redirectTo = location.state?.from?.pathname || '/'
   const canResendVerification =
@@ -39,9 +41,20 @@ function Login() {
         return
       }
 
+      showToast({
+        title: 'Login successful',
+        message: 'Welcome back! You are now signed in.',
+        type: 'success',
+      })
+
       navigate(redirectTo, { replace: true })
     } catch (loginError) {
       setError(loginError.message)
+      showToast({
+        title: 'Login failed',
+        message: loginError.message,
+        type: 'error',
+      })
     } finally {
       setLoading(false)
     }
@@ -107,7 +120,7 @@ function Login() {
         {/* Right Side - Login Form */}
         <div className="w-full max-w-md">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-normal text-gray-900 mb-2 leading-tight">
-            Welcome back <br />to <span className="font-bold">Mind Ploy English !</span>
+            Welcome back <br />to <span className="font-bold">Thai Talk Tips !</span>
           </h2>
           
           <p className="text-gray-600 text-sm sm:text-base mb-6 sm:mb-8">

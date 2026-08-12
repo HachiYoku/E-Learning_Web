@@ -4,6 +4,7 @@ import { Maximize2, TvMinimalPlay, X } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { useToast } from "../contexts/ToastContext";
 import { fetchCourseById } from "../services/courseService";
 import { createPayment } from "../services/paymentService";
 import { fetchPaymentSettings } from "../services/paymentSettingsService";
@@ -23,6 +24,7 @@ function Payment() {
   const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptName, setReceiptName] = useState("");
+  const { showToast } = useToast();
 
   useEffect(() => {
     async function loadCourse() {
@@ -72,9 +74,19 @@ function Payment() {
       setSubmitting(true);
       setError("");
       await createPayment(courseId, receiptFile);
+      showToast({
+        title: "Payment submitted",
+        message: "Your receipt has been uploaded and is pending review.",
+        type: "success",
+      });
       setCurrentStep(3);
     } catch (submitError) {
       setError(submitError.message);
+      showToast({
+        title: "Upload failed",
+        message: submitError.message,
+        type: "error",
+      });
     } finally {
       setSubmitting(false);
     }

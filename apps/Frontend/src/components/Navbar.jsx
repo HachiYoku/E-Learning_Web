@@ -1,8 +1,127 @@
-const logo = "/Nav/Logo.PNG"
-import { Menu, X } from "lucide-react"
+const logo = "/Nav/Logo.png"
+import { Bell, CheckCheck, Menu, X } from "lucide-react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { useAuth } from "../contexts/AuthContext"
+import { useNotification } from "../contexts/NotificationContext"
+
+const NOTIFICATION_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "unread", label: "Unread" },
+  { key: "course", label: "Course" },
+  { key: "payment", label: "Payment" },
+];
+
+function NotificationBell({ compact = false }) {
+  const {
+    unreadCount,
+    isOpen: isNotificationOpen,
+    setIsOpen: setNotificationOpen,
+    notifications,
+    loading,
+    markAsRead,
+    markAllRead,
+  } = useNotification()
+  const [activeFilter, setActiveFilter] = useState("all")
+
+  const filteredNotifications = notifications.filter((notification) => {
+    if (activeFilter === "unread") return !notification.isRead;
+    if (activeFilter === "course") return notification.type === "course" || notification.type === "enrollment";
+    if (activeFilter === "payment") return notification.type === "payment";
+    return true;
+  })
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setNotificationOpen(!isNotificationOpen)}
+        className={`relative flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 ${compact ? "h-10 w-10" : "h-11 w-11"}`}
+        aria-label="Notifications"
+      >
+        <Bell className={compact ? "h-4 w-4" : "h-5 w-5"} />
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {isNotificationOpen && (
+        <div className="absolute right-0 z-50 mt-3 w-[22rem] rounded-2xl border border-gray-200 bg-white shadow-2xl">
+          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+            <h3 className="font-semibold text-gray-900">Notifications</h3>
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={markAllRead}
+                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                Mark all read
+              </button>
+            )}
+          </div>
+
+          <div className="border-b border-gray-200 px-3 py-2">
+            <div className="flex flex-wrap gap-2">
+              {NOTIFICATION_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => setActiveFilter(filter.key)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                    activeFilter === filter.key
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="max-h-80 overflow-y-auto">
+            {loading && notifications.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-gray-500">Loading notifications...</div>
+            ) : filteredNotifications.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-gray-500">No notifications in this view.</div>
+            ) : (
+              filteredNotifications.map((notification) => (
+                <button
+                  key={notification._id}
+                  type="button"
+                  onClick={() => {
+                    if (!notification.isRead) markAsRead(notification._id);
+                    setNotificationOpen(false);
+                    if (notification.link) window.location.href = notification.link;
+                  }}
+                  className={`flex w-full items-start gap-3 border-b border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50 ${
+                    !notification.isRead ? "bg-blue-50/40" : "bg-white"
+                  }`}
+                >
+                  <div
+                    className={`mt-1 h-2.5 w-2.5 rounded-full ${
+                      notification.isRead ? "bg-gray-300" : "bg-blue-500"
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900">{notification.title}</p>
+                    <p className="mt-1 text-sm text-gray-600">{notification.message}</p>
+                    <p className="mt-2 text-[11px] text-gray-400">
+                      {new Date(notification.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Navbar() {
   const navigate = useNavigate()
@@ -10,13 +129,23 @@ function Navbar() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
+  const {
+    notifications,
+    unreadCount,
+    isOpen: isNotificationOpen,
+    setIsOpen: setNotificationOpen,
+    markAsRead,
+    markAllRead,
+    loading,
+  } = useNotification()
 
   const isActive = (path) => location.pathname === path
 
   useEffect(() => {
     setShowMobileMenu(false)
     setShowProfileMenu(false)
-  }, [location.pathname])
+    setNotificationOpen(false)
+  }, [location.pathname, setNotificationOpen])
 
   const navItems = [
     { label: "Home", path: "/" },
@@ -49,7 +178,7 @@ function Navbar() {
           onClick={() => goTo('/')}
           className="flex items-center overflow-hidden"
         >
-          <img src={logo} alt="English Kafe Logo" className="size-14 scale-150 object-fit sm:size-15" />
+          <img src={logo} alt="Thai Talk Tips" className="size-14 scale-100 object-fit sm:size-15" />
         </button>
 
         {/* Desktop Menu */}
@@ -67,7 +196,7 @@ function Navbar() {
         </ul>
 
         {/* Desktop Login / Profile */}
-        <div className="hidden md:block">
+        <div className="hidden md:flex items-center gap-3">
           {!isAuthenticated ? (
             <button
               onClick={() => goTo('/login')}
@@ -76,7 +205,9 @@ function Navbar() {
               login
             </button>
           ) : (
-            <div className="relative">
+            <div className="relative flex items-center gap-3">
+              <NotificationBell />
+
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="flex items-center gap-2 transition-opacity hover:opacity-80"
@@ -89,7 +220,7 @@ function Navbar() {
               </button>
 
               {showProfileMenu && (
-                <div className="absolute right-0 z-50 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-xl">
+                <div className="absolute right-0 z-50 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-xl top-full">
                   <div className="flex items-center gap-3 overflow-hidden border-b border-gray-200 px-2 py-4">
                     <img
                       src={profileImage}
@@ -120,6 +251,16 @@ function Navbar() {
                     className="w-full px-4 py-3 text-left text-gray-700 transition-colors hover:bg-blue-50"
                   >
                     My Courses
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      goTo('/notifications')
+                      setShowProfileMenu(false)
+                    }}
+                    className="w-full px-4 py-3 text-left text-gray-700 transition-colors hover:bg-blue-50"
+                  >
+                    Notifications
                   </button>
 
                   <button
@@ -186,16 +327,20 @@ function Navbar() {
               </button>
             ) : (
               <div className="space-y-3">
-                <div className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3">
-                  <img
-                    src={profileImage}
-                    alt="Profile"
-                    className="h-12 w-12 rounded-full border-2 border-gray-300 object-cover"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-gray-900">{userName}</p>
-                    <p className="truncate text-xs text-gray-500">{user?.email}</p>
+                <div className="flex items-center justify-between gap-3 rounded-2xl bg-gray-50 px-4 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={profileImage}
+                      alt="Profile"
+                      className="h-12 w-12 rounded-full border-2 border-gray-300 object-cover"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-gray-900">{userName}</p>
+                      <p className="truncate text-xs text-gray-500">{user?.email}</p>
+                    </div>
                   </div>
+
+                  <NotificationBell compact />
                 </div>
 
                 <button
@@ -210,6 +355,13 @@ function Navbar() {
                   className="w-full rounded-2xl bg-gray-50 px-4 py-3 text-left font-medium text-gray-700 transition-colors hover:bg-blue-50"
                 >
                   My Courses
+                </button>
+
+                <button
+                  onClick={() => goTo('/notifications')}
+                  className="w-full rounded-2xl bg-gray-50 px-4 py-3 text-left font-medium text-gray-700 transition-colors hover:bg-blue-50"
+                >
+                  Notifications
                 </button>
 
                 <button

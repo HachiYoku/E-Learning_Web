@@ -101,7 +101,7 @@ function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6 md:p-8 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-6 md:mb-8">Mind Ploy English Administration Dashboard</h1>
+      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-6 md:mb-8">Thai Talk Tips Administration Dashboard</h1>
 
       {error ? (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

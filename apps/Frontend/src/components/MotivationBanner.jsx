@@ -1,4 +1,4 @@
-const logoMotivation = "/moti/Watermark.JPG"
+const logoMotivation = "/moti/moti-punch.jpeg"
 const openIcon = "/moti/open.svg"
 const closeIcon = "/moti/close.svg"
 

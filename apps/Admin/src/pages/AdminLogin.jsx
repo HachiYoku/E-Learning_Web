@@ -61,7 +61,7 @@ function AdminLogin() {
             {/* Logo Badge */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <h1 className="text-white text-4xl font-bold drop-shadow-lg">Mind Ploy English</h1>
+                <h1 className="text-white text-4xl font-bold drop-shadow-lg">Thai Talk Tips</h1>
                 <p className="text-white text-lg drop-shadow-lg mt-2">Admin Dashboard</p>
               </div>
             </div>
@@ -71,7 +71,7 @@ function AdminLogin() {
         {/* Right Side - Login Form */}
         <div className="w-full max-w-md">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-normal text-gray-900 mb-2 leading-tight">
-            Welcome back <br />to <span className="font-bold">Mind Ploy English !</span>
+            Welcome back <br />to <span className="font-bold">Thai Talk Tips !</span>
           </h2>
           
           <p className="text-gray-600 text-sm sm:text-base mb-6 sm:mb-8">

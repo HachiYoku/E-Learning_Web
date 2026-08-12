@@ -3,7 +3,7 @@ import StudentReview from "../components/StudentReview"
 import ContactSection from "../components/ContactSection"
 import Footer from "../components/Footer"
 const lineIcon = "/logo/Line.svg"
-const serviceImage = "/moti/Watermark.JPG"
+const serviceImage = "moti/moti-punch.jpeg"
 
 function Service() {
   return (

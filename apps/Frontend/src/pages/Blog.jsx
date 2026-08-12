@@ -8,7 +8,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { fetchBlogs } from "../services/blogService";
 import { sanitizeHtmlContent } from "../utils/sanitizeHtmlContent";
 
-const logo = "/Nav/Logo.PNG";
+const logo = "/Nav/Logo.png";
 const fallbackImage =
   "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=1200&h=900&fit=crop";
 const INSIGHTS_PER_PAGE = 6;
@@ -124,7 +124,7 @@ function Blog() {
                   <div className="flex items-center gap-3">
                     <img
                       src={logo}
-                      alt="mindployenglish"
+                      alt="thaitalktips"
                       className="border-2 border-[#F5C6D8] rounded-xl h-12 sm:h-14 w-auto"
                     />
                     <div>

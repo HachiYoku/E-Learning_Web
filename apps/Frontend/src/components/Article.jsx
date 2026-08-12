@@ -181,7 +181,7 @@ function Article() {
                     image={article.image}
                     title={article.title}
                     description={article.excerpt}
-                    authorLogo="/Nav/Logo.PNG"
+                    authorLogo="/Nav/Logo.png"
                     authorName={article.authorName}
                     date={article.date}
                   />
