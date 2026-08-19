@@ -47,7 +47,7 @@ function Hero() {
             <h3 className="font-semibold text-gray-800 mb-2 text-base">
               Our Courses and Services:
             </h3>
-            <ul className="space-y-2 text-gray-700 text-sm">
+            <ul className="space-y-2 text-gray-600 text-sm">
               <li>• One-on-One English Coaching</li>
               <li>• IELTS Preparation Guidance</li>
               <li>• Conversational English Training</li>
