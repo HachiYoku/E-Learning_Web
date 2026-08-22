@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { resendVerification } from '../services/authService'
 
-const logo = '/Nav/Logo.PNG'
+const logo = '/Nav/Logo.png'
 
 function VerificationHelp() {
   const location = useLocation()
