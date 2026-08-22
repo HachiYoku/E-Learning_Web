@@ -3,7 +3,9 @@ const Course = require("../models/courseModel");
 const Enrollment = require("../models/enrollmentModel");
 const Payment = require("../models/paymentModel");
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 const { uploadStream } = require("../services/uploadStream");
+const { createNotification } = require("./notificationController");
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
@@ -113,7 +115,23 @@ const updateUserStatus = async (req, res) => {
 
 const updateUserCourseAccess = async (req, res) => {
   try {
-    const { courseIds } = req.body;
+    const { courseIds, adminPassword } = req.body;
+
+    if (typeof adminPassword !== 'string' || !adminPassword.trim()) {
+      return res.status(400).json({ message: "Admin password is required to perform this action" });
+    }
+
+    // Verify admin password
+    const adminUser = await User.findById(req.user?.id);
+    if (!adminUser) {
+      return res.status(403).json({ message: "Admin user not found" });
+    }
+
+    const isAdminPasswordValid = bcrypt.compareSync(adminPassword, adminUser.password);
+    if (!isAdminPasswordValid) {
+      // Use 403 Forbidden so the frontend does not treat this as an authentication/token error (401)
+      return res.status(403).json({ message: "Invalid admin password" });
+    }
 
     if (!Array.isArray(courseIds)) {
       return res.status(400).json({ message: "courseIds must be an array" });
@@ -142,19 +160,62 @@ const updateUserCourseAccess = async (req, res) => {
         .map((enrollment) => [String(enrollment.courseId), enrollment])
     );
 
-    for (const courseId of validCourseIds) {
-      if (!existingByCourseId.has(courseId)) {
-        await Enrollment.create({
-          userId: user._id,
-          courseId,
-        });
-      }
+    // Determine which course ids will be added and removed
+    const addedCourseIds = validCourseIds.filter((id) => !existingByCourseId.has(id));
+    const removedCourseIds = existingEnrollments
+      .filter((enrollment) => !enrollment.courseId || !isValidObjectId(enrollment.courseId) || !validCourseIds.includes(String(enrollment.courseId)))
+      .map((enrollment) => String(enrollment.courseId))
+      .filter(Boolean);
+
+    // Apply additions
+    for (const courseId of addedCourseIds) {
+      await Enrollment.create({
+        userId: user._id,
+        courseId,
+      });
     }
 
+    // Apply removals
     for (const enrollment of existingEnrollments) {
       if (!enrollment.courseId || !isValidObjectId(enrollment.courseId) || !validCourseIds.includes(String(enrollment.courseId))) {
         await enrollment.deleteOne();
       }
+    }
+
+    // Prepare notification content for the user
+    try {
+      const changedCourseIds = [...new Set([...addedCourseIds, ...removedCourseIds])];
+      let notificationMessage = "Your course access was updated.";
+
+      if (changedCourseIds.length > 0) {
+        const changedCourses = await Course.find({ _id: { $in: changedCourseIds } }).select("title");
+        const addedTitles = changedCourses
+          .filter((c) => addedCourseIds.includes(String(c._id)))
+          .map((c) => c.title);
+        const removedTitles = changedCourses
+          .filter((c) => removedCourseIds.includes(String(c._id)))
+          .map((c) => c.title);
+
+        const parts = [];
+        if (addedTitles.length > 0) parts.push(`Added: ${addedTitles.join(", ")}`);
+        if (removedTitles.length > 0) parts.push(`Removed: ${removedTitles.join(", ")}`);
+
+        if (parts.length > 0) {
+          notificationMessage = parts.join(". ");
+        }
+      }
+
+      // Create in-app notification for the user
+      await createNotification({
+        userId: user._id,
+        type: "course",
+        title: "Course access updated",
+        message: notificationMessage,
+        link: "/my-courses",
+      });
+    } catch (notifyError) {
+      // Log but don't block the main response
+      console.warn("Failed to create notification:", notifyError.message);
     }
 
     const users = await getAdminUsersWithEnrollments();

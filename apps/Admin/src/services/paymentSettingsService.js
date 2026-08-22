@@ -30,6 +30,11 @@ export async function updatePaymentSettings(payload) {
     formData.append("paymentQr", payload.paymentQr || "");
   }
 
+  // include admin password for re-authentication of sensitive change
+  if (payload.adminPassword !== undefined) {
+    formData.append("adminPassword", payload.adminPassword);
+  }
+
   const settings = await apiClient.put("/payment-settings", formData);
   return normalizePaymentSettings(settings);
 }

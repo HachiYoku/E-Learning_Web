@@ -1,7 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 
-const instructor1Url = "/instructors/instructor2.jpg";
-const instructor2Url = "/instructors/instructor1.jpg";
+const instructor1Url = "public/instructors/instructor2.jpg";
+const instructor2Url = "public/instructors/instructor1.jpg";
 
 function Instructors() {
   return (

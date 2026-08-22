@@ -31,7 +31,7 @@ export async function updateUserStatus(id, isActive) {
   return apiClient.put(`/user/${id}/status`, { isActive });
 }
 
-export async function updateUserCourseAccess(id, courseIds) {
-  const response = await apiClient.put(`/user/${id}/course-access`, { courseIds });
+export async function updateUserCourseAccess(id, courseIds, adminPassword) {
+  const response = await apiClient.put(`/user/${id}/course-access`, { courseIds, adminPassword });
   return normalizeUser(response.user);
 }

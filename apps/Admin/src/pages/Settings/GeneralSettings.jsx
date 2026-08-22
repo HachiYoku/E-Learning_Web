@@ -17,6 +17,12 @@ function GeneralSettings() {
   const [announcementStatus, setAnnouncementStatus] = useState('')
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  // modal states for admin password confirmation
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [modalPassword, setModalPassword] = useState('')
+  const [modalError, setModalError] = useState('')
+  const [modalLoading, setModalLoading] = useState(false)
+  const [modalSuccess, setModalSuccess] = useState('')
 
   useEffect(() => {
     async function loadSettings() {
@@ -60,21 +66,51 @@ function GeneralSettings() {
       return
     }
 
+    // open confirmation modal to ask for admin password
+    setModalPassword('')
+    setModalError('')
+    setModalSuccess('')
+    setShowConfirmModal(true)
+  }
+
+  const handleConfirmSave = async () => {
+    if (!modalPassword || !modalPassword.trim()) {
+      setModalError('Please enter your admin password to confirm.')
+      return
+    }
+
     try {
-      setSaving(true)
-      setError('')
-      setSuccessMessage('')
+      setModalLoading(true)
+      setModalError('')
+      setModalSuccess('')
+
       const settings = await updatePaymentSettings({
         paymentQr,
         paymentQrFile,
+        adminPassword: modalPassword,
       })
+
       setPaymentQr(settings.paymentQr)
       setPaymentQrFile(null)
       setSuccessMessage('Payment QR updated successfully.')
+      setModalSuccess('Payment QR updated successfully.')
+
+      // close modal after a short delay so user can see success
+      setTimeout(() => {
+        setShowConfirmModal(false)
+        setModalPassword('')
+        setModalError('')
+        setModalSuccess('')
+      }, 1100)
     } catch (saveError) {
-      setError(saveError.message)
+      const msg = saveError && saveError.message ? String(saveError.message) : ''
+      if (msg.toLowerCase().includes('invalid admin password') || msg.toLowerCase().includes('incorrect admin password')) {
+        setModalError('Incorrect admin password. Please try again.')
+      } else {
+        setModalError(msg || 'Failed to update payment settings')
+      }
     } finally {
-      setSaving(false)
+      setModalLoading(false)
     }
   }
 
@@ -260,8 +296,59 @@ function GeneralSettings() {
           </div>
         </div>
       </div>
+
+      {/* Confirmation modal for admin password */}
+      {showConfirmModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="w-full max-w-md rounded-lg bg-white p-6">
+            <h3 className="text-lg font-semibold mb-2">Confirm admin password</h3>
+            <p className="text-sm text-gray-600 mb-4">Enter your admin password to confirm saving the Global Payment QR.</p>
+
+            {modalError ? (
+              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+                {modalError}
+              </div>
+            ) : null}
+
+            {modalSuccess ? (
+              <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+                {modalSuccess}
+              </div>
+            ) : null}
+
+            <input
+              type="password"
+              value={modalPassword}
+              onChange={(e) => setModalPassword(e.target.value)}
+              placeholder="Admin password"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 mb-4 text-sm text-gray-900 focus:border-pink-400 focus:outline-none"
+            />
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => { setShowConfirmModal(false); setModalPassword(''); setModalError(''); setModalSuccess('') }}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmSave}
+                disabled={modalLoading}
+                className="rounded-lg bg-pink-300 px-4 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-pink-400 disabled:opacity-60"
+              >
+                {modalLoading ? 'Saving...' : 'Confirm and Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </div>
   )
 }
+
 
 export default GeneralSettings

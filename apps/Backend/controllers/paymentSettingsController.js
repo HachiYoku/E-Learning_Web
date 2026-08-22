@@ -1,5 +1,7 @@
 const PaymentSettings = require("../models/paymentSettingsModel");
 const { uploadStream } = require("../services/uploadStream");
+const User = require("../models/userModel");
+const bcrypt = require("bcryptjs");
 
 const SETTINGS_KEY = "global";
 
@@ -27,7 +29,25 @@ const updatePaymentSettings = async (req, res) => {
   try {
     const settings = await getOrCreateSettings();
 
-    if (req.file?.buffer) {
+      // Require admin password for sensitive changes
+      const { adminPassword } = req.body;
+      if (typeof adminPassword !== 'string' || !adminPassword.trim()) {
+        return res.status(400).json({ message: "Admin password is required to perform this action" });
+      }
+
+      // Verify admin password
+      const adminUser = await User.findById(req.user?.id);
+      if (!adminUser) {
+        return res.status(403).json({ message: "Admin user not found" });
+      }
+
+      const isAdminPasswordValid = bcrypt.compareSync(adminPassword, adminUser.password);
+      if (!isAdminPasswordValid) {
+        // Use 403 Forbidden so the frontend does not treat this as an authentication/token error (401)
+        return res.status(403).json({ message: "Invalid admin password" });
+      }
+
+      if (req.file?.buffer) {
       const result = await uploadStream(
         req.file.buffer,
         "english_kafe/payment_qr_codes"

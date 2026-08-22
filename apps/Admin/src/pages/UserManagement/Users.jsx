@@ -16,6 +16,9 @@ function Users() {
   const [addCourseModalOpen, setAddCourseModalOpen] = useState(false)
   const [selectedUserForCourse, setSelectedUserForCourse] = useState(null)
   const [selectedCourses, setSelectedCourses] = useState([])
+  const [adminPassword, setAdminPassword] = useState("")
+  const [modalError, setModalError] = useState("")
+  const [modalSuccess, setModalSuccess] = useState("")
 
   useEffect(() => {
     async function loadUserManagementData() {
@@ -100,12 +103,24 @@ function Users() {
         .map((course) => course.id)
         .filter(Boolean)
     )
+    setAdminPassword("")
+    setModalError("")
+    setModalSuccess("")
     setAddCourseModalOpen(true)
   }
 
   const handleAddCourseToUser = async () => {
     try {
-      const updatedUser = await updateUserCourseAccess(selectedUserForCourse.id, selectedCourses)
+      // clear previous modal messages
+      setModalError("")
+      setModalSuccess("")
+
+      if (!adminPassword || adminPassword.trim() === "") {
+        setModalError("Please enter your admin password to confirm changes.")
+        return
+      }
+
+      const updatedUser = await updateUserCourseAccess(selectedUserForCourse.id, selectedCourses, adminPassword)
 
       setUsers((currentUsers) =>
         currentUsers.map((user) =>
@@ -113,11 +128,23 @@ function Users() {
         )
       )
 
-      setAddCourseModalOpen(false)
-      setSelectedCourses([])
-      setSelectedUserForCourse(null)
+      // show a friendly success message inside modal then close
+      setModalSuccess("Course access updated successfully.")
+      setAdminPassword("")
+
+      setTimeout(() => {
+        setAddCourseModalOpen(false)
+        setSelectedCourses([])
+        setSelectedUserForCourse(null)
+        setModalSuccess("")
+      }, 1200)
     } catch (courseAccessError) {
-      setError(courseAccessError.message)
+      // map common errors to friendly messages
+      if (courseAccessError && courseAccessError.status === 403) {
+        setModalError("Incorrect admin password. Please try again.")
+      } else {
+        setModalError(courseAccessError?.message || "Unable to save changes. Please try again.")
+      }
     }
   }
 
@@ -136,8 +163,8 @@ function Users() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
       <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4 md:mb-6">Manage user</h1>
-        
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4 md:mb-6">Manage Users</h1>
+
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="relative w-full sm:w-96">
             <input
@@ -270,7 +297,7 @@ function Users() {
             <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
               <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">Manage {selectedUserForCourse?.name}'s course access</h2>
               <button
-                onClick={() => setAddCourseModalOpen(false)}
+                onClick={() => { setAdminPassword(""); setAddCourseModalOpen(false); }}
                 className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
               >
                 <X size={20} className="sm:w-6 sm:h-6" />
@@ -296,9 +323,28 @@ function Users() {
               </div>
             </div>
 
+            <div className="px-4 sm:px-6 pb-4 sm:pb-6">
+              {modalError ? (
+                <div className="mb-3 rounded px-3 py-2 bg-red-50 text-red-700 text-sm">{modalError}</div>
+              ) : null}
+
+              {modalSuccess ? (
+                <div className="mb-3 rounded px-3 py-2 bg-green-50 text-green-700 text-sm">{modalSuccess}</div>
+              ) : null}
+
+              <label className="block text-xs sm:text-sm text-gray-700 font-medium mb-2">Confirm admin password</label>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Enter your admin password to confirm changes"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+              />
+            </div>
+
             <div className="flex gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg">
               <button
-                onClick={() => setAddCourseModalOpen(false)}
+                onClick={() => { setAdminPassword(""); setAddCourseModalOpen(false); }}
                 className="flex-1 px-4 py-2 text-gray-700 font-medium text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
