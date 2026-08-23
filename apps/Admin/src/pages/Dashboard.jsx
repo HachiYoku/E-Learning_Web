@@ -1,4 +1,4 @@
-import { BookOpen, FileText, Users, CreditCard, Trash2} from 'lucide-react'
+import { BookOpen, FileText, Users, CreditCard, Trash2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ConfirmationModal from '../components/ConfirmationModal'
@@ -13,8 +13,13 @@ function Dashboard() {
   const [recentUsers, setRecentUsers] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  // ask for admin password before delete (same pattern as Users page)
+  const [confirmDeletePasswordOpen, setConfirmDeletePasswordOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState(null)
+  const [adminPassword, setAdminPassword] = useState("")
+  const [modalError, setModalError] = useState("")
+  const [modalSuccess, setModalSuccess] = useState("")
 
   useEffect(() => {
     async function loadDashboard() {
@@ -78,12 +83,18 @@ function Dashboard() {
 
   const handleDeleteClick = (userId) => {
     setSelectedUserId(userId)
-    setDeleteModalOpen(true)
+    // reset password and modal messages then prompt for admin password
+    setAdminPassword("")
+    setModalError("")
+    setModalSuccess("")
+    setConfirmDeletePasswordOpen(true)
   }
-
+  
   const handleDeleteUser = async () => {
     try {
-      await deleteUser(selectedUserId)
+      await deleteUser(selectedUserId, adminPassword)
+
+      // update UI on success
       setRecentUsers((currentUsers) => currentUsers.filter((user) => user.id !== selectedUserId))
       setStats((currentStats) =>
         currentStats.map((stat) =>
@@ -92,10 +103,23 @@ function Dashboard() {
             : stat
         )
       )
-      setDeleteModalOpen(false)
-      setSelectedUserId(null)
+
+      setModalSuccess("User deleted successfully.")
+      setAdminPassword("")
+
+      // close modal after a short delay
+      setTimeout(() => {
+        setConfirmDeletePasswordOpen(false)
+        setModalSuccess("")
+        setSelectedUserId(null)
+      }, 1200)
     } catch (deleteError) {
-      setError(deleteError.message)
+      // show error inside modal
+      if (deleteError && deleteError.status === 403) {
+        setModalError("Incorrect admin password. Please try again.")
+      } else {
+        setModalError(deleteError?.message || "Unable to delete user. Please try again.")
+      }
     }
   }
 
@@ -200,19 +224,68 @@ function Dashboard() {
         </div>
       </div>
 
-      <ConfirmationModal
-        isOpen={deleteModalOpen}
-        title="Delete User"
-        message="Are you sure you want to delete this user? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={handleDeleteUser}
-        onCancel={() => {
-          setDeleteModalOpen(false)
-          setSelectedUserId(null)
-        }}
-        isDangerous={true}
-      />
+      {/* Prompt for admin password before deleting user (shows friendly messages inside modal) */}
+      {confirmDeletePasswordOpen ? (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+              <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">Confirm admin password</h2>
+              <button
+                onClick={() => { setAdminPassword(''); setModalError(''); setConfirmDeletePasswordOpen(false); }}
+                className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+              >
+                <X size={20} className="sm:w-6 sm:h-6" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6">
+              {modalError ? (
+                <div className="mb-3 rounded px-3 py-2 bg-red-50 text-red-700 text-sm">{modalError}</div>
+              ) : null}
+
+              {modalSuccess ? (
+                <div className="mb-3 rounded px-3 py-2 bg-green-50 text-green-700 text-sm">{modalSuccess}</div>
+              ) : null}
+
+              <label className="block text-xs sm:text-sm text-gray-700 font-medium mb-2">Confirm admin password</label>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Enter your admin password to confirm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+              />
+            </div>
+
+            <div className="flex gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+              <button
+                onClick={() => { setAdminPassword(''); setModalError(''); setConfirmDeletePasswordOpen(false); }}
+                className="flex-1 px-4 py-2 text-gray-700 font-medium text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setModalError('')
+                  if (!adminPassword || adminPassword.trim() === "") {
+                    setModalError('Please enter your admin password to confirm.')
+                    return
+                  }
+
+                  try {
+                    await handleDeleteUser()
+                  } catch (e) {
+                    // handleDeleteUser sets modalError
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-pink-500 text-white font-medium text-sm rounded-lg hover:bg-pink-600 transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
