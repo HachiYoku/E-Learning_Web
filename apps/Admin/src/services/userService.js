@@ -23,8 +23,9 @@ export async function fetchUsers() {
   return users.map(normalizeUser);
 }
 
-export async function deleteUser(id) {
-  return apiClient.delete(`/user/${id}`);
+export async function deleteUser(id, adminPassword) {
+  // Pass adminPassword for server-side re-authentication when supported
+  return apiClient.delete(`/user/${id}`, adminPassword ? { adminPassword } : undefined);
 }
 
 export async function updateUserStatus(id, isActive) {

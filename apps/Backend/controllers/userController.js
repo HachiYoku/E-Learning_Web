@@ -80,6 +80,23 @@ const updateProfile = async (req, res) => {
 
 const deletAccount = async (req, res) => {
   try {
+    const { adminPassword } = req.body || {};
+
+    if (typeof adminPassword !== 'string' || !adminPassword.trim()) {
+      return res.status(400).json({ message: "Admin password is required to perform this action" });
+    }
+
+    // Verify admin password
+    const adminUser = await User.findById(req.user?.id);
+    if (!adminUser) {
+      return res.status(403).json({ message: "Admin user not found" });
+    }
+
+    const isAdminPasswordValid = bcrypt.compareSync(adminPassword, adminUser.password);
+    if (!isAdminPasswordValid) {
+      return res.status(403).json({ message: "Invalid admin password" });
+    }
+
     const user = await User.findByIdAndDelete(req.params.id);
 
     if (!user) {

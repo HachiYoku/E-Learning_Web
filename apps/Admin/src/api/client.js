@@ -76,9 +76,10 @@ export const apiClient = {
       method: "PATCH",
       body: body instanceof FormData ? body : JSON.stringify(body),
     }),
-  delete: (path) =>
+  delete: (path, body) =>
     request(path, {
       method: "DELETE",
+      body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
     }),
 };
 
