@@ -1,4 +1,4 @@
-const logo = "/Nav/Logo.png"
+const logo = "/Nav/Arun-thai-web-logo.png"
 import { Bell, CheckCheck, Menu, X } from "lucide-react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react"
@@ -178,7 +178,11 @@ function Navbar() {
           onClick={() => goTo('/')}
           className="flex items-center overflow-hidden"
         >
-          <img src={logo} alt="Thai Talk Tips" className="size-14 scale-100 object-fit sm:size-15" />
+          <img
+            src={logo}
+            alt="Arun Thai"
+            className="w-[180px] h-auto object-contain"
+          />
         </button>
 
         {/* Desktop Menu */}

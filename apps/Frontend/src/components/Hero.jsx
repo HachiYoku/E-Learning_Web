@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const lineIcon = "/logo/Line.svg";
@@ -8,115 +9,66 @@ const landing = "/hero/hero1.jpg";
 
 function Hero() {
   const navigate = useNavigate();
+  const [activeImage, setActiveImage] = useState("conversation");
 
   return (
-    <section className="relative px-4 sm:px-6 md:px-10 lg:px-20 py-12 md:py-20 bg-white overflow-hidden">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center max-w-7xl mx-auto">
-        {/* Background Shape */}
-        <div
-          className="absolute hidden md:block -left-40 lg:-left-72 -bottom-40 w-96 lg:w-[660px] h-96 lg:h-[640px] rounded-full opacity-70"
-          style={{ backgroundColor: "#FCDCE2" }}
-        />
+    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-16 sm:px-6 md:px-10 md:py-24 lg:px-16">
+      <div className="absolute -left-24 top-12 -z-10 h-72 w-72 rounded-full bg-[#F8C56A]/25 blur-3xl" aria-hidden="true" />
+      <div className="absolute -right-20 bottom-0 -z-10 h-80 w-80 rounded-full bg-[#E9A9A0]/20 blur-3xl" aria-hidden="true" />
+      <div className="mx-auto grid max-w-[1500px] grid-cols-1 items-center gap-10 md:grid-cols-[minmax(170px,1fr)_minmax(360px,1.5fr)_minmax(170px,1fr)] md:gap-6 lg:gap-12">
+        <button
+          type="button"
+          onClick={() => setActiveImage("conversation")}
+          className={`group relative hidden w-full overflow-hidden rounded-[2rem] text-left shadow-xl transition duration-500 md:block md:h-[27rem] ${activeImage === "conversation" ? "-rotate-2 scale-[1.03]" : "rotate-2 opacity-75 hover:rotate-0 hover:scale-[1.03] hover:opacity-100"}`}
+          aria-label="Focus on everyday Thai"
+        >
+          <img src={landing} alt="Student practicing Thai conversation" className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+          <div className="absolute inset-0 flex items-end bg-gradient-to-t from-[#2D2E30]/85 via-[#2D2E30]/25 to-transparent p-5 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100">
+            <div className="translate-y-3 text-white transition-transform duration-300 group-hover:translate-y-0 group-focus-visible:translate-y-0">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#FFD98B]">Everyday Thai</p>
+              <p className="mt-2 text-xl font-semibold leading-tight">Find your voice in every conversation.</p>
+              <p className="mt-2 text-sm leading-relaxed text-white/85">Build natural speaking habits for travel, work, and real life.</p>
+            </div>
+          </div>
+        </button>
 
-        {/* LEFT */}
-        <div className="relative z-10 max-w-xl">
-          <h1 className="text-3xl sm:text-4xl md:text-4xl lg:text-5xl font-bold text-gray-900 leading-[1.2]">
-            Speak English with 
-            Confidence, Master Grammar at{" "}
-            <span className="text-[#F8A2C0]">Mind Ploy English</span>
+        <div className="z-10 rounded-[2rem] border border-white/70 bg-white/45 px-5 py-8 text-center shadow-[0_24px_60px_-32px_rgba(80,48,19,0.45)] backdrop-blur-sm sm:px-8 sm:py-10 md:border-0 md:bg-transparent md:px-0 md:py-0 md:shadow-none md:backdrop-blur-none">
+          <p className="mb-5 inline-flex rounded-full border border-[#E58C1A]/20 bg-[#FFF4D8] px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Arun Thai Academy</p>
+          <h1 className="text-4xl font-bold leading-[1.06] tracking-tight text-[#2D2E30] sm:text-5xl lg:text-7xl">
+            Learn Thai with <span className="text-[#E58C1A]">confidence</span><span className="text-[#2D2E30]">, naturally.</span>
           </h1>
-
-          <p className="text-[#8B6F61] mt-5 text-base md:text-xl leading-relaxed">
-            Where English learning feels relaxed, practical, and enjoyable.
+          <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-[#765F55] md:text-xl">
+            Where Thai learning feels relaxed, practical, and enjoyable.
           </p>
-
-          {/* CTA */}
           <button
             onClick={() => navigate("/courses")}
-            className="mt-8 bg-black text-white px-8 py-3 rounded-xl font-medium 
-            hover:bg-gray-800 transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
+            className="mt-8 rounded-xl bg-[#2D2E30] px-8 py-3.5 font-semibold text-white shadow-lg shadow-[#2D2E30]/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#E58C1A] hover:shadow-xl"
           >
-            Explore Courses →
+            Explore Courses <span aria-hidden="true">→</span>
           </button>
-
-          {/* Divider */}
-          <div className="w-74 h-[2px] bg-black mt-10"></div>
-
-          {/* OFFER */}
-          <div className="mt-6">
-            <h3 className="font-semibold text-gray-800 mb-2 text-base">
-              Our Courses and Services:
-            </h3>
-            <ul className="space-y-2 text-gray-600 text-sm">
-              <li>• One-on-One English Coaching</li>
-              <li>• IELTS Preparation Guidance</li>
-              <li>• Conversational English Training</li>
-            </ul>
-          </div>
-
-          {/* SOCIAL */}
-          <div className="mt-6">
-            <p className="font-semibold text-gray-800 mb-2 text-base">
-              Contact us via:
-            </p>
-            <div className="flex gap-4">
-              <img
-                src={lineIcon}
-                className="w-7 h-7 hover:scale-110 transition"
-              />
-              <img
-                src={facebookIcon}
-                className="w-7 h-7 hover:scale-110 transition"
-              />
-              <img
-                src={instagramIcon}
-                className="w-7 h-7 hover:scale-110 transition"
-              />
-            </div>
+          <p className="mt-4 text-sm font-medium text-[#8B6F61]">Begin with practical Thai for real life.</p>
+          <div className="mt-8 flex justify-center gap-4" aria-label="Social links">
+            <img src={lineIcon} alt="Line" className="h-7 w-7 transition hover:scale-110" />
+            <img src={facebookIcon} alt="Facebook" className="h-7 w-7 transition hover:scale-110" />
+            <img src={instagramIcon} alt="Instagram" className="h-7 w-7 transition hover:scale-110" />
           </div>
         </div>
 
-        {/* RIGHT */}
-        <div className="relative">
-          {/* MOBILE */}
-          <div className="md:hidden flex flex-col gap-4">
-            <div className="rounded-xl text-center shadow-md p-4 bg-[#FCDCE2]">
-              <h4 className="font-bold text-sm">Grammar Foundations</h4>
-            </div>
-
-            <div className="flex gap-3 h-56">
-              <img src={landing0} className="rounded-xl w-1/2 object-cover" />
-              <img src={landing} className="rounded-xl w-1/2 object-cover" />
-            </div>
-
-            <div className="rounded-xl shadow-md text-center p-4 bg-[#DDF1FC]">
-              <h4 className="font-bold text-sm">English Communication</h4>
+        <button
+          type="button"
+          onClick={() => setActiveImage("foundations")}
+          className={`group relative hidden w-full overflow-hidden rounded-[2rem] text-left shadow-xl transition duration-500 md:block md:h-[27rem] ${activeImage === "foundations" ? "rotate-2 scale-[1.03]" : "-rotate-2 opacity-75 hover:rotate-0 hover:scale-[1.03] hover:opacity-100"}`}
+          aria-label="Focus on Thai foundations"
+        >
+          <img src={landing0} alt="Student learning Thai grammar" className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+          <div className="absolute inset-0 flex items-end bg-gradient-to-t from-[#2D2E30]/85 via-[#2D2E30]/25 to-transparent p-5 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100">
+            <div className="translate-y-3 text-white transition-transform duration-300 group-hover:translate-y-0 group-focus-visible:translate-y-0">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#FFD98B]">Thai Foundations</p>
+              <p className="mt-2 text-xl font-semibold leading-tight">Make grammar feel beautifully simple.</p>
+              <p className="mt-2 text-sm leading-relaxed text-white/85">Learn the patterns behind Thai so every new phrase sticks.</p>
             </div>
           </div>
-
-          {/* DESKTOP */}
-          <div className="hidden md:block relative h-[450px] lg:h-[520px]">
-            {/* Back Image */}
-            <div className="absolute top-0 right-0 w-[60%] h-[70%] rounded-2xl overflow-hidden shadow-md">
-              <img src={landing} className="w-full h-full object-cover" />
-            </div>
-
-            {/* Front Image */}
-            <div className="absolute bottom-0 left-0 w-[55%] h-[70%] rounded-3xl overflow-hidden shadow-xl">
-              <img src={landing0} className="w-full h-full object-cover" />
-            </div>
-
-            {/* Card 1 */}
-            <div className="absolute top-6 left-0 bg-[#FCDCE2] backdrop-blur-md shadow-lg p-4 text-center rounded-xl w-56">
-              <h4 className="font-bold text-sm">Grammar Foundations</h4>
-            </div>
-
-            {/* Card 2 */}
-            <div className="absolute bottom-6 right-0 bg-[#DDF1FC] backdrop-blur-md shadow-lg p-4 text-center rounded-xl w-56">
-              <h4 className="font-bold text-sm">English Communication</h4>
-            </div>
-          </div>
-        </div>
+        </button>
       </div>
     </section>
   );
