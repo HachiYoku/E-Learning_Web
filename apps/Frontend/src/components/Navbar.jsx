@@ -129,15 +129,7 @@ function Navbar() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
-  const {
-    notifications,
-    unreadCount,
-    isOpen: isNotificationOpen,
-    setIsOpen: setNotificationOpen,
-    markAsRead,
-    markAllRead,
-    loading,
-  } = useNotification()
+  const { setIsOpen: setNotificationOpen } = useNotification();
 
   const isActive = (path) => location.pathname === path
 
@@ -191,8 +183,10 @@ function Navbar() {
             <li
               key={item.path}
               onClick={() => goTo(item.path)}
-              className="cursor-pointer rounded-full px-4 py-2 text-black transition-all hover:shadow-md lg:px-6"
-              style={{ backgroundColor: isActive(item.path) ? "#CDEAFA" : "transparent" }}
+              className={`cursor-pointer rounded-full px-4 py-2 transition-all hover:shadow-md lg:px-6 ${
+                isActive(item.path) ? "text-white" : "text-black"
+              }`}
+              style={{ backgroundColor: isActive(item.path) ? "#E58C1A" : "transparent" }}
             >
               {item.label}
             </li>
