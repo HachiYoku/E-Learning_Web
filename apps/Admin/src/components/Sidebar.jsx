@@ -53,7 +53,7 @@ function Sidebar({ isOpen = true }) {
               onClick={() => navigate(item.path)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                 active
-                  ? 'bg-pink-200 text-gray-900 font-medium'
+                  ? 'bg-[#E58C1A] text-white font-medium'
                   : 'text-gray-700 hover:bg-pink-100'
               }`}
               title={!isOpen ? item.label : ''}
