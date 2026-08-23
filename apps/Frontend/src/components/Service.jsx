@@ -6,40 +6,37 @@ const teacherImage = "/service/medium-shot-smiley-teacher-with-whiteboard.jpg"
 const serviceCards = [
   {
     image: asianMotherImage,
-    title: "One-on-One English Coaching",
-    description: "Personalized lessons focused on your goals and learning style.",
+    title: "One-on-One Thai Class",
     features: [
-      "Personalized speaking practice based on your goals",
-      "Grammar explained in real conversation context",
-      "Vocabulary building for daily communication",
-      "Confidence coaching for natural expression",
-      "Real-life conversation training"
+      "Personalized lessons based on your learning goals",
+      "Flexible learning pace and lesson content",
+      "Individual speaking and pronunciation practice",
+      "Grammar and vocabulary explained clearly",
+      "Direct feedback from your teacher"
     ],
     className: "md:mt-16",
     imageLoading: "eager",
   },
   {
     image: languageLearningImage,
-    title: "IELTS Preparation Guidance",
-    description: "Targeted coaching designed to build exam confidence and strategy.",
+    title: "Group Thai Class",
     features: [
-      "Speaking strategies for higher band scores",
-      "Writing structure and task response coaching",
-      "Listening and reading skill training",
-      "Mock tests with feedback and improvement plans",
-      "Exam confidence and time management"
+      "Interactive lessons with other learners",
+      "Practice speaking through group activities",
+      "Build vocabulary for everyday communication",
+      "Learn Thai grammar in practical contexts",
+      "Improve communication through pair and group practice"
     ],
   },
   {
     image: teacherImage,
-    title: "Conversational English Training",
-    description: "Interactive sessions that help you speak naturally and comfortably.",
+    title: "Thai Speaking Class",
     features: [
-      "Everyday communication practice",
-      "Pronunciation and fluency development",
-      "Natural sentence flow practice",
-      "Active listening and response skills",
-      "Confidence-building conversation drills"
+      "Practice real-life Thai conversations",
+      "Improve pronunciation and natural speaking",
+      "Learn useful phrases for everyday situations",
+      "Develop listening and response skills",
+      "Build confidence speaking Thai naturally"
     ],
     className: "md:mt-16",
   },
@@ -47,12 +44,12 @@ const serviceCards = [
 
 function Service() {
   return (
-    <section className="px-4 sm:px-6 md:px-10 py-8 sm:py-12 md:py-16 bg-white">
+    <section className="px-4 sm:px-6 md:px-10 py-8 sm:py-12 md:py-16 bg-white mb-8 md:mb-14 lg:mb-18">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8 sm:mb-10 md:mb-12">
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-2 sm:mb-3 md:mb-4">
-            How We Help You Improve Your English
+            How We Help You Improve Your Thai Skills
           </h2>
         </div>
 
@@ -63,7 +60,6 @@ function Service() {
               key={card.title}
               image={card.image}
               title={card.title}
-              description={card.description}
               features={card.features}
               className={card.className}
               imageLoading={card.imageLoading}

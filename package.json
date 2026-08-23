@@ -7,8 +7,14 @@
     "apps/Backend"
   ],
   "scripts": {
+    "dev": "npm run dev:frontend",
+    "build": "npm run build:frontend",
     "dev:frontend": "npm run dev --workspace=Frontend",
+    "build:frontend": "npm run build --workspace=Frontend",
     "dev:admin": "npm run dev --workspace=Admin",
-    "dev:backend": "npm run dev --workspace=Backend"
+    "build:admin": "npm run build --workspace=Admin",
+    "dev:backend": "npm run dev --workspace=Backend",
+    "start:backend": "npm run start --workspace=Backend",
+    "build:all": "npm run build:frontend && npm run build:admin"
   }
 }

@@ -1,5 +1,6 @@
 import Navbar from "../components/Navbar"
 import Hero from "../components/Hero"
+import Service from "../components/Service"
 import Instructors from "../components/Instructors"
 import MotivationBanner from "../components/MotivationBanner"
 import Courses from "../components/Courses"
@@ -16,8 +17,9 @@ function Home() {
       <Instructors />
       <MotivationBanner />
       <Courses />
-      <Article />
       <StudentReview />
+      <Article />
+      <Service />
       <ContactSection />
       <Footer />
     </div>

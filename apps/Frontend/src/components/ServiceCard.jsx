@@ -1,86 +1,42 @@
-import { Check } from 'lucide-react'
-import { useState } from 'react'
+import { Check } from "lucide-react";
 
-function ServiceCard({ image, title, description, features, className, imageLoading = 'lazy' }) {
-  const [isFlipped, setIsFlipped] = useState(false)
-
+function ServiceCard({ image, title, features, className, imageLoading = "lazy" }) {
   return (
-    <div 
-      className={`h-screen/2 cursor-pointer perspective ${className || ''}`}
-      onClick={() => setIsFlipped(!isFlipped)}
-      style={{
-        perspective: '1000px',
-        height: '450px'
-      }}
+    <article
+      className={`group h-full overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-[#FFFDF8] shadow-[0_18px_45px_-28px_rgba(45,46,48,0.45)] transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_28px_55px_-25px_rgba(45,46,48,0.38)] ${className || ""}`}
     >
-      <div
-        style={{
-          transition: 'transform 0.6s',
-          transformStyle: 'preserve-3d',
-          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-          width: '100%',
-          height: '100%',
-          position: 'relative',
-        }}
-      >
-        {/* Front Side */}
-        <div
-          style={{
-            backfaceVisibility: 'hidden',
-            width: '100%',
-            height: '100%',
-          }}
-          className="rounded-2xl overflow-hidden relative"
-        >
-          <img 
-            src={image} 
-            alt={title}
-            loading={imageLoading}
-            decoding="async"
-            className="w-full h-full object-cover"
-          />
-          {/* Overlay */}
-          <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
-            <h3 className="text-2xl font-bold text-white mb-2">
-              {title}
-            </h3>
-            <p className="text-gray-200 text-sm">
-              {description}
-            </p>
-          </div>
-        </div>
-
-        {/* Back Side */}
-        <div
-          style={{
-            backfaceVisibility: 'hidden',
-            transform: 'rotateY(180deg)',
-            width: '100%',
-            height: '100%',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-          }}
-          className="rounded-2xl overflow-y-auto bg-white border-2 border-gray-300 p-6 flex flex-col justify-center"
-        >
-          <div className="space-y-4">
-            {features.map((feature, index) => (
-              <div key={index} className="flex items-start gap-4">
-                <Check
-                  className="w-5 h-5 text-gray-800 mt-0.5 shrink-0"
-                  strokeWidth={2.5}
-                  aria-hidden="true"
-                />
-                <p className="text-gray-700 text-sm font-medium leading-relaxed">
-                  {feature}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className="relative h-52 overflow-hidden sm:h-60">
+        <img
+          src={image}
+          alt={title}
+          loading={imageLoading}
+          decoding="async"
+          className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#2D2E30]/55 via-transparent to-transparent" />
+        <span className="absolute bottom-4 left-4 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-[#C97112] backdrop-blur">
+          Thai learning
+        </span>
       </div>
-    </div>
-  )
+
+      <div className="flex flex-col p-6 sm:p-7">
+        <h3 className="text-2xl font-bold tracking-tight text-[#2D2E30]">{title}</h3>
+
+        <div className="my-5 h-px bg-[#2D2E30]/10" />
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">What you’ll get</p>
+        <ul className="mt-4 space-y-3">
+          {features.map((feature) => (
+            <li key={feature} className="flex items-start gap-3 text-sm leading-relaxed text-[#4B4541]">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FCE7B2] text-[#B6630D]">
+                <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />
+              </span>
+              {feature}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </article>
+  );
 }
 
-export default ServiceCard
+export default ServiceCard;
