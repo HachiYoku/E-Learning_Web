@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 function ServiceCard({ image, title, features, className, imageLoading = "lazy" }) {
   return (
     <article
-      className={`group h-full overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-[#FFFDF8] shadow-[0_18px_45px_-28px_rgba(45,46,48,0.45)] transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_28px_55px_-25px_rgba(45,46,48,0.38)] ${className || ""}`}
+      className={`group self-start overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-[#FFFDF8] shadow-[0_18px_45px_-28px_rgba(45,46,48,0.45)] transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_28px_55px_-25px_rgba(45,46,48,0.38)] ${className || ""}`}
     >
       <div className="relative h-52 overflow-hidden sm:h-60">
         <img

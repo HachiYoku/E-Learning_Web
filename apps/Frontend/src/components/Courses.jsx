@@ -29,15 +29,14 @@ function Courses() {
   }, [])
 
   return (
-    <section className="px-4 sm:px-6 md:px-10 py-8 sm:py-12 md:py-16 bg-[#FEF7F9] overflow-hidden">
-      <div className="relative max-w-6xl mx-auto">
-        <div className="absolute -left-10 -top-30 w-30 md:w-30 h-30 md:h-30 rounded-full pointer-events-none z-10" style={{ backgroundColor: "#B5E0F8" }}></div>
-        <div className="absolute -left-55 -top-25 w-60 md:w-60 h-30 md:h-30 rounded-xl pointer-events-none z-10" style={{ backgroundColor: "#B5E0F8" }}></div>
-        <div className="absolute -right-10 -bottom-30 w-30 md:w-30 h-30 md:h-30 rounded-full pointer-events-none z-10" style={{ backgroundColor: "#B5E0F8" }}></div>
-        <div className="absolute -right-55 -bottom-25 w-60 md:w-60 h-30 md:h-30 rounded-xl pointer-events-none z-10" style={{ backgroundColor: "#B5E0F8" }}></div>
+    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-12 sm:px-6 sm:py-16 md:px-10 md:py-24 lg:px-16">
+      <div className="absolute -left-32 top-16 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/20 blur-3xl" aria-hidden="true" />
+      <div className="absolute -right-24 bottom-0 -z-10 h-96 w-96 rounded-full bg-[#E9A9A0]/18 blur-3xl" aria-hidden="true" />
+      <div className="absolute inset-0 -z-10 opacity-[0.035] [background-image:linear-gradient(rgba(45,46,48,.9)_1px,transparent_1px),linear-gradient(90deg,rgba(45,46,48,.9)_1px,transparent_1px)] [background-size:44px_44px]" aria-hidden="true" />
+      <div className="relative mx-auto max-w-[1500px]">
         
         <div className="flex justify-center mb-6 sm:mb-8 md:mb-10">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 pb-2 sm:pb-3 border-b-9 border-black">
+          <h2 className="border-b-4 border-[#E58C1A] pb-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:pb-3 sm:text-3xl md:text-4xl lg:text-5xl">
             Courses
           </h2>
         </div>
@@ -72,11 +71,10 @@ function Courses() {
         <div className="flex justify-center mt-8 sm:mt-10 md:mt-12">
           <button 
             onClick={() => navigate('/courses')}
-            className="font-semibold px-5 sm:px-6 md:px-8 py-2 sm:py-2.5 md:py-3 rounded-xl hover:opacity-80 transition-opacity flex items-center gap-2 text-sm sm:text-base" 
-            style={{backgroundColor: "#B5E0F8"}}
+            className="flex items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-2 font-semibold text-sm text-white shadow-lg shadow-[#2D2E30]/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#E58C1A] hover:shadow-xl sm:px-6 sm:py-2.5 sm:text-base md:px-8 md:py-3"
           >
             View All Courses
-            <ArrowRight className="h-5 w-5 text-black" strokeWidth={2.25} aria-hidden="true" />
+            <ArrowRight className="h-5 w-5" strokeWidth={2.25} aria-hidden="true" />
           </button>
         </div>
       </div>

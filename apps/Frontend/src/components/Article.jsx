@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ArticleCard from "./ArticleCard";
 import LoadingSpinner from "./LoadingSpinner";
@@ -6,14 +7,9 @@ import { fetchBlogs } from "../services/blogService";
 
 function Article() {
   const navigate = useNavigate();
-  const scrollContainerRef = useRef(null);
-  const [isDown, setIsDown] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
   const [articles, setArticles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -23,175 +19,68 @@ function Article() {
         setIsLoading(true);
         setError("");
         const blogs = await fetchBlogs();
-
-        if (isMounted) {
-          setArticles(blogs.slice(0, 6));
-        }
+        if (isMounted) setArticles(blogs.slice(0, 3));
       } catch (loadError) {
-        if (isMounted) {
-          setError(loadError.message || "Failed to load articles");
-        }
+        if (isMounted) setError(loadError.message || "Failed to load articles");
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     }
 
     loadArticles();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
-  // Auto-scroll animation
-  useEffect(() => {
-    if (!isAutoScrolling || !scrollContainerRef.current || articles.length === 0) return;
-
-    const interval = setInterval(() => {
-      const container = scrollContainerRef.current;
-      if (container) {
-        container.scrollLeft += 2;
-        // Reset to beginning when reaching the end
-        if (container.scrollLeft >= container.scrollWidth - container.clientWidth - 10) {
-          container.scrollLeft = 0;
-        }
-      }
-    }, 50);
-
-    return () => clearInterval(interval);
-  }, [isAutoScrolling, articles.length]);
-
-  const handleMouseDown = (e) => {
-    setIsDown(true);
-    setIsAutoScrolling(false);
-    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
-    setScrollLeft(scrollContainerRef.current.scrollLeft);
-  };
-
-  const handleMouseLeave = () => {
-    setIsDown(false);
-    setIsAutoScrolling(true);
-  };
-
-  const handleMouseUp = () => {
-    setIsDown(false);
-    setIsAutoScrolling(true);
-  };
-
-  const speed = 1.5; // adjust here anytime
-
-  const handleMouseMove = (e) => {
-    if (!isDown) return;
-    e.preventDefault();
-    const x = e.pageX - scrollContainerRef.current.offsetLeft;
-    const walk = (x - startX) * speed;
-    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleTouchStart = (e) => {
-    setIsDown(true);
-    setIsAutoScrolling(false);
-    setStartX(e.touches[0].pageX - scrollContainerRef.current.offsetLeft);
-    setScrollLeft(scrollContainerRef.current.scrollLeft);
-  };
-
-  const handleTouchMove = (e) => {
-    if (!isDown) return;
-    const x = e.touches[0].pageX - scrollContainerRef.current.offsetLeft;
-    const walk = (x - startX) * speed;
-    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleTouchEnd = () => {
-    setIsDown(false);
-    setIsAutoScrolling(true);
-  };
-
-  const handleWheel = (e) => {
-    e.preventDefault();
-    scrollContainerRef.current.scrollLeft += e.deltaY * 5;
-  };
-
   return (
-    <>
-      <style>{`
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
-      <section className="px-4 sm:px-6 md:px-10 py-8 sm:py-12 md:py-16 bg-blue-50">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-8 sm:mb-10 md:mb-12">
-            <div className="flex-1 mb-4 sm:mb-5 md:mb-0">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-2 sm:mb-3 md:mb-4">
-                English Tips & Learning Articles
-              </h2>
-              <p className="text-[#8B6F61] text-xs sm:text-sm md:text-base max-w-2xl">
-                We share easy-to-follow articles that guide students through
-                speaking, vocabulary, and grammar in a friendly way.
-              </p>
-            </div>
-            <button
-              onClick={() => navigate("/blog")}
-              className="text-gray-900 font-bold text-sm sm:text-base md:text-lg underline hover:text-gray-700 transition-colors whitespace-nowrap md:mt-2 cursor-pointer bg-transparent border-none mt-3 sm:mt-4 md:mt-0"
-            >
-              See More
-            </button>
+    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-16 sm:px-6 md:px-10 md:py-24 lg:px-16">
+      <div className="absolute -left-28 top-12 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/18 blur-3xl" aria-hidden="true" />
+      <div className="absolute -bottom-32 -right-24 -z-10 h-96 w-96 rounded-full bg-[#E9A9A0]/18 blur-3xl" aria-hidden="true" />
+      <div className="mx-auto max-w-[1500px]">
+        <div className="flex flex-col gap-6 border-b border-[#2D2E30]/12 pb-8 sm:pb-10 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C97112]">From our journal</p>
+            <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
+              Thai Learning <span className="text-[#E58C1A]">Insights.</span>
+            </h2>
+            <p className="mt-4 text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg">
+              Practical tips, useful language notes, and encouragement for every stage of your Thai learning journey.
+            </p>
           </div>
-          {/* Horizontal Scrollable Section */}
-          <div
-            className="overflow-x-auto pb-2 sm:pb-3 md:pb-4 cursor-grab active:cursor-grabbing hide-scrollbar"
-            ref={scrollContainerRef}
-            onMouseDown={handleMouseDown}
-            onMouseLeave={handleMouseLeave}
-            onMouseUp={handleMouseUp}
-            onMouseMove={handleMouseMove}
-            onWheel={handleWheel}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            tabIndex={0}
-            style={{ userSelect: "none", WebkitOverflowScrolling: "touch" }}
+          <button
+            type="button"
+            onClick={() => navigate("/blog")}
+            className="inline-flex w-fit items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[#2D2E30]/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#E58C1A] hover:shadow-xl"
           >
-            {isLoading ? (
-              <div className="min-w-full flex justify-center py-8">
-                <LoadingSpinner message="Loading articles..." />
-              </div>
-            ) : error ? (
-              <div className="rounded-3xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700 shadow-sm">
-                {error}
-              </div>
-            ) : articles.length === 0 ? (
-              <div className="rounded-3xl bg-white px-6 py-8 text-center text-gray-600 shadow-sm">
-                No articles available yet.
-              </div>
-            ) : (
-              <div className="flex gap-6 sm:gap-7 md:gap-8" style={{ minWidth: "min-content" }}>
-                {articles.map((article) => (
-                  <ArticleCard
-                    key={article.id}
-                    id={article.id}
-                    image={article.image}
-                    title={article.title}
-                    description={article.excerpt}
-                    authorLogo="/Nav/Logo.png"
-                    authorName={article.authorName}
-                    date={article.date}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+            Explore all articles <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
-      </section>
-    </>
+
+        <div className="mt-10 md:mt-12">
+          {isLoading ? (
+            <LoadingSpinner message="Loading articles..." />
+          ) : error ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700">{error}</div>
+          ) : articles.length === 0 ? (
+            <div className="rounded-2xl border border-[#2D2E30]/10 bg-white/60 px-6 py-10 text-center text-[#765F55]">No articles available yet.</div>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
+              {articles.map((article) => (
+                <ArticleCard
+                  key={article.id}
+                  id={article.id}
+                  image={article.image}
+                  title={article.title}
+                  description={article.excerpt}
+                  authorLogo="/Nav/Logo.png"
+                  authorName={article.authorName}
+                  date={article.date}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
