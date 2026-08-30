@@ -1,11 +1,12 @@
 import { ArrowLeft, Upload, Star } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createCourse } from '../../services/courseService'
 import { validateFileSize } from '../../utils/fileValidation'
 
 function AddCourse() {
   const navigate = useNavigate()
+  const titleRef = useRef(null)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -20,6 +21,14 @@ function AddCourse() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const titleField = titleRef.current
+    if (!titleField) return
+
+    titleField.style.height = 'auto'
+    titleField.style.height = `${Math.min(titleField.scrollHeight, 144)}px`
+  }, [formData.title])
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -125,9 +134,9 @@ function AddCourse() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 md:px-8 py-4 sm:py-6">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center sm:gap-4">
+    <div className="min-h-screen bg-slate-50">
+      <div className="border-b border-gray-200 bg-white px-4 py-4 sm:px-6 sm:py-5 md:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 sm:flex-row sm:items-center sm:gap-4">
           <button
             onClick={() => navigate('/courses')}
             className="flex items-center gap-2 text-gray-700 hover:text-gray-900 text-sm sm:text-base"
@@ -135,7 +144,10 @@ function AddCourse() {
             <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
             <span>Back</span>
           </button>
-          <h1 className="w-full flex-1 text-left text-2xl font-bold text-gray-900 sm:text-center sm:text-3xl md:text-4xl">Add Course</h1>
+          <div className="flex-1 sm:text-center">
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Create course</h1>
+            <p className="mt-1 text-sm text-gray-500">Add the details students will see before enrolling.</p>
+          </div>
           <button
             onClick={handleSubmit}
             disabled={loading}
@@ -147,12 +159,14 @@ function AddCourse() {
       </div>
 
       <div className="p-4 sm:p-6 md:p-8">
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-          <div className="col-span-1 space-y-6">
-            <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-3">
-              Upload course image:
+        <form onSubmit={handleSubmit} className="mx-auto grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">
+          <div className="space-y-4 lg:col-span-1">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <label className="mb-2 block text-sm font-semibold text-gray-900">
+              Course image <span className="text-pink-500">*</span>
             </label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 flex flex-col items-center justify-center min-h-64 sm:min-h-80 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative group">
+            <p className="mb-4 text-xs leading-5 text-gray-500">Use a clear landscape image that represents the course.</p>
+            <div className="relative flex min-h-64 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-6 transition-colors hover:border-pink-300 hover:bg-pink-50 sm:min-h-72">
               <input
                 type="file"
                 accept="image/*"
@@ -160,11 +174,14 @@ function AddCourse() {
                 className="absolute inset-0 opacity-0 cursor-pointer"
               />
               {formData.image ? (
-                <img
-                  src={formData.image}
-                  alt="Course preview"
-                  className="w-full h-full object-cover rounded-lg"
-                />
+                <>
+                  <img
+                    src={formData.image}
+                    alt="Course preview"
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-4 pb-4 pt-10 text-center text-sm font-medium text-white">Change image</div>
+                </>
               ) : (
                 <div className="flex flex-col items-center gap-2 sm:gap-3 text-gray-500">
                   <Upload size={28} className="sm:w-8 sm:h-8" />
@@ -172,7 +189,8 @@ function AddCourse() {
                 </div>
               )}
             </div>
-            <p className="mt-2 text-xs text-gray-500">Image must be 5 MB or smaller.</p>
+            <p className="mt-3 text-xs text-gray-500">PNG, JPG or WEBP &middot; maximum 5 MB</p>
+            </div>
 
             {error ? (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -181,25 +199,31 @@ function AddCourse() {
             ) : null}
           </div>
 
-          <div className="col-span-1 lg:col-span-2 space-y-4 sm:space-y-6">
+          <div className="space-y-6 lg:col-span-2">
             
 
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-gray-900">Course details</h2>
+                <p className="mt-1 text-sm text-gray-500">Start with a clear title and short description.</p>
+              </div>
             <div>
-              <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                Course Title
+              <label className="mb-2 block text-sm font-semibold text-gray-900">
+                Course title <span className="text-pink-500">*</span>
               </label>
-              <input
-                type="text"
+              <textarea
+                ref={titleRef}
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
-                placeholder="Add short course title"
-                className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-300 text-sm"
+                placeholder="e.g. English for everyday conversations"
+                rows={1}
+                className="w-full min-h-[2.75rem] max-h-36 resize-none overflow-y-auto rounded-lg border border-gray-300 px-3 py-2 text-base font-medium text-gray-900 outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-200 sm:px-4"
               />
             </div>
 
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
+            <div className="mt-5">
+              <label className="mb-2 block text-sm font-semibold text-gray-900">
                 Course description
               </label>
               <textarea
@@ -207,15 +231,17 @@ function AddCourse() {
                 value={formData.description}
                 onChange={handleInputChange}
                 placeholder="Describe your course"
-                rows="4"
-                className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-300 text-sm"
+                rows="5"
+                className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm leading-6 outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-200 sm:px-4"
               />
             </div>
+            </section>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                  Set price
+                <label className="mb-2 block text-sm font-semibold text-gray-900">
+                  Price <span className="text-pink-500">*</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -224,15 +250,16 @@ function AddCourse() {
                     value={formData.price}
                     onChange={handleInputChange}
                     placeholder="4500"
-                    className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-300 text-sm"
+                    min="0"
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-200 sm:px-4"
                   />
                   <span className="text-gray-700 font-medium">฿</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
-                  Set rating
+                <label className="mb-2 block text-sm font-semibold text-gray-900">
+                  Course rating
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -243,7 +270,7 @@ function AddCourse() {
                     min="0"
                     max="5"
                     step="0.5"
-                    className="w-16 sm:w-20 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-300 text-sm"
+                    className="w-16 rounded-lg border border-gray-300 px-2 py-2 text-sm outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-200 sm:w-20"
                   />
                   <span className="text-gray-700 font-medium">/5</span>
                   <div className="ml-1 flex gap-1 sm:ml-2">
@@ -259,7 +286,7 @@ function AddCourse() {
               </div>
             </div>
 
-            <label className="flex items-start gap-3 text-sm text-gray-700 sm:items-center">
+            <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-xl bg-pink-50 p-4 text-sm text-gray-700 sm:items-center">
               <input
                 type="checkbox"
                 name="isPublished"
@@ -269,20 +296,26 @@ function AddCourse() {
               />
               Publish this course to the student frontend
             </label>
+            </section>
 
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Learning outcomes</h2>
+                <p className="mt-1 text-sm text-gray-500">Add the skills or knowledge students will gain.</p>
+              </div>
+              <label className="mb-2 block text-sm font-semibold text-gray-900">
                 What you'll learn
               </label>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {formData.learnings.map((learning, index) => (
-                  <div key={index} className="flex items-start gap-2">
+                  <div key={index} className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-100 text-xs font-semibold text-pink-700">{index + 1}</span>
                     <input
                       type="text"
                       value={learning}
                       onChange={(e) => handleLearningChange(index, e.target.value)}
                       placeholder="what students will get from this course"
-                      className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-300 text-sm"
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-200 sm:px-4"
                     />
                     {formData.learnings.length > 1 && (
                       <button
@@ -298,12 +331,12 @@ function AddCourse() {
                 <button
                   type="button"
                   onClick={addLearning}
-                  className="text-blue-500 hover:text-blue-600 text-xs sm:text-sm font-medium mt-2"
+                  className="mt-1 rounded-lg border border-pink-200 px-3 py-2 text-sm font-medium text-pink-700 transition-colors hover:bg-pink-50"
                 >
                   + Add another
                 </button>
               </div>
-            </div>
+            </section>
           </div>
         </form>
       </div>

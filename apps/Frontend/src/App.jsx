@@ -18,6 +18,7 @@ import OrderStatus from "./pages/OrderStatus"
 import Blog from "./pages/Blog"
 import Service from "./pages/Service"
 import NotFound from "./pages/NotFound"
+import Quiz from "./pages/Quiz"
 import RequireAuth from "./routes/RequireAuth"
 import ScrollToTop from "./components/ScrollToTop"
 
@@ -45,6 +46,7 @@ function App() {
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/order-status/:orderId" element={<OrderStatus />} />
           <Route path="/course-lessons/:courseId" element={<CourseLessons />} />
+          <Route path="/course-lessons/:courseId/quiz/:lessonId" element={<Quiz />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

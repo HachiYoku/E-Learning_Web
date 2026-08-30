@@ -1,12 +1,13 @@
-import { ArrowLeft, Bold, Italic, Link2, Quote, Type } from "lucide-react";
+import { ArrowLeft, Bold, Italic, Link2, Quote, Redo2, Type, Undo2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createBlog } from "../../services/blogService";
 import { validateFileSize } from "../../utils/fileValidation";
 
 function AddBlog() {
   const navigate = useNavigate();
   const contentRef = useRef(null);
+  const titleRef = useRef(null);
   const selectedRangeRef = useRef(null);
   const [formData, setFormData] = useState({
     title: "",
@@ -29,6 +30,16 @@ function AddBlog() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    const titleField = titleRef.current;
+    if (!titleField) {
+      return;
+    }
+
+    titleField.style.height = "auto";
+    titleField.style.height = `${Math.min(titleField.scrollHeight, 160)}px`;
+  }, [formData.title]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -46,6 +57,27 @@ function AddBlog() {
       content,
     }));
     setIsEditorEmpty(plainText.trim() === "");
+  };
+
+  const handleUndoRedo = (command) => {
+    contentRef.current?.focus();
+    document.execCommand(command, false, null);
+    handleEditorChange();
+  };
+
+  const handleEditorKeyDown = (event) => {
+    if (!(event.ctrlKey || event.metaKey)) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+    if (key === "z") {
+      event.preventDefault();
+      handleUndoRedo(event.shiftKey ? "redo" : "undo");
+    } else if (key === "y") {
+      event.preventDefault();
+      handleUndoRedo("redo");
+    }
   };
 
   const handleImageUpload = (e) => {
@@ -246,13 +278,15 @@ function AddBlog() {
           </div>
 
           <div className="space-y-4">
-            <input
-              type="text"
+            <textarea
+              ref={titleRef}
               name="title"
               value={formData.title}
               onChange={handleInputChange}
               placeholder="Title"
-              className="w-full border-none text-2xl font-bold text-gray-900 outline-none placeholder:text-gray-400 focus:ring-0 sm:text-3xl md:text-4xl"
+              rows={1}
+              aria-label="Blog title"
+              className="w-full min-h-[2.5rem] max-h-40 resize-none overflow-y-auto border-none bg-transparent p-0 text-2xl font-bold leading-tight text-gray-900 outline-none placeholder:text-gray-400 focus:ring-0 sm:min-h-[3rem] sm:text-3xl md:text-4xl"
             />
 
             <div
@@ -261,6 +295,7 @@ function AddBlog() {
               suppressContentEditableWarning
               onMouseUp={handleTextSelection}
               onKeyUp={handleTextSelection}
+              onKeyDown={handleEditorKeyDown}
               onInput={handleEditorChange}
               onFocus={(e) => {
                 if (e.currentTarget.textContent.trim() === "Start writing...") {
@@ -293,6 +328,7 @@ function AddBlog() {
         >
           <button
             onClick={() => applyFormat("bold")}
+            onMouseDown={(event) => event.preventDefault()}
             className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
             title="Bold"
           >
@@ -300,6 +336,7 @@ function AddBlog() {
           </button>
           <button
             onClick={() => applyFormat("italic")}
+            onMouseDown={(event) => event.preventDefault()}
             className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
             title="Italic"
           >
@@ -308,6 +345,7 @@ function AddBlog() {
           <div className="h-6 w-px bg-gray-700" />
           <button
             onClick={() => applyFormat("heading")}
+            onMouseDown={(event) => event.preventDefault()}
             className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
             title="Heading"
           >
@@ -315,6 +353,7 @@ function AddBlog() {
           </button>
           <button
             onClick={() => applyFormat("quote")}
+            onMouseDown={(event) => event.preventDefault()}
             className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
             title="Quote"
           >
@@ -322,10 +361,32 @@ function AddBlog() {
           </button>
           <button
             onClick={() => applyFormat("link")}
+            onMouseDown={(event) => event.preventDefault()}
             className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
             title="Link"
           >
             <Link2 size={18} />
+          </button>
+          <div className="h-6 w-px bg-gray-700" />
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => handleUndoRedo("undo")}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
+            title="Undo (Ctrl/Cmd + Z)"
+            aria-label="Undo"
+          >
+            <Undo2 size={18} />
+          </button>
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => handleUndoRedo("redo")}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
+            title="Redo (Ctrl/Cmd + Shift + Z)"
+            aria-label="Redo"
+          >
+            <Redo2 size={18} />
           </button>
         </div>
       ) : null}
