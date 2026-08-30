@@ -21,6 +21,9 @@ import Settings from './pages/Settings/GeneralSettings'
 import AdminProfile from './pages/AdminProfile'
 import NotFound from './pages/NotFound'
 import RequireAdmin from './routes/RequireAdmin'
+import Quizzes from './pages/QuizManagement/Quizzes'
+import QuizEditor from './pages/QuizManagement/QuizEditor'
+import QuizAttempts from './pages/QuizManagement/QuizAttempts'
 
 function ProtectedLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
@@ -53,6 +56,10 @@ function App() {
             <Route path="/courses/:id/add-lesson" element={<AddLesson />} />
             <Route path="/courses/:id/edit-lesson/:lessonId" element={<EditLesson />} />
             <Route path="/courses/edit/:id" element={<EditCourse />} />
+            <Route path="/quizzes" element={<Quizzes />} />
+            <Route path="/quizzes/new" element={<QuizEditor />} />
+            <Route path="/quizzes/:id/edit" element={<QuizEditor />} />
+            <Route path="/quizzes/:id/attempts" element={<QuizAttempts />} />
             <Route path="/users" element={<Users />} />
             <Route path="/blog" element={<Blogs />} />
             <Route path="/blog/add" element={<AddBlog />} />

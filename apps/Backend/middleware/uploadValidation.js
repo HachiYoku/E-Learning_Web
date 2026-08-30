@@ -20,10 +20,15 @@ function imageFileFilter(_req, file, callback) {
   return callback(null, true);
 }
 
-function createImageUpload() {
+function createImageUpload({ maxFiles } = {}) {
+  const limits = { fileSize: MAX_UPLOAD_SIZE_BYTES };
+  if (maxFiles) {
+    limits.files = maxFiles;
+  }
+
   return multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: MAX_UPLOAD_SIZE_BYTES },
+    limits,
     fileFilter: imageFileFilter,
   });
 }
