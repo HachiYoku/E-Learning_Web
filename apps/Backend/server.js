@@ -79,6 +79,9 @@ app.use('/courses', courseRoutes)
 const lessonRoutes = require('./routes/lesson')
 app.use('/lessons', lessonRoutes)
 
+const quizRoutes = require('./routes/quiz')
+app.use('/quizzes', quizRoutes)
+
 const paymentRoutes = require('./routes/payment')
 app.use('/payments', paymentRoutes)
 
