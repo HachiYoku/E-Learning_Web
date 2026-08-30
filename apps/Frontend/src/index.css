@@ -20,3 +20,11 @@ h5,
 h6 {
   font-family: var(--font-heading);
 }
+
+.benefits-snap-scroll {
+  scrollbar-width: none;
+}
+
+.benefits-snap-scroll::-webkit-scrollbar {
+  display: none;
+}

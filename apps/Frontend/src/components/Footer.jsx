@@ -7,7 +7,7 @@ function Footer() {
         <div className=" flex flex-col md:flex-row justify-between items-center gap-6">
           {/* Left - Copyright */}
           <div className="text-gray-700 text-sm md:text-base">
-            Copyright {currentYear} © <span className="font-bold">mindployenglish</span>. All rights reserved.
+            Copyright {currentYear} © <span className="font-bold"> Arun Thai Language Center</span>. All rights reserved.
           </div>
 
           {/* Right - Links */}
