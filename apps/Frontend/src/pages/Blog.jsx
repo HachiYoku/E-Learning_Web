@@ -8,7 +8,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { fetchBlogs } from "../services/blogService";
 import { sanitizeHtmlContent } from "../utils/sanitizeHtmlContent";
 
-const logo = "/Nav/Logo.png";
+const logo = "/Nav/favicon-arunthai.png"; // Default author logo if none is provided
 const fallbackImage =
   "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=1200&h=900&fit=crop";
 const INSIGHTS_PER_PAGE = 6;
