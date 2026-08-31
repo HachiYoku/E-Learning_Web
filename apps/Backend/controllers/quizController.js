@@ -58,6 +58,11 @@ async function uploadQuestionImages(questions) {
   );
 }
 
+async function validateCourse(courseId) {
+  const course = await Course.findById(courseId);
+  if (!course) throw new Error("Course not found");
+}
+
 async function validateLesson(courseId, lessonId) {
   const [course, lesson] = await Promise.all([Course.findById(courseId), Lesson.findById(lessonId)]);
   if (!course) throw new Error("Course not found");
@@ -66,16 +71,29 @@ async function validateLesson(courseId, lessonId) {
 
 const createQuiz = async (req, res) => {
   try {
-    const { courseId, lessonId, title } = req.body;
+    const { courseId, lessonId, title, quizType } = req.body;
+    const finalQuizType = quizType || "lesson"; // Default to lesson for backward compatibility
     const maxAttempts = req.body.maxAttempts === "" || req.body.maxAttempts === undefined ? null : Number(req.body.maxAttempts);
-    if (!courseId || !lessonId || !title?.trim()) return res.status(400).json({ message: "Course, lesson, and quiz title are required." });
+    
+    if (!courseId || !title?.trim()) return res.status(400).json({ message: "Course and quiz title are required." });
+    if (!["lesson", "course"].includes(finalQuizType)) return res.status(400).json({ message: "Quiz type must be 'lesson' or 'course'." });
+    if (finalQuizType === "lesson" && !lessonId) return res.status(400).json({ message: "Lesson is required for lesson-type quizzes." });
     if (maxAttempts !== null && (!Number.isInteger(maxAttempts) || maxAttempts < 1)) return res.status(400).json({ message: "Attempt limit must be a whole number of at least 1." });
-    await validateLesson(courseId, lessonId);
+    
+    if (finalQuizType === "lesson") {
+      await validateLesson(courseId, lessonId);
+    } else {
+      await validateCourse(courseId);
+    }
+    
     const questions = await uploadQuestionImages(parseQuestions(req.body.questions, req.files));
-    const quiz = await Quiz.create({ course: courseId, lesson: lessonId, title: title.trim(), maxAttempts, questions });
+    const quizData = { course: courseId, title: title.trim(), maxAttempts, questions, quizType: finalQuizType };
+    if (finalQuizType === "lesson") quizData.lesson = lessonId;
+    
+    const quiz = await Quiz.create(quizData);
     return res.status(201).json(quiz);
   } catch (error) {
-    if (error.code === 11000) return res.status(400).json({ message: "This lesson already has a quiz with that title." });
+    if (error.code === 11000) return res.status(400).json({ message: "A quiz with this title already exists for this course/lesson." });
     return res.status(error.message.includes("not found") ? 404 : 400).json({ message: error.message });
   }
 };
@@ -103,12 +121,28 @@ const updateQuiz = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.quizId);
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+    
     const courseId = req.body.courseId || String(quiz.course);
     const lessonId = req.body.lessonId || String(quiz.lesson);
-    await validateLesson(courseId, lessonId);
+    const quizType = req.body.quizType || quiz.quizType;
+    
+    if (!["lesson", "course"].includes(quizType)) return res.status(400).json({ message: "Quiz type must be 'lesson' or 'course'." });
+    if (quizType === "lesson" && !lessonId) return res.status(400).json({ message: "Lesson is required for lesson-type quizzes." });
+    
+    if (quizType === "lesson") {
+      await validateLesson(courseId, lessonId);
+    } else {
+      await validateCourse(courseId);
+    }
+    
     const questions = await uploadQuestionImages(parseQuestions(req.body.questions, req.files));
     quiz.course = courseId;
-    quiz.lesson = lessonId;
+    quiz.quizType = quizType;
+    if (quizType === "lesson") {
+      quiz.lesson = lessonId;
+    } else {
+      quiz.lesson = null;
+    }
     quiz.title = req.body.title?.trim() || quiz.title;
     if (req.body.maxAttempts !== undefined) {
       const maxAttempts = req.body.maxAttempts === "" ? null : Number(req.body.maxAttempts);
@@ -119,7 +153,7 @@ const updateQuiz = async (req, res) => {
     await quiz.save();
     return res.json(quiz);
   } catch (error) {
-    if (error.code === 11000) return res.status(400).json({ message: "This lesson already has a quiz with that title." });
+    if (error.code === 11000) return res.status(400).json({ message: "A quiz with this title already exists for this course/lesson." });
     return res.status(error.message.includes("not found") ? 404 : 400).json({ message: error.message });
   }
 };
@@ -206,4 +240,17 @@ const getQuizAttempts = async (req, res) => {
   }
 };
 
-module.exports = { createQuiz, getAdminQuizzes, getAdminQuiz, updateQuiz, deleteQuiz, getStudentQuizzesForLesson, submitQuiz, getQuizAttempts };
+const getStudentCourseQuizzes = async (req, res) => {
+  try {
+    const quizzes = await Quiz.find({ course: req.params.courseId, quizType: "course" }).select("title maxAttempts questions.prompt questions.image questions.options");
+    const withAttemptInfo = await Promise.all(quizzes.map(async (quiz) => ({
+      ...quiz.toObject(),
+      attemptsUsed: await QuizAttempt.countDocuments({ quiz: quiz._id, user: req.user.id }),
+    })));
+    return res.json(withAttemptInfo);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { createQuiz, getAdminQuizzes, getAdminQuiz, updateQuiz, deleteQuiz, getStudentQuizzesForLesson, submitQuiz, getQuizAttempts, getStudentCourseQuizzes };

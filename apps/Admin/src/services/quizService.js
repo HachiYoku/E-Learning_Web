@@ -6,6 +6,7 @@ const normalizeQuiz = (quiz) => ({
   maxAttempts: quiz.maxAttempts ?? null,
   course: quiz.course,
   lesson: quiz.lesson,
+  quizType: quiz.quizType || "lesson",
   questions: quiz.questions || [],
   createdAt: quiz.createdAt,
 });
@@ -13,8 +14,9 @@ const normalizeQuiz = (quiz) => ({
 function buildQuizFormData(payload) {
   const formData = new FormData();
   formData.append("courseId", payload.courseId);
-  formData.append("lessonId", payload.lessonId);
+  if (payload.lessonId) formData.append("lessonId", payload.lessonId);
   formData.append("title", payload.title.trim());
+  formData.append("quizType", payload.quizType || "lesson");
   formData.append("maxAttempts", payload.maxAttempts === null || payload.maxAttempts === "" ? "" : String(payload.maxAttempts));
   formData.append("questions", JSON.stringify(payload.questions.map(({ imageFile, preview, ...question }) => question)));
   payload.questions.forEach((question, index) => {
