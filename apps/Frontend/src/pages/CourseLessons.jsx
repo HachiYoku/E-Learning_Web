@@ -5,6 +5,7 @@ import Footer from '../components/Footer'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { fetchCourseById } from '../services/courseService'
 import { fetchLessonsByCourse } from '../services/lessonService'
+import { fetchCourseQuizzes } from '../services/quizService'
 
 function getEmbedUrl(src) {
   if (!src) {
@@ -54,6 +55,7 @@ function CourseLessons() {
   const navigate = useNavigate()
   const [course, setCourse] = useState(null)
   const [lessons, setLessons] = useState([])
+  const [courseQuizzes, setCourseQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeLesson, setActiveLesson] = useState(null)
@@ -66,13 +68,15 @@ function CourseLessons() {
         setLoading(true)
         setError('')
 
-        const [courseResponse, lessonsResponse] = await Promise.all([
+        const [courseResponse, lessonsResponse, quizzesResponse] = await Promise.all([
           fetchCourseById(courseId),
           fetchLessonsByCourse(courseId),
+          fetchCourseQuizzes(courseId),
         ])
 
         setCourse(courseResponse)
         setLessons(lessonsResponse)
+        setCourseQuizzes(quizzesResponse)
       } catch (loadError) {
         setError(loadError.message)
       } finally {
@@ -189,38 +193,82 @@ function CourseLessons() {
                     No lessons are available in this course yet.
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {lessons.map((lesson) => (
-                      <div
-                        key={lesson.id}
-                        className="flex w-full items-center gap-3 rounded-xl border border-gray-200 p-3 transition-all hover:border-pink-300 hover:bg-gray-50"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => lesson.videoUrl && setActiveLesson(lesson)}
-                          className="group flex flex-1 items-center gap-4 p-1 text-left"
-                        >
-                        <div className="flex items-center gap-4 text-left flex-1">
-                          <span className="text-gray-500 font-semibold text-sm w-8">
-                            {lesson.order}.
-                          </span>
-                          <span className="text-gray-900 font-semibold group-hover:text-pink-400 transition-colors">
-                            {lesson.title}
-                          </span>
-                        </div>
-                        <span className="text-gray-400 group-hover:text-pink-400 transition-colors text-xl">
-                          →
-                        </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/course-lessons/${courseId}/quiz/${lesson.id}`)}
-                          className="shrink-0 rounded-lg bg-pink-100 px-3 py-2 text-sm font-semibold text-pink-700 transition hover:bg-pink-200"
-                        >
-                          Quiz
-                        </button>
+                  <div>
+                    <div className="mb-8">
+                      <h3 className="text-lg font-bold text-gray-900 mb-4">Lessons</h3>
+                      <div className="space-y-3">
+                        {lessons.map((lesson) => (
+                          <div
+                            key={lesson.id}
+                            className="flex w-full items-center gap-3 rounded-xl border border-gray-200 p-3 transition-all hover:border-pink-300 hover:bg-gray-50"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => lesson.videoUrl && setActiveLesson(lesson)}
+                              className="group flex flex-1 items-center gap-4 p-1 text-left"
+                            >
+                            <div className="flex items-center gap-4 text-left flex-1">
+                              <span className="text-gray-500 font-semibold text-sm w-8">
+                                {lesson.order}.
+                              </span>
+                              <span className="text-gray-900 font-semibold group-hover:text-pink-400 transition-colors">
+                                {lesson.title}
+                              </span>
+                            </div>
+                            <span className="text-gray-400 group-hover:text-pink-400 transition-colors text-xl">
+                              →
+                            </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/course-lessons/${courseId}/quiz/${lesson.id}`)}
+                              className="shrink-0 rounded-lg bg-pink-100 px-3 py-2 text-sm font-semibold text-pink-700 transition hover:bg-pink-200"
+                            >
+                              Quiz
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+
+                    {courseQuizzes.length > 0 && (
+                      <div className="border-t border-gray-200 pt-8">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Course Quizzes</h3>
+                        <div className="space-y-3">
+                          {courseQuizzes.map((quiz) => {
+                            const quizId = quiz.id || quiz._id;
+                            return (
+                              <div
+                                key={quizId}
+                                className="flex w-full items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 transition-all hover:border-blue-400 hover:bg-blue-100"
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-900 font-semibold text-sm">
+                                      {quiz.title}
+                                    </span>
+                                    <span className="inline-block rounded-full bg-blue-200 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                      Course
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    {quiz.questions.length} question{quiz.questions.length === 1 ? '' : 's'}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/course-quiz/${courseId}/${quizId}`)}
+                                  disabled={Boolean(quiz.maxAttempts) && (quiz.attemptsUsed ?? 0) >= quiz.maxAttempts}
+                                  className={`shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition ${Boolean(quiz.maxAttempts) && (quiz.attemptsUsed ?? 0) >= quiz.maxAttempts ? 'cursor-not-allowed bg-gray-300 text-gray-600' : 'bg-blue-500 text-white hover:bg-blue-600'}`}
+                                >
+                                  {Boolean(quiz.maxAttempts) && (quiz.attemptsUsed ?? 0) >= quiz.maxAttempts ? 'Closed' : 'Take'}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

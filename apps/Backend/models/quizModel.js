@@ -28,7 +28,8 @@ questionSchema.pre("validate", function validateCorrectAnswer() {
 const quizSchema = new mongoose.Schema(
   {
     course: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true, index: true },
-    lesson: { type: mongoose.Schema.Types.ObjectId, ref: "Lesson", required: true, index: true },
+    lesson: { type: mongoose.Schema.Types.ObjectId, ref: "Lesson", default: null, index: true },
+    quizType: { type: String, enum: ["lesson", "course"], default: "lesson", index: true },
     title: { type: String, required: true, trim: true, maxlength: 140 },
     maxAttempts: { type: Number, min: 1, default: null },
     questions: { type: [questionSchema], default: [] },
@@ -36,6 +37,10 @@ const quizSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-quizSchema.index({ lesson: 1, title: 1 }, { unique: true });
+// Unique index for lesson quizzes
+quizSchema.index({ lesson: 1, title: 1 }, { unique: true, partialFilterExpression: { quizType: "lesson" } });
+
+// Unique index for course quizzes
+quizSchema.index({ course: 1, title: 1 }, { unique: true, partialFilterExpression: { quizType: "course" } });
 
 module.exports = mongoose.model("Quiz", quizSchema);
