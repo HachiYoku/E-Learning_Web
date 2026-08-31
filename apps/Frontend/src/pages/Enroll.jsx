@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { Fragment, useEffect, useState } from "react";
-import { TvMinimalPlay } from "lucide-react";
+import { ArrowLeft, Check, CreditCard, LockKeyhole, Star, TvMinimalPlay } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -42,7 +42,7 @@ function Enroll() {
     return (
       <div className="min-h-screen bg-white">
         <Navbar />
-        <div className="flex items-center justify-center h-screen">
+        <div className="flex h-screen items-center justify-center bg-[#FFF9EA]">
           <LoadingSpinner message="Loading course..." />
         </div>
       </div>
@@ -53,8 +53,8 @@ function Enroll() {
     return (
       <div className="min-h-screen bg-white">
         <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <p className="text-lg sm:text-2xl text-gray-600">
+        <div className="flex h-screen items-center justify-center bg-[#FFF9EA]">
+          <p className="text-lg sm:text-2xl text-[#765F55]">
             {error || "Course not found"}
           </p>
         </div>
@@ -62,46 +62,33 @@ function Enroll() {
     );
   }
 
-  const renderStars = (rating) => (
-    <div className="flex gap-1">
-      {[...Array(5)].map((_, i) => (
-        <span
-          key={i}
-          className={
-            i < Math.floor(rating) ? "text-yellow-400" : "text-gray-300"
-          }
-        >
-          ★
-        </span>
-      ))}
-    </div>
-  );
-
   return (
     <Fragment>
-      <div className="min-h-screen bg-blue-50">
+      <div className="min-h-screen bg-[#FFFDF8]">
         <Navbar />
 
         {/* Back to Courses */}
-        <div className="px-4 sm:px-6 md:px-10 pt-6 sm:pt-8">
+        <div className="bg-[#FFF9EA] px-4 pt-6 sm:px-6 sm:pt-8 md:px-10">
           <div className="max-w-7xl mx-auto">
             <button
               onClick={() => navigate("/courses")}
-              className="flex items-center gap-2 text-gray-700 hover:text-gray-900 font-semibold transition-colors text-sm sm:text-base"
+              className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"
             >
-              <span className="text-xl sm:text-2xl">←</span>
-              Back To Courses
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to courses
             </button>
           </div>
         </div>
 
-        <div className="px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-12">
+        <div className="bg-[#FFF9EA] px-4 pb-14 pt-8 sm:px-6 sm:pb-16 md:px-10 md:pb-20">
           <div className="max-w-7xl mx-auto">
             {/* Header */}
-            <div className="text-center mb-8 sm:mb-10 md:mb-12">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900">
-                Complete Your Enrollment
+            <div className="mx-auto mb-8 max-w-4xl text-center sm:mb-10 md:mb-12">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">One step away</p>
+              <h1 className="mt-3 whitespace-nowrap text-[clamp(1.5rem,7vw,3rem)] font-bold leading-[1.05] tracking-tight text-[#2D2E30]">
+                Complete your <span className="font-serif font-normal italic text-[#B96128]">enrollment.</span>
               </h1>
+              <p className="mt-4 text-sm leading-relaxed text-[#765F55] sm:text-base">Review your course, then continue to payment.</p>
             </div>
 
             {/*
@@ -113,104 +100,90 @@ function Enroll() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 items-start">
               {/* Course Details */}
               <div className="md:col-span-1 lg:col-span-2">
-                <div className="bg-white rounded-3xl p-5 sm:p-6 md:p-8 shadow-lg">
+                <div className="rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-4 shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] sm:p-6 md:p-8">
                   <div className="mb-5 sm:mb-6">
                     <img
                       src={course.image}
                       alt={course.title}
-                      className="w-full h-48 sm:h-56 md:h-64 lg:h-80 xl:h-96 object-cover rounded-2xl"
+                      className="h-52 w-full rounded-[1.3rem] object-cover sm:h-64 md:h-80 lg:h-96"
                     />
                   </div>
 
                   <div className="mb-2">
-                    <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full">
-                      {course.title}
-                    </span>
+                    <span className="inline-block rounded-full border border-[#E58C1A]/20 bg-[#FFF4D8] px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Your selected course</span>
                   </div>
 
                   <div className="mb-4">
-                    <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-semibold">
-                      Course Title — {course.title}
-                    </h1>
+                    <h2 className="mt-3 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl">
+                      {course.title}
+                    </h2>
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5">
                       <div className="flex items-center gap-2">
                         <TvMinimalPlay
-                          className="h-5 w-5 text-gray-700"
+                        className="h-5 w-5 text-[#E58C1A]"
                           strokeWidth={2}
                           aria-hidden="true"
                         />
-                        <span className="text-gray-700 font-semibold text-sm sm:text-base">
+                        <span className="text-[#2D2E30] font-semibold text-sm sm:text-base">
                           {course.lessons} lessons
                         </span>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {renderStars(course.rating)}
-                        <span className="text-gray-700 font-semibold text-sm sm:text-base">
+                        <Star className="h-4 w-4 fill-[#F4B63F] text-[#F4B63F]" aria-hidden="true" />
+                        <span className="text-[#2D2E30] font-semibold text-sm sm:text-base">
                           ({course.rating.toFixed(1)}/5)
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="text-xl sm:text-2xl font-semibold text-gray-900">
-                    Price - {course.price}
-                  </div>
+                  <p className="mt-6 border-t border-[#2D2E30]/10 pt-4 text-sm leading-relaxed text-[#765F55]">You’ll get full access once your payment is approved.</p>
                 </div>
               </div>
 
               {/* Order Summary */}
               <div className="md:col-span-1 lg:col-span-1">
-                <div className="bg-white rounded-3xl p-5 sm:p-6 md:p-6 shadow-lg md:sticky md:top-20">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-5">
-                    Order Summary
-                  </h3>
-
+                <div className="rounded-[1.75rem] bg-[#2D2E30] p-5 text-white shadow-[0_24px_55px_-34px_rgba(45,46,48,0.55)] sm:p-6 md:sticky md:top-20">
+                  <div className="flex items-center justify-between border-b border-white/15 pb-4"><h3 className="text-xl font-bold">Order summary</h3><CreditCard className="h-5 w-5 text-[#F8C56A]" aria-hidden="true" /></div>
                   <div className="space-y-3 mb-4 sm:mb-5">
                     <div className="flex justify-between items-start gap-3">
-                      <span className="text-gray-700 font-semibold text-xs sm:text-sm shrink-0">
+                      <span className="text-white/65 font-semibold text-xs sm:text-sm shrink-0">
                         Course name:
                       </span>
-                      <span className="text-gray-900 font-semibold text-xs sm:text-sm text-right">
+                      <span className="text-white font-semibold text-xs sm:text-sm text-right">
                         {course.title}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center pb-3 border-b border-gray-300">
-                      <span className="text-gray-700 font-semibold text-xs sm:text-sm">
+                    <div className="flex justify-between items-center pb-3 border-b border-white/15">
+                      <span className="text-white/65 font-semibold text-xs sm:text-sm">
                         Price:
                       </span>
-                      <span className="text-gray-900 font-semibold text-xs sm:text-sm">
+                      <span className="text-white font-semibold text-xs sm:text-sm">
                         {course.price}
                       </span>
                     </div>
                     <div className="flex justify-between items-center pt-1">
-                      <span className="text-sm font-bold text-gray-900">
-                        Total Amount:
+                      <span className="text-sm font-bold text-white">
+                        Total
                       </span>
-                      <span className="text-sm font-bold text-gray-900">
+                      <span className="text-xl font-bold text-[#F8C56A]">
                         {course.price}
                       </span>
                     </div>
                   </div>
 
                   {/* How to Enroll */}
-                  <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 mb-4 sm:mb-5">
-                    <h4 className="font-bold text-gray-900 mb-2 sm:mb-3 text-xs sm:text-sm">
-                      How to Enroll
+                  <div className="mb-5 rounded-2xl border border-white/15 bg-white/5 p-4">
+                    <h4 className="font-bold text-white mb-3 text-xs uppercase tracking-[0.16em]">
+                      What happens next
                     </h4>
-                    <ol className="space-y-2 text-xs text-gray-700">
-                      <li>
-                        <span className="font-semibold">Step 1.</span> Scan the QR Code to make payment.
+                    <ol className="space-y-3 text-xs leading-relaxed text-white/75">
+                      <li className="flex gap-2"><Check className="h-4 w-4 shrink-0 text-[#F8C56A]" aria-hidden="true" /><span>Make payment using the QR code.</span>
                       </li>
-                      <li>
-                        <span className="font-semibold">Step 2.</span> Attach the payment proof (receipt)
+                      <li className="flex gap-2"><Check className="h-4 w-4 shrink-0 text-[#F8C56A]" aria-hidden="true" /><span>Upload your payment receipt.</span>
                       </li>
-                      <li>
-                        <span className="font-semibold">Step 3.</span> Wait for the staff to verify. Check status in{" "}
-                        <span className="font-bold">
-                          Profile → My Course Orders
-                        </span>
-                        .
+                      <li className="flex gap-2"><Check className="h-4 w-4 shrink-0 text-[#F8C56A]" aria-hidden="true" /><span>We’ll verify it and notify you when access is ready.</span>
                       </li>
                     </ol>
                   </div>
@@ -219,17 +192,17 @@ function Enroll() {
                   <div className="flex gap-2 sm:gap-3">
                     <button
                       onClick={() => navigate(`/courses/${courseId}`)}
-                      className="flex-1 border-2 border-gray-300 text-gray-900 font-bold py-2 sm:py-2.5 rounded-full hover:bg-gray-50 transition-colors text-xs sm:text-sm"
+                      className="flex-1 rounded-xl border border-white/25 py-3 text-xs font-bold text-white transition hover:bg-white/10 sm:text-sm"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleEnrollClick}
-                      className="flex-1 bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-bold py-2 sm:py-2.5 rounded-full transition-colors text-xs sm:text-sm"
+                      className="flex-1 rounded-xl bg-[#F8C56A] py-3 text-xs font-bold text-[#2D2E30] transition-colors hover:bg-[#E58C1A] sm:text-sm"
                     >
                       Enroll Now
                     </button>
-                  </div>
+                  </div><p className="mt-4 flex items-center justify-center gap-2 text-[11px] text-white/55"><LockKeyhole className="h-3 w-3" aria-hidden="true" /> Secure enrollment</p>
                 </div>
               </div>
             </div>
