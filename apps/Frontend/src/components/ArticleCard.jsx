@@ -1,7 +1,7 @@
 import { ArrowRight, CalendarDays } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const defaultAuthorLogo = "/Nav/Logo.png";
+const defaultAuthorLogo = "/Nav/favicon-arunthai.png"; // Default author logo if none is provided
 const fallbackImage =
   "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800&h=600&fit=crop";
 
@@ -54,6 +54,10 @@ function ArticleCard({ id, image, title, description, authorLogo, authorName, da
             <img
               src={resolvedAuthorLogo}
               alt={authorName}
+              onError={(event) => {
+                event.currentTarget.onerror = null;
+                event.currentTarget.src = defaultAuthorLogo;
+              }}
               className="h-9 w-9 rounded-full border border-[#E58C1A]/20 object-contain p-1"
             />
             <div className="min-w-0">

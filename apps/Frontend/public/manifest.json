@@ -7,9 +7,9 @@
   "theme_color": "#E58C1A",
   "icons": [
     {
-      "src": "/Nav/Logo.png",
-      "sizes": "any",
-      "type": "image/png"
+      "src": "/Nav/favicon-arunthai.jpg?v=1",
+      "sizes": "196x196",
+      "type": "image/jpeg"
     }
   ]
 }
