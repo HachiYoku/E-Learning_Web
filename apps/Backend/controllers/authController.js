@@ -6,6 +6,11 @@ const sendEmail = require('../services/sendEmail')
 
 const GENERIC_LOGIN_ERROR_MESSAGE = "Invalid email, password, or account status";
 const GENERIC_PASSWORD_RESET_MESSAGE = "If that email exists, a password reset link has been sent";
+const isStrongPassword = (password) => typeof password === "string"
+  && password.length >= 12
+  && /[a-z]/.test(password)
+  && /[A-Z]/.test(password)
+  && /\d/.test(password);
 
 const getAppUrl = (appName) => {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -59,6 +64,9 @@ const register = async (req, res) => {
 
     if (!displayName || !email || !password) {
       return res.status(400).json({ message: "Please fill all fields" });
+    }
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ message: "Use a password with at least 12 characters, including uppercase, lowercase, and a number." });
     }
 
     const existUser = await User.findOne({ email });
@@ -301,6 +309,9 @@ const resetPassword = async (req, res) => {
     // Validate that newPassword is provided
     if (!password) {
       return res.status(400).json({ message: "New password is required" });
+    }
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ message: "Use a password with at least 12 characters, including uppercase, lowercase, and a number." });
     }
     const user = await User.findOne({
       resetToken: token,

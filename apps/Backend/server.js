@@ -97,6 +97,12 @@ app.use('/blogs', blogRoutes)
 const notificationRoutes = require('./routes/notification')
 app.use('/notifications', notificationRoutes)
 
+const contactRoutes = require('./routes/contact')
+app.use('/contacts', contactRoutes)
+
+const campaignRoutes = require('./routes/campaign')
+app.use('/campaigns', campaignRoutes)
+
 app.get('/', (req, res) => {
   res.send('Hello English Kafe!')
 })
