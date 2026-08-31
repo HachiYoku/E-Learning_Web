@@ -2,7 +2,7 @@ const express = require("express");
 const validateToken = require("../middleware/authMiddleware");
 const requireAdmin = require("../middleware/adminMiddleware");
 const requireEnrollment = require("../middleware/enrollmentMiddleware");
-const { createImageUpload } = require("../middleware/uploadValidation");
+const { createImageUpload, validateImageFileContent } = require("../middleware/uploadValidation");
 const controller = require("../controllers/quizController");
 
 const router = express.Router();
@@ -23,8 +23,8 @@ function validateQuizImageFields(req, res, next) {
 router.get("/admin", validateToken, requireAdmin, controller.getAdminQuizzes);
 router.get("/admin/:quizId", validateToken, requireAdmin, controller.getAdminQuiz);
 router.get("/admin/:quizId/attempts", validateToken, requireAdmin, controller.getQuizAttempts);
-router.post("/admin", validateToken, requireAdmin, upload.any(), validateQuizImageFields, controller.createQuiz);
-router.put("/admin/:quizId", validateToken, requireAdmin, upload.any(), validateQuizImageFields, controller.updateQuiz);
+router.post("/admin", validateToken, requireAdmin, upload.any(), validateImageFileContent, validateQuizImageFields, controller.createQuiz);
+router.put("/admin/:quizId", validateToken, requireAdmin, upload.any(), validateImageFileContent, validateQuizImageFields, controller.updateQuiz);
 router.delete("/admin/:quizId", validateToken, requireAdmin, controller.deleteQuiz);
 router.get("/course/:courseId/lesson/:lessonId", validateToken, requireEnrollment, controller.getStudentQuizzesForLesson);
 router.post("/:quizId/submit", validateToken, controller.submitQuiz);

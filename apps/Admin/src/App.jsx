@@ -11,6 +11,8 @@ import CourseDetail from './pages/CourseManagement/CourseDetail'
 import AddLesson from './pages/CourseManagement/AddLesson'
 import EditLesson from './pages/CourseManagement/EditLesson'
 import Users from './pages/UserManagement/Users'
+import ContactLeads from './pages/ContactManagement/ContactLeads'
+import Campaigns from './pages/CampaignManagement/Campaigns'
 import Blogs from './pages/BlogManagement/Blogs'
 import AddBlog from './pages/BlogManagement/AddBlog'
 import EditBlog from './pages/BlogManagement/EditBlog'
@@ -61,6 +63,8 @@ function App() {
             <Route path="/quizzes/:id/edit" element={<QuizEditor />} />
             <Route path="/quizzes/:id/attempts" element={<QuizAttempts />} />
             <Route path="/users" element={<Users />} />
+            <Route path="/contacts" element={<ContactLeads />} />
+            <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/blog" element={<Blogs />} />
             <Route path="/blog/add" element={<AddBlog />} />
             <Route path="/blog/edit/:id" element={<EditBlog />} />
