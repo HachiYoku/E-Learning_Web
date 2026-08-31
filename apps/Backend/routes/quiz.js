@@ -27,6 +27,7 @@ router.post("/admin", validateToken, requireAdmin, upload.any(), validateImageFi
 router.put("/admin/:quizId", validateToken, requireAdmin, upload.any(), validateImageFileContent, validateQuizImageFields, controller.updateQuiz);
 router.delete("/admin/:quizId", validateToken, requireAdmin, controller.deleteQuiz);
 router.get("/course/:courseId/lesson/:lessonId", validateToken, requireEnrollment, controller.getStudentQuizzesForLesson);
+router.get("/course/:courseId", validateToken, requireEnrollment, controller.getStudentCourseQuizzes);
 router.post("/:quizId/submit", validateToken, controller.submitQuiz);
 
 module.exports = router;
