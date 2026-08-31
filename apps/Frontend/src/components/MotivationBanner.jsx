@@ -1,65 +1,47 @@
-const logoMotivation = "/moti/moti-punch.jpeg"
 const openIcon = "/moti/open.svg"
 const closeIcon = "/moti/close.svg"
 
 function MotivationBanner() {
   return (
-    <section className="relative px-4 sm:px-6 md:px-10 py-6 sm:py-8 md:py-12" style={{ backgroundColor: "#F5D4DC" }}>
-      <div className="max-w-6xl mx-auto relative">
+    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-16 sm:px-6 md:px-10 md:py-24 lg:px-16">
+      <div className="absolute -left-24 top-0 -z-10 h-72 w-72 rounded-full bg-[#F8C56A]/20 blur-3xl" aria-hidden="true" />
+      <div className="absolute -bottom-20 -right-16 -z-10 h-72 w-72 rounded-full bg-[#E9A9A0]/20 blur-3xl" aria-hidden="true" />
+      <div className="relative mx-auto max-w-[1500px]">
+        <div className="relative mx-auto max-w-4xl rounded-[2rem] border border-white/80 bg-white/55 px-8 py-10 shadow-[0_24px_60px_-32px_rgba(80,48,19,0.45)] backdrop-blur-sm sm:px-12 sm:py-12 md:px-16 md:py-14">
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 md:gap-6 items-center">
-
-          {/* left - Logo (hidden on mobile) */}
-          <div className="hidden md:flex justify-center">
-            <img
-              src={logoMotivation}
-              alt="English Kafé Logo"
-              className="w-32 h-32 md:w-40 md:h-40 lg:w-48 lg:h-48 object-contain"
-            />
-          </div>
-
-          {/* Right - Main Message (takes 2 cols) */}
-          <div className="md:col-span-2 md:pr-6 lg:pr-8 relative px-8 sm:px-10 md:px-0">
-
-            {/* Open quote icon — top left of text block */}
-            <div className="absolute left-0 top-0 md:-left-8 lg:-left-12">
+          <div className="absolute left-3 top-4 sm:left-5 sm:top-5">
               <img
                 src={openIcon}
-                alt="Open Icon"
-                className="w-7 sm:w-9 md:w-14 lg:w-16 h-7 sm:h-9 md:h-14 lg:h-16"
+                alt=""
+                className="h-7 w-7 opacity-60 sm:h-9 sm:w-9 md:h-12 md:w-12"
               />
             </div>
 
-            {/* Close quote icon — bottom right of text block */}
-            <div className="absolute right-0 bottom-0 md:-right-4">
+          <div className="absolute bottom-4 right-3 sm:bottom-5 sm:right-5">
               <img
                 src={closeIcon}
-                alt="Close Icon"
-                className="w-7 sm:w-9 md:w-14 lg:w-16 h-7 sm:h-9 md:h-14 lg:h-16"
+                alt=""
+                className="h-7 w-7 opacity-60 sm:h-9 sm:w-9 md:h-12 md:w-12"
               />
             </div>
 
-            <div>
-              {/* Top accent line */}
-              <div className="w-16 sm:w-24 md:w-36 h-0.8 sm:h-1 bg-black mb-3 sm:mb-4 mx-8" />
+            <div className="relative">
+              <div className="mb-5 h-1 w-16 rounded-full bg-[#E58C1A] sm:mb-6 sm:w-24" />
 
-              <div className="py-2 sm:py-3 px-8 pr-6 sm:pr-8 md:pr-4">
-                <h2 className="text-base sm:text-lg md:text-xl lg:text-3xl font-bold text-gray-900 mb-2 sm:mb-3 leading-snug">
-                  Every small effort you make in learning English
+              <div className="pr-4 sm:pr-6">
+                <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">A note for your journey</p>
+                <h2 className="mb-4 text-xl font-bold leading-snug tracking-tight text-[#2D2E30] sm:text-2xl md:text-3xl lg:text-4xl">
+                  Every small effort you make in learning Thai
                   today builds the confidence and fluency you
                   will proudly use tomorrow.
                 </h2>
-                <p className="text-[#8B6F61] text-xs sm:text-sm md:text-base lg:text-lg">
+                <p className="text-sm leading-relaxed text-[#765F55] sm:text-base lg:text-lg">
                   Learn smarter, progress faster, and speak with confidence.
                 </p>
               </div>
             </div>
 
-          </div>
-
-
         </div>
-
       </div>
     </section>
   )

@@ -79,6 +79,9 @@ app.use('/courses', courseRoutes)
 const lessonRoutes = require('./routes/lesson')
 app.use('/lessons', lessonRoutes)
 
+const quizRoutes = require('./routes/quiz')
+app.use('/quizzes', quizRoutes)
+
 const paymentRoutes = require('./routes/payment')
 app.use('/payments', paymentRoutes)
 
@@ -93,6 +96,12 @@ app.use('/blogs', blogRoutes)
 
 const notificationRoutes = require('./routes/notification')
 app.use('/notifications', notificationRoutes)
+
+const contactRoutes = require('./routes/contact')
+app.use('/contacts', contactRoutes)
+
+const campaignRoutes = require('./routes/campaign')
+app.use('/campaigns', campaignRoutes)
 
 app.get('/', (req, res) => {
   res.send('Hello English Kafe!')

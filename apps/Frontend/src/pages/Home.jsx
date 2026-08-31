@@ -1,7 +1,7 @@
 import Navbar from "../components/Navbar"
 import Hero from "../components/Hero"
-import Service from "../components/Service"
-import Instructors from "../components/Instructors"
+import OurServices from "../components/OurServices"
+import Benefits from "../components/Benefits"
 import MotivationBanner from "../components/MotivationBanner"
 import Courses from "../components/Courses"
 import Article from "../components/Article"
@@ -14,12 +14,12 @@ function Home() {
     <div>
       <Navbar />
       <Hero />
-      <Instructors />
-      <MotivationBanner />
       <Courses />
-      <StudentReview />
+      <Benefits />
       <Article />
-      <Service />
+      <MotivationBanner />
+      <OurServices />
+      <StudentReview />
       <ContactSection />
       <Footer />
     </div>

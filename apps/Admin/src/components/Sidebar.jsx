@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut } from 'lucide-react'
+import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, Send } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 function Sidebar({ isOpen = true }) {
@@ -22,8 +22,11 @@ function Sidebar({ isOpen = true }) {
   const menuItems = [
     { label: 'Dashboard', path: '/', icon: LayoutGrid },
     { label: 'Manage course', path: '/courses', icon: BookOpen },
+    { label: 'Quiz management', path: '/quizzes', icon: ListChecks },
     { label: 'Manage blog', path: '/blog', icon: FileText },
-    { label: 'Manage user', path: '/users', icon: Users },
+    { label: 'Manage users', path: '/users', icon: Users },
+    { label: 'Subscribers & enquiries', path: '/contacts', icon: Mail },
+    { label: 'Updates & campaigns', path: '/campaigns', icon: Send },
     { label: 'Review payment', path: '/review-payment', icon: CreditCard },
     { label: 'Settings', path: '/settings', icon: Settings },
   ]

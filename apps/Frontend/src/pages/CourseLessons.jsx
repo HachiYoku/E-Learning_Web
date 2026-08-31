@@ -191,12 +191,15 @@ function CourseLessons() {
                 ) : (
                   <div className="space-y-3">
                     {lessons.map((lesson) => (
-                      <button
+                      <div
                         key={lesson.id}
-                        type="button"
-                        onClick={() => lesson.videoUrl && setActiveLesson(lesson)}
-                        className="w-full flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-pink-300 transition-all group cursor-pointer text-left"
+                        className="flex w-full items-center gap-3 rounded-xl border border-gray-200 p-3 transition-all hover:border-pink-300 hover:bg-gray-50"
                       >
+                        <button
+                          type="button"
+                          onClick={() => lesson.videoUrl && setActiveLesson(lesson)}
+                          className="group flex flex-1 items-center gap-4 p-1 text-left"
+                        >
                         <div className="flex items-center gap-4 text-left flex-1">
                           <span className="text-gray-500 font-semibold text-sm w-8">
                             {lesson.order}.
@@ -208,7 +211,15 @@ function CourseLessons() {
                         <span className="text-gray-400 group-hover:text-pink-400 transition-colors text-xl">
                           →
                         </span>
-                      </button>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/course-lessons/${courseId}/quiz/${lesson.id}`)}
+                          className="shrink-0 rounded-lg bg-pink-100 px-3 py-2 text-sm font-semibold text-pink-700 transition hover:bg-pink-200"
+                        >
+                          Quiz
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -244,6 +255,15 @@ function CourseLessons() {
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
               />
+            </div>
+            <div className="flex justify-end bg-white p-4">
+              <button
+                type="button"
+                onClick={() => navigate(`/course-lessons/${courseId}/quiz/${activeLesson.id}`)}
+                className="rounded-lg bg-pink-300 px-5 py-2.5 font-semibold text-gray-900 transition hover:bg-pink-400"
+              >
+                Take lesson quiz
+              </button>
             </div>
           </div>
         </div>

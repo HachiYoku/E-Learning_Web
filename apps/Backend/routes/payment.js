@@ -1,7 +1,7 @@
 const express = require("express");
 const validateToken = require("../middleware/authMiddleware");
 const requireAdmin = require("../middleware/adminMiddleware");
-const { createImageUpload } = require("../middleware/uploadValidation");
+const { createImageUpload, validateImageFileContent } = require("../middleware/uploadValidation");
 const {
   createPayment,
   getMyPayments,
@@ -15,7 +15,7 @@ const upload = createImageUpload();
 
 router.get("/my", validateToken, getMyPayments);
 router.get("/", validateToken, requireAdmin, getAllPayments);
-router.post("/course/:courseId", validateToken, upload.single("paymentProof"), createPayment);
+router.post("/course/:courseId", validateToken, upload.single("paymentProof"), validateImageFileContent, createPayment);
 router.patch("/:paymentId/approve", validateToken, requireAdmin, approvePayment);
 router.patch("/:paymentId/reject", validateToken, requireAdmin, rejectPayment);
 
