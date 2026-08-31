@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, BookOpen, PlayCircle, Sparkles } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import CourseCard from '../components/CourseCard'
 import TestimonialVideo from '../components/TestimonialVideo'
@@ -16,6 +17,7 @@ function Courses() {
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const coursesSectionRef = useRef(null)
 
   useEffect(() => {
     async function loadCourses() {
@@ -35,43 +37,56 @@ function Courses() {
   }, [])
 
   const totalPages = Math.max(1, Math.ceil(courses.length / COURSES_PER_PAGE))
-  const startIndex = (currentPage - 1) * COURSES_PER_PAGE
+  const activePage = Math.min(currentPage, totalPages)
+  const startIndex = (activePage - 1) * COURSES_PER_PAGE
   const currentCourses = courses.slice(startIndex, startIndex + COURSES_PER_PAGE)
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
-    }
-  }, [currentPage, totalPages])
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    coursesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
       
-      <div className="px-4 sm:px-6 md:px-10 py-8 sm:py-12 md:py-16 text-center bg-gray-50">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-3 sm:mb-4 md:mb-6">
-          Explore Our Online Video Courses
-        </h1>
-        <p className="text-gray-600 text-xs sm:text-sm md:text-base max-w-2xl mx-auto">
-          Browse a curated collection of self-paced English video courses designed to improve your speaking, grammar, and real-world communication skills.
-        </p>
-      </div>
+      <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-12 sm:px-6 sm:py-16 md:px-10 md:py-18">
+        <div className="absolute -left-24 top-0 -z-10 h-72 w-72 rounded-full bg-[#F8C56A]/25 blur-3xl" aria-hidden="true" />
+        <div className="absolute -bottom-36 right-0 -z-10 h-96 w-96 rounded-full bg-[#E9A9A0]/25 blur-3xl" aria-hidden="true" />
+        <div className="mx-auto max-w-4xl text-center">
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#E58C1A]/25 bg-white/75 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-[#C97112] shadow-sm">
+            Learn Thai your way
+          </div>
+          <h1 className="mt-5 text-4xl font-bold leading-[1.05] tracking-tight text-[#2D2E30] sm:text-5xl md:text-6xl">
+            Courses made for <span className="text-[#E58C1A]">real Thai.</span>
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg">
+            Choose a self-paced video course that makes speaking, grammar, and everyday communication feel clear, practical, and enjoyable.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3 text-sm font-semibold text-[#765F55]">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 shadow-sm"><BookOpen className="h-4 w-4 text-[#E58C1A]" aria-hidden="true" /> Learn at your pace</span>
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 shadow-sm"><PlayCircle className="h-4 w-4 text-[#E58C1A]" aria-hidden="true" /> Watch anywhere</span>
+          </div>
+        </div>
+      </section>
 
-      <div className="px-4 sm:px-6 md:px-10 py-8 sm:py-12 md:py-16">
+      <section ref={coursesSectionRef} className="scroll-mt-20 bg-[#FFFDF8] px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
         <div className="max-w-7xl mx-auto">
+          <div className="mb-8 flex flex-col gap-3 border-b border-[#2D2E30]/10 pb-6 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Find your next lesson</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">Explore all courses</h2>
+            </div>
+            {!loading && courses.length > 0 ? <p className="text-sm font-medium text-[#765F55]">{courses.length} {courses.length === 1 ? 'course' : 'courses'} available</p> : null}
+          </div>
           {error ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
               {error}
             </div>
           ) : loading ? (
               <LoadingSpinner message="Loading courses..." />
           ) : currentCourses.length === 0 ? (
-            <div className="rounded-lg bg-gray-50 px-4 py-10 text-center text-gray-500">
+            <div className="rounded-2xl border border-[#2D2E30]/10 bg-white px-4 py-12 text-center text-[#765F55] shadow-sm">
               No published courses are available yet.
             </div>
           ) : (
@@ -92,14 +107,15 @@ function Courses() {
               </div>
 
               {courses.length > COURSES_PER_PAGE ? (
-                <div className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:mt-10 md:mt-12">
+                <nav className="mt-10 flex flex-wrap items-center justify-center gap-2 sm:mt-12 sm:gap-3" aria-label="Course pages">
                   <button
                     type="button"
-                    onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="rounded-full border border-gray-300 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
+                    onClick={() => handlePageChange(Math.max(activePage - 1, 1))}
+                    disabled={activePage === 1}
+                    className="inline-flex items-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-2.5 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:border-[#E58C1A] hover:text-[#C97112] disabled:cursor-not-allowed disabled:opacity-40 sm:px-5"
                   >
-                    Previous
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">Previous</span>
                   </button>
 
                   {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
@@ -108,12 +124,12 @@ function Courses() {
                       type="button"
                       onClick={() => handlePageChange(pageNumber)}
                       className={`h-10 w-10 rounded-full text-sm font-semibold transition sm:text-base ${
-                        currentPage === pageNumber
-                          ? 'bg-[#F8B2C0] text-gray-900'
-                          : 'border border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                        activePage === pageNumber
+                          ? 'bg-[#E58C1A] text-white shadow-md shadow-[#E58C1A]/25'
+                          : 'border border-[#2D2E30]/15 bg-white text-[#765F55] hover:border-[#E58C1A] hover:text-[#C97112]'
                       }`}
                       aria-label={`Go to page ${pageNumber}`}
-                      aria-current={currentPage === pageNumber ? 'page' : undefined}
+                      aria-current={activePage === pageNumber ? 'page' : undefined}
                     >
                       {pageNumber}
                     </button>
@@ -121,40 +137,44 @@ function Courses() {
 
                   <button
                     type="button"
-                    onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="rounded-full border border-gray-300 px-5 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
+                    onClick={() => handlePageChange(Math.min(activePage + 1, totalPages))}
+                    disabled={activePage === totalPages}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-[#2D2E30]/15 transition hover:bg-[#E58C1A] disabled:cursor-not-allowed disabled:opacity-40 sm:px-5"
                   >
-                    Next
+                    <span className="hidden sm:inline">Next</span>
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </button>
-                </div>
+                </nav>
               ) : null}
             </>
           )}
         </div>
-      </div>
+      </section>
 
-      <div className="px-4 sm:px-6 md:px-10 py-10 sm:py-14 md:py-16 text-center bg-pink-100">
+      <section className="relative overflow-hidden bg-[#2D2E30] px-4 py-14 text-center sm:px-6 sm:py-16 md:px-10 md:py-20">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#E58C1A] to-transparent" aria-hidden="true" />
         <div className="flex justify-center">
           <div>
-            <h2 className="text-base sm:text-lg md:text-xl lg:text-3xl font-bold text-gray-900 mb-2 sm:mb-3 leading-snug">
-              Master English faster with expert-guided video courses designed for<br className="hidden sm:block" />practical speaking, grammar, and everyday communication.
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-[#F8C56A]">Built for real progress</p>
+            <h2 className="text-2xl font-bold leading-snug text-white sm:text-3xl lg:text-4xl">
+              Master Thai faster with expert-guided video courses designed for<br className="hidden sm:block" />practical speaking, grammar, and everyday communication.
             </h2>
-            <div className="h-1 w-20 sm:w-28 md:w-32 bg-black mx-auto"></div>
+            <div className="mx-auto mt-6 h-1 w-20 rounded-full bg-[#E58C1A] sm:w-28" />
           </div>
         </div>
-        <p className="text-[#8B6F61] text-xs sm:text-sm md:text-base lg:text-lg mt-4 sm:mt-5 md:mt-6 max-w-3xl mx-auto">
+        <p className="mx-auto mt-5 max-w-3xl text-sm leading-relaxed text-white/70 sm:text-base lg:text-lg">
           Learn smarter, progress faster, and speak with confidence.
         </p>
-      </div>
+      </section>
 
-      <div className="px-4 sm:px-6 md:px-10 py-10 sm:py-14 md:py-16 bg-white">
+      <section className="bg-white px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4 sm:mb-5 md:mb-6">
-              Free Course Preview Videos
+          <div className="mb-8 text-center sm:mb-10 md:mb-12">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Try before you begin</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
+              Free course previews
             </h2>
-            <p className="text-gray-600 text-xs sm:text-sm md:text-base lg:text-lg max-w-2xl mx-auto">
+            <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-[#765F55] sm:text-base lg:text-lg">
               Explore sample lessons that show how our courses teach step by step.<br className="hidden sm:block" />
               Learn practical tips, clear explanations, and real examples
             </p>
@@ -162,8 +182,8 @@ function Courses() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-7 md:gap-8">
             <div>
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 sm:mb-3">
-                <span className="font-bold">Speak English with Confidence</span>
+              <h3 className="mb-3 text-lg font-bold text-[#2D2E30] sm:text-xl">
+                <span className="font-bold">Speak Thai with Confidence</span>
                 <span className="text-gray-600 font-normal text-sm sm:text-base"> (Free to learn)</span>
               </h3>
               <TestimonialVideo 
@@ -173,8 +193,8 @@ function Courses() {
             </div>
 
             <div>
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 sm:mb-3">
-                <span className="font-bold">English Basics – Free Starter Course</span>
+              <h3 className="mb-3 text-lg font-bold text-[#2D2E30] sm:text-xl">
+                <span className="font-bold">Thai Basic – Free Starter Course</span>
                 <span className="text-gray-600 font-normal text-sm sm:text-base"> (Free to learn)</span>
               </h3>
               <TestimonialVideo 
@@ -184,7 +204,7 @@ function Courses() {
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <ContactSection />
       <Footer />
