@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, PenLine, Quote } from "lucide-react";
 import Navbar from "../components/Navbar";
-import RecentArticle from "../components/RecentArticle";
 import ArticleCard from "../components/ArticleCard";
 import ContactSection from "../components/ContactSection";
 import Footer from "../components/Footer";
@@ -8,7 +8,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { fetchBlogs } from "../services/blogService";
 import { sanitizeHtmlContent } from "../utils/sanitizeHtmlContent";
 
-const logo = "/Nav/Logo.png";
+const logo = "/Nav/favicon-arunthai.png"; // Default author logo if none is provided
 const fallbackImage =
   "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=1200&h=900&fit=crop";
 const INSIGHTS_PER_PAGE = 6;
@@ -20,6 +20,7 @@ function Blog() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const moreToReadRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -43,20 +44,10 @@ function Blog() {
     return () => { isMounted = false; };
   }, []);
 
-  useEffect(() => {
-    setIsExpanded(false);
-    setCurrentPage(1);
-  }, [selectedBlogId]);
-
   const featuredBlog = useMemo(() => {
     if (!blogs.length) return null;
     return blogs.find((blog) => blog.id === selectedBlogId) || blogs[0];
   }, [blogs, selectedBlogId]);
-
-  const recentBlogs = useMemo(
-    () => blogs.filter((blog) => blog.id !== featuredBlog?.id).slice(0, 4),
-    [blogs, featuredBlog]
-  );
 
   const insightBlogs = useMemo(
     () => blogs.filter((blog) => blog.id !== featuredBlog?.id),
@@ -64,28 +55,44 @@ function Blog() {
   );
 
   const totalInsightPages = Math.max(1, Math.ceil(insightBlogs.length / INSIGHTS_PER_PAGE));
+  const activePage = Math.min(currentPage, totalInsightPages);
 
   const paginatedInsightBlogs = useMemo(() => {
-    const startIndex = (currentPage - 1) * INSIGHTS_PER_PAGE;
+    const startIndex = (activePage - 1) * INSIGHTS_PER_PAGE;
     return insightBlogs.slice(startIndex, startIndex + INSIGHTS_PER_PAGE);
-  }, [currentPage, insightBlogs]);
-
-  useEffect(() => {
-    if (currentPage > totalInsightPages) setCurrentPage(totalInsightPages);
-  }, [currentPage, totalInsightPages]);
+  }, [activePage, insightBlogs]);
 
   const selectBlog = (id) => {
     setSelectedBlogId(id);
+    setIsExpanded(false);
+    setCurrentPage(1);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const changeInsightPage = (page) => {
+    setCurrentPage(page);
+    window.requestAnimationFrame(() => {
+      const section = moreToReadRef.current;
+      if (!section) return;
+      const navbarOffset = 80;
+      const sectionTop = section.getBoundingClientRect().top + window.scrollY - navbarOffset;
+      window.scrollTo({ top: Math.max(0, sectionTop), behavior: "smooth" });
+    });
   };
 
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
 
+      
+
       {/* Featured Blog Section */}
-      <div className="bg-gray-50 px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-12">
+      <section className="bg-white px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
         <div className="mx-auto max-w-7xl">
+          <div className="mb-8 flex items-end justify-between border-b-2 border-[#2D2E30] pb-4 sm:mb-10">
+            <div><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Editor’s pick</p><h2 className="mt-2 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">Featured story</h2></div>
+            {!isLoading && blogs.length > 0 ? <p className="hidden text-sm font-medium text-[#765F55] sm:block">Issue 01 · {blogs.length} stories</p> : null}
+          </div>
 
           {error ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -100,15 +107,16 @@ function Blog() {
               No blog posts available yet.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-3 overflow-hidden">
+            <article className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-start lg:gap-12">
 
               {/* Featured Article */}
-              <div className="md:col-span-2 min-w-0 overflow-hidden">
-                <h1 className="mb-4 sm:mb-6 text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 leading-snug break-words overflow-wrap-break-word">
+              <div className="order-2 min-w-0 overflow-hidden lg:order-1">
+                <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Featured story · {featuredBlog.date}</p>
+                <h3 className="mb-4 text-3xl font-bold leading-[1.05] tracking-tight text-[#2D2E30] sm:mb-5 sm:text-4xl md:text-5xl break-words overflow-wrap-break-word">
                   {featuredBlog.title}
-                </h1>
+                </h3>
 
-                <p className="mb-5 sm:mb-8 text-sm sm:text-base md:text-lg leading-relaxed text-gray-600 break-words">
+                <p className="mb-6 text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg break-words">
                   {featuredBlog.excerpt}
                 </p>
 
@@ -120,70 +128,58 @@ function Blog() {
                 ) : null}
 
                 {/* Author + Read More row */}
-                <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="mb-6 flex flex-col justify-between gap-4 border-y border-[#2D2E30]/10 py-4 sm:mb-8 sm:flex-row sm:items-center">
                   <div className="flex items-center gap-3">
                     <img
                       src={logo}
                       alt="thaitalktips"
-                      className="border-2 border-[#F5C6D8] rounded-xl h-12 sm:h-14 w-auto"
+                      className="h-11 w-11 rounded-full border border-[#E58C1A]/20 object-contain p-1"
                     />
                     <div>
-                      <p className="font-semibold text-gray-900 text-sm sm:text-base">
+                      <p className="text-sm font-semibold text-[#2D2E30] sm:text-base">
                         {featuredBlog.authorName}
                       </p>
-                      <p className="text-xs sm:text-sm text-gray-600">{featuredBlog.date}</p>
+                      <p className="text-xs text-[#8B6F61] sm:text-sm">{featuredBlog.date}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setIsExpanded((current) => !current)}
-                    className="flex items-center justify-center gap-2 rounded-xl bg-[#F8B2C0] px-5 sm:px-8 py-2.5 sm:py-3 text-sm sm:text-base font-semibold text-gray-900 transition-colors hover:bg-[#F8C2C0] w-full sm:w-auto"
+                    className="flex w-full items-center justify-center gap-2 rounded-none border-b-2 border-[#E58C1A] bg-transparent px-2 py-3 text-sm font-bold uppercase tracking-[0.16em] text-[#2D2E30] transition hover:bg-[#FFF1D0] sm:w-auto"
                   >
                     {isExpanded ? "Read Less" : "Read More"}
                     <span>{isExpanded ? "↑" : "↓"}</span>
                   </button>
                 </div>
 
-                {/* Featured Image */}
-                <div>
-                  <img
-                    src={featuredBlog.image || fallbackImage}
-                    alt={featuredBlog.title}
-                    className="w-full h-48 sm:h-64 md:h-80 lg:h-96 rounded-2xl object-cover"
-                  />
+              </div>
+
+              <div className="order-1 relative lg:order-2">
+                <div className="absolute -right-3 -top-3 h-full w-full border border-[#E58C1A]/40 sm:-right-5 sm:-top-5" aria-hidden="true" />
+                <img
+                  src={featuredBlog.image || fallbackImage}
+                  alt={featuredBlog.title}
+                  className="relative h-64 w-full object-cover sm:h-80 lg:h-[32rem]"
+                />
+                <div className="absolute bottom-0 left-0 bg-[#2D2E30] px-5 py-4 text-sm font-medium leading-relaxed text-white sm:max-w-[85%]">
+                  A practical note from the Arun Thai Journal.
                 </div>
               </div>
 
-              {/* Recent Articles Sidebar */}
-              <div className="md:col-span-1 mt-2 md:mt-5">
-                <h2 className="mb-3 sm:mb-4 text-base sm:text-lg font-bold text-gray-900">Recents</h2>
-                <div className="space-y-2">
-                  {recentBlogs.map((blog) => (
-                    <RecentArticle
-                      key={blog.id}
-                      title={blog.title}
-                      description={blog.excerpt}
-                      authorName={blog.authorName}
-                      date={blog.date}
-                      onReadMore={() => selectBlog(blog.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-            </div>
+            </article>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Insights Section */}
-      <div className="bg-blue-50 px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-12">
+      <section ref={moreToReadRef} className="scroll-mt-20 bg-[#E9EEF0] px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
         <div className="mx-auto max-w-7xl">
 
-          <div className="mb-8 sm:mb-10 md:mb-12 text-center">
-            <h2 className="mb-4 sm:mb-6 text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900">
-              English Learning Insights
+          <div className="mb-8 border-b border-[#2D2E30]/20 pb-6 sm:mb-10 md:mb-12">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Browse the journal</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
+              More to read
             </h2>
-            <div className="mx-auto h-1.5 sm:h-2 w-36 sm:w-52 bg-black rounded-full" />
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-[#536166] sm:text-base">New ideas, useful words, and friendly perspectives for your Thai learning journey.</p>
           </div>
 
           {isLoading ? (
@@ -207,28 +203,28 @@ function Blog() {
 
               {/* Pagination */}
               {totalInsightPages > 1 ? (
-                <div className="mt-8 sm:mt-10 flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+                <nav className="mt-10 flex flex-wrap items-center justify-center gap-2 sm:mt-12 sm:gap-3" aria-label="Blog pages">
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="rounded-full border border-gray-300 px-4 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => changeInsightPage(Math.max(activePage - 1, 1))}
+                    disabled={activePage === 1}
+                    className="inline-flex items-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-2.5 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:border-[#E58C1A] hover:text-[#C97112] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Previous
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Previous</span>
                   </button>
 
                   {Array.from({ length: totalInsightPages }, (_, i) => i + 1).map((page) => (
                     <button
                       key={page}
                       type="button"
-                      onClick={() => setCurrentPage(page)}
+                      onClick={() => changeInsightPage(page)}
                       className={`h-8 w-8 sm:h-10 sm:w-10 rounded-full text-xs sm:text-sm font-semibold transition ${
-                        currentPage === page
-                          ? "bg-[#F8B2C0] text-gray-900"
-                          : "border border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                        activePage === page
+                          ? "bg-[#E58C1A] text-white shadow-md shadow-[#E58C1A]/25"
+                          : "border border-[#2D2E30]/15 bg-white text-[#765F55] hover:border-[#E58C1A] hover:text-[#C97112]"
                       }`}
                       aria-label={`Go to page ${page}`}
-                      aria-current={currentPage === page ? "page" : undefined}
+                      aria-current={activePage === page ? "page" : undefined}
                     >
                       {page}
                     </button>
@@ -236,13 +232,13 @@ function Blog() {
 
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((page) => Math.min(page + 1, totalInsightPages))}
-                    disabled={currentPage === totalInsightPages}
-                    className="rounded-full border border-gray-300 px-4 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => changeInsightPage(Math.min(activePage + 1, totalInsightPages))}
+                    disabled={activePage === totalInsightPages}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-[#2D2E30]/15 transition hover:bg-[#E58C1A] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Next
+                    <span className="hidden sm:inline">Next</span><ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </button>
-                </div>
+                </nav>
               ) : null}
             </div>
           ) : (
@@ -252,7 +248,7 @@ function Blog() {
           )}
 
         </div>
-      </div>
+      </section>
 
       <ContactSection />
       <Footer />

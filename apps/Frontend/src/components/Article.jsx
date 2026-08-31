@@ -71,7 +71,7 @@ function Article() {
                   image={article.image}
                   title={article.title}
                   description={article.excerpt}
-                  authorLogo="/Nav/Logo.png"
+                  authorLogo="/Nav/favicon-arunthai.png"
                   authorName={article.authorName}
                   date={article.date}
                 />

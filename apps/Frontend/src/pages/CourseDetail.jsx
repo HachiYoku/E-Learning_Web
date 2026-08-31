@@ -1,11 +1,11 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { Check, TvMinimalPlay } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Check, PlayCircle, Star, TvMinimalPlay } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import CourseCard from "../components/CourseCard";
 import LoadingSpinner from "../components/LoadingSpinner";
-const Watermark = "/moti/Watermark.JPG";
+const Watermark = "/benefit/teacher&stduents.jpg";
 import { fetchCourseById, fetchCourses } from "../services/courseService";
 
 const RELATED_COURSES_PER_PAGE = 4;
@@ -18,6 +18,7 @@ function CourseDetail() {
   const [relatedCourses, setRelatedCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const relatedCoursesRef = useRef(null);
 
   useEffect(() => {
     async function loadCourseData() {
@@ -31,6 +32,7 @@ function CourseDetail() {
         ]);
 
         setCourse(courseResponse);
+        setCurrentPage(1);
         setRelatedCourses(
           coursesResponse.filter((item) => item.id !== courseResponse.id),
         );
@@ -48,32 +50,23 @@ function CourseDetail() {
     1,
     Math.ceil(relatedCourses.length / RELATED_COURSES_PER_PAGE),
   );
-  const startIndex = (currentPage - 1) * RELATED_COURSES_PER_PAGE;
+  const activePage = Math.min(currentPage, totalPages);
+  const startIndex = (activePage - 1) * RELATED_COURSES_PER_PAGE;
   const currentRelatedCourses = relatedCourses.slice(
     startIndex,
     startIndex + RELATED_COURSES_PER_PAGE,
   );
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [courseId]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
-
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    relatedCoursesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-white">
         <Navbar />
-        <div className="flex items-center justify-center h-screen">
+        <div className="flex h-screen items-center justify-center bg-[#FFF9EA]">
           <LoadingSpinner message="Loading course..." />
         </div>
       </div>
@@ -84,8 +77,8 @@ function CourseDetail() {
     return (
       <div className="min-h-screen bg-white">
         <Navbar />
-        <div className="flex items-center justify-center h-screen px-4 text-center">
-          <p className="text-2xl text-gray-600">
+        <div className="flex h-screen items-center justify-center bg-[#FFF9EA] px-4 text-center">
+          <p className="text-2xl text-[#765F55]">
             {error || "Course not found"}
           </p>
         </div>
@@ -93,25 +86,8 @@ function CourseDetail() {
     );
   }
 
-  const renderStars = (rating) => {
-    return (
-      <div className="flex gap-1">
-        {[...Array(5)].map((_, i) => (
-          <span
-            key={i}
-            className={
-              i < Math.floor(rating) ? "text-yellow-400" : "text-gray-300"
-            }
-          >
-            ★
-          </span>
-        ))}
-      </div>
-    );
-  };
-
   const courseFeatures =
-    course.features.length > 0
+    (course.features ?? []).length > 0
       ? course.features
       : ["No specific features listed for this course."];
 
@@ -119,20 +95,12 @@ function CourseDetail() {
     <div className="min-h-screen bg-white">
       <Navbar />
 
-      <div className="px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-6 md:py-8 bg-blue-50">
+      <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-12 sm:px-6 sm:py-16 md:px-10 md:py-20">
+        <div className="absolute -left-28 top-0 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/25 blur-3xl" aria-hidden="true" />
+        <div className="absolute -bottom-28 right-0 -z-10 h-96 w-96 rounded-full bg-[#E9A9A0]/25 blur-3xl" aria-hidden="true" />
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-3 sm:mb-4">
-              Explore Our Online Video Courses
-            </h1>
-            <p className="text-gray-600 text-sm sm:text-base md:text-lg leading-relaxed px-2">
-              Browse a curated collection of self-paced English video courses
-              designed to improve your speaking, grammar, and real-world
-              communication skills.
-            </p>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 md:p-10 lg:p-12">
+          <div className="mb-8 max-w-2xl sm:mb-10"><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Course library</p><p className="mt-3 text-sm leading-relaxed text-[#765F55] sm:text-base">A practical, self-paced path to more confident Thai conversations.</p></div>
+          <div className="border border-[#2D2E30]/10 bg-white/90 p-4 shadow-[0_25px_65px_-42px_rgba(80,48,19,0.45)] sm:p-6 lg:p-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 md:gap-10 lg:gap-12">
               <div className="space-y-4 sm:space-y-5">
                 <div className="flex items-start justify-center">
@@ -140,64 +108,60 @@ function CourseDetail() {
                     <img
                       src={course.image}
                       alt={course.title}
-                      className="w-full h-48 sm:h-64 md:h-80 lg:h-96 object-cover rounded-xl"
+                      className="h-56 w-full object-cover sm:h-72 md:h-80 lg:h-[28rem]"
                     />
                   ) : (
-                    <div className="flex h-48 w-full items-center justify-center rounded-2xl bg-gray-100 text-gray-500">
+                    <div className="flex h-56 w-full items-center justify-center bg-[#E7DCCE] text-[#765F55]">
                       No image
                     </div>
                   )}
                 </div>
 
-                <div className="space-y-3  p-4 sm:p-5">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-[#2D2E30]/10 pt-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5">
                     <div className="flex items-center gap-2">
                       <TvMinimalPlay
-                        className="h-5 w-5 text-gray-700"
+                        className="h-5 w-5 text-[#E58C1A]"
                         strokeWidth={2}
                         aria-hidden="true"
                       />
-                      <span className="text-gray-700 font-semibold text-sm sm:text-base">
+                      <span className="text-[#2D2E30] font-semibold text-sm sm:text-base">
                         {course.lessons} lessons
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {renderStars(course.rating)}
-                      <span className="text-gray-700 font-semibold text-sm sm:text-base">
+                      <Star className="h-4 w-4 fill-[#F4B63F] text-[#F4B63F]" aria-hidden="true" />
+                      <span className="text-[#2D2E30] font-semibold text-sm sm:text-base">
                         ({course.rating.toFixed(1)}/5)
                       </span>
                     </div>
                   </div>
 
-                  <div className="text-xl sm:text-2xl font-semibold text-gray-900">
-                    Price - {course.price}
-                  </div>
                 </div>
               </div>
 
               <div className="flex flex-col justify-center space-y-4 sm:space-y-5 md:space-y-6">
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-medium text-gray-900">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Learn with confidence</p>
+                <h1 className="text-3xl font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
                   {course.title}
-                </h2>
+                </h1>
 
-                <p className="text-gray-600 text-sm sm:text-base md:text-lg leading-relaxed">
+                <p className="text-[#765F55] text-sm sm:text-base md:text-lg leading-relaxed">
                   {course.fullDescription}
                 </p>
 
                 <div>
-                  <h3 className="text-lg sm:text-xl font-medium text-gray-900 mb-3 sm:mb-4">
-                    What you'll learn:
+                  <h3 className="text-lg sm:text-xl font-bold text-[#2D2E30] mb-3 sm:mb-4">
+                    What you’ll learn
                   </h3>
                   <ul className="space-y-2 sm:space-y-3">
                     {courseFeatures.map((feature, index) => (
                       <li
                         key={index}
-                        className="flex items-start gap-3 text-sm sm:text-base text-gray-600"
+                        className="flex items-start gap-3 text-sm sm:text-base text-[#765F55]"
                       >
-                        <span className="text-pink-400 mt-1 flex-shrink-0">
-                          •
-                        </span>
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#E58C1A]" strokeWidth={3} aria-hidden="true" />
                         <span>{feature}</span>
                       </li>
                     ))}
@@ -205,27 +169,22 @@ function CourseDetail() {
                 </div>
 
                 
-                  <button
-                    onClick={() => navigate(`/enroll/${course.id}`)}
-                    className="w-full sm:w-auto bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-bold py-3 sm:py-4 px-8 sm:px-12 rounded-full transition-colors text-sm sm:text-base md:text-lg"
-                  >
-                    Enroll Now 
-                  </button>
+                <div className="flex flex-col gap-3 border-t border-[#2D2E30]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Course access</p><p className="mt-1 text-2xl font-bold text-[#C97112]">{course.price}</p></div>
+                  <button onClick={() => navigate(`/enroll/${course.id}`)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#2D2E30]/20 transition hover:bg-[#E58C1A]">Enroll now <PlayCircle className="h-4 w-4" aria-hidden="true" /></button>
+                </div>
                 
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="px-4 sm:px-6 md:px-8 lg:px-10 py-12 sm:py-14 md:py-16 bg-pink-50">
+      <section ref={relatedCoursesRef} className="scroll-mt-20 bg-[#FFFDF8] px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Related Courses
-            </h2>
-            <div className="w-16 sm:w-20 md:w-24 h-1 bg-gray-900 mx-auto" />
+          <div className="mb-8 border-b border-[#2D2E30]/10 pb-6 sm:mb-10 md:mb-12">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Continue learning</p><h2 className="mt-3 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">You might also like</h2>
           </div>
 
           {currentRelatedCourses.length > 0 ? (
@@ -254,10 +213,10 @@ function CourseDetail() {
                     onClick={() =>
                       handlePageChange(Math.max(currentPage - 1, 1))
                     }
-                    disabled={currentPage === 1}
-                    className="rounded-full border border-gray-300 px-4 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={activePage === 1}
+                    className="inline-flex items-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-2.5 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:border-[#E58C1A] hover:text-[#C97112] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Previous
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Previous</span>
                   </button>
 
                   {Array.from(
@@ -269,13 +228,13 @@ function CourseDetail() {
                       type="button"
                       onClick={() => handlePageChange(pageNumber)}
                       className={`h-8 w-8 sm:h-10 sm:w-10 rounded-full text-xs sm:text-sm font-semibold transition ${
-                        currentPage === pageNumber
-                          ? "bg-[#F8B2C0] text-gray-900"
-                          : "border border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                        activePage === pageNumber
+                          ? "bg-[#E58C1A] text-white shadow-md shadow-[#E58C1A]/25"
+                          : "border border-[#2D2E30]/15 bg-white text-[#765F55] hover:border-[#E58C1A] hover:text-[#C97112]"
                       }`}
                       aria-label={`Go to page ${pageNumber}`}
                       aria-current={
-                        currentPage === pageNumber ? "page" : undefined
+                        activePage === pageNumber ? "page" : undefined
                       }
                     >
                       {pageNumber}
@@ -287,10 +246,10 @@ function CourseDetail() {
                     onClick={() =>
                       handlePageChange(Math.min(currentPage + 1, totalPages))
                     }
-                    disabled={currentPage === totalPages}
-                    className="rounded-full border border-gray-300 px-4 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={activePage === totalPages}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-[#2D2E30]/15 transition hover:bg-[#E58C1A] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Next
+                    <span className="hidden sm:inline">Next</span><ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
               ) : null}
@@ -301,63 +260,49 @@ function CourseDetail() {
             </div>
           )}
         </div>
-      </div>
+      </section>
 
-      <div className="px-4 sm:px-6 md:px-8 lg:px-10 py-12 sm:py-14 md:py-16 bg-blue-50">
+      <section className="relative overflow-hidden bg-[#F2EFE9] px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
+        <div className="absolute -right-32 top-8 h-80 w-80 rounded-full border-[28px] border-[#E58C1A]/10" aria-hidden="true" />
         <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 md:p-10 lg:p-12 shadow-lg">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 md:gap-12 items-center">
-              <div>
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4">
-                  Why Choose English Kafé Online Courses?
+          <div className="relative grid grid-cols-1 gap-10 lg:grid-cols-[.8fr_1.2fr] lg:items-start lg:gap-16">
+              <div className="lg:sticky lg:top-28">
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C97112]">The Arun Thai difference</p>
+                <h2 className="mt-4 text-4xl font-bold leading-[1.02] tracking-tight text-[#2D2E30] sm:text-5xl">
+                  Learn the Thai you’ll <span className="font-serif font-normal italic text-[#B96128]">actually use.</span>
                 </h2>
-
-
-                <p className="text-gray-600 text-sm sm:text-base leading-relaxed mb-6 sm:mb-8">
-                  Mind Ploy English is designed for learners who want real progress, real confidence, and real communication skills.
+                <p className="mt-5 max-w-md text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg">
+                  Arun Thai is made for steady progress: clear guidance, useful practice, and the confidence to take Thai beyond the screen.
                 </p>
+                <div className="relative mt-8 flex h-48 max-w-sm items-center justify-center overflow-hidden bg-[#2D2E30] sm:h-56">
+                  <div className="absolute inset-4 border border-[#F8C56A]/40" aria-hidden="true" />
+                  <img src={Watermark} alt="Arun Thai learners" className="absolute inset-0 h-full w-full object-cover opacity-75" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#2D2E30] via-[#2D2E30]/20 to-transparent" aria-hidden="true" />
+                  <div className="relative mt-auto w-full p-6">
+                    <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#F8C56A]">Your next conversation</p>
+                    <p className="mt-2 max-w-xs text-lg font-semibold leading-snug text-white">Practice that fits into real life.</p>
+                  </div>
+                </div>
+              </div>
 
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">
-                  What Makes Us Different?
-                </h3>
-
-                <ul className="space-y-3 sm:space-y-4">
+              <div className="grid gap-px overflow-hidden border border-[#2D2E30]/15 bg-[#2D2E30]/15 sm:grid-cols-2">
                   {[
                     'Clear, step-by-step lessons that are easy to follow',
                     'Practical speaking and real-life communication focus',
-                    'Structured learning paths for steady progress',
                     'Self-paced videos — learn anytime, anywhere',
                     'Simple grammar explanations without confusion',
                     'Confidence-building practice in every lesson',
                     'Designed for beginners to advanced learners'
                   ].map((item, index) => (
-                    <li key={index} className="flex items-start gap-3 sm:gap-4">
-                      <div className="flex-shrink-0 w-5 sm:w-6 h-5 sm:h-6 bg-black rounded-full flex items-center justify-center mt-0.5">
-                        <Check
-                          className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white"
-                          strokeWidth={3}
-                          aria-hidden="true"
-                        />
-                      </div>
-                      <span className="text-gray-700 text-sm sm:text-base">
-                        {item}
-                      </span>
-                    </li>
+                    <div key={index} className="group min-h-40 bg-[#FFFDF8] p-5 transition-colors hover:bg-[#FFF1D0] sm:p-6">
+                      <div className="flex items-center justify-between"><span className="text-xs font-bold tracking-[0.18em] text-[#C97112]">0{index + 1}</span><Check className="h-4 w-4 text-[#E58C1A]" strokeWidth={3} aria-hidden="true" /></div>
+                      <p className="mt-8 text-base font-semibold leading-snug text-[#2D2E30] sm:text-lg">{item}</p>
+                    </div>
                   ))}
-                </ul>
               </div>
-
-              <div className="flex items-center justify-center order-first lg:order-last mt-6 lg:mt-0">
-                <img
-                  src={Watermark}
-                  alt="Mind Ploy English Logo"
-                  className="w-full max-w-xs sm:max-w-sm md:max-w-md h-auto"
-                />
-              </div>
-            </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <Footer />
     </div>

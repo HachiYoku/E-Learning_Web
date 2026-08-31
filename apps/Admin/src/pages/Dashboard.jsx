@@ -194,9 +194,9 @@ function Dashboard() {
                   <td className="hidden sm:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 truncate">{user.email}</td>
                   <td className="hidden md:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600">{user.dateCreated}</td>
                   <td className="hidden lg:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600">
-                    {user.purchasedCourses.length > 0
-                      ? user.purchasedCourses.map((course) => course.title).join(', ')
-                      : 'N/A'}
+                    <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-pink-100 px-2 py-1 font-semibold text-pink-700">
+                      {user.purchasedCourses.length}
+                    </span>
                   </td>
                   <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                     <div className="flex items-center gap-1 sm:gap-2">

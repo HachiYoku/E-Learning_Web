@@ -1,143 +1,38 @@
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import AuthShell from "../components/AuthShell";
 import { resetPassword as resetPasswordRequest } from "../services/authService";
 
-const logo = "/login/Login-logo.png";
+const inputClass = "mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 pr-12 text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10";
+
+function PasswordField({ label, value, onChange, visible, toggle, autoComplete }) {
+  return <label className="block text-sm font-bold text-[#2D2E30]">{label}<div className="relative"><input type={visible ? "text" : "password"} value={value} onChange={onChange} required minLength="12" autoComplete={autoComplete} className={inputClass} placeholder="Enter your new password" /><button type="button" onClick={toggle} className="absolute bottom-3 right-3 text-[#765F55] hover:text-[#C97112]" aria-label={visible ? "Hide password" : "Show password"}>{visible ? <EyeOff size={19} /> : <Eye size={19} />}</button></div></label>;
+}
 
 function ResetPassword() {
-  const { token } = useParams();
-  const navigate = useNavigate();
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-
+  const { token } = useParams(); const navigate = useNavigate(); const [password, setPassword] = useState(""); const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); const [showConfirmation, setShowConfirmation] = useState(false); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [successMessage, setSuccessMessage] = useState("");
   const handleSubmit = async (event) => {
-    event.preventDefault();
-    setError("");
-    setSuccessMessage("");
-
-    if (!token) {
-      setError("Reset token is missing.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
+    event.preventDefault(); setError(""); setSuccessMessage("");
+    if (!token) return setError("Reset token is missing.");
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{12,}$/.test(password)) return setError("Use 12+ characters with uppercase, lowercase, and a number.");
+    if (password !== confirmPassword) return setError("Passwords do not match.");
     setLoading(true);
-
-    try {
-      const response = await resetPasswordRequest(token, { password });
-      setSuccessMessage(
-        response.message || "Password has been reset successfully."
-      );
-      setTimeout(() => {
-        navigate("/login", { replace: true });
-      }, 1500);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
+    try { const response = await resetPasswordRequest(token, { password }); setSuccessMessage(response.message || "Password reset successfully."); setTimeout(() => navigate("/login", { replace: true }), 1500); }
+    catch (requestError) { setError(requestError.message); }
+    finally { setLoading(false); }
   };
-
-  return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-3 sm:px-4 py-6 sm:py-8">
-      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-10 md:gap-12 items-center">
-        <div className="hidden md:flex justify-center">
-          <div className="relative">
-            <img
-              src="/login/Login-bg.jpg"
-              alt="English Kafe"
-              className="w-full object-cover rounded-2xl"
-              style={{ height: "500px" }}
-            />
-            <div className="absolute inset-0 bg-black/30 rounded-2xl"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <img
-                src={logo}
-                alt="English Kafe Logo"
-                className="w-25  sm:w-20 md:w-23 lg:w-25 h-25 sm:h-20 md:h-23 lg:h-25 object-contain drop-shadow-lg"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="w-full max-w-md">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-normal text-gray-900 mb-2 leading-tight">
-            Create a new password
-          </h2>
-
-          <p className="text-gray-600 text-sm sm:text-base mb-6 sm:mb-8">
-            Enter your new password to finish resetting your account.
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-            {error ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            ) : null}
-
-            {successMessage ? (
-              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                {successMessage}
-              </div>
-            ) : null}
-
-            <div>
-              <label className="block text-gray-700 font-semibold text-sm sm:text-base mb-1.5 sm:mb-2">
-                New Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-blue-50 border border-gray-300 rounded-lg text-sm sm:text-base focus:outline-none focus:border-blue-400 transition-colors"
-                placeholder="Enter your new password"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold text-sm sm:text-base mb-1.5 sm:mb-2">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                required
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-blue-50 border border-gray-300 rounded-lg text-sm sm:text-base focus:outline-none focus:border-blue-400 transition-colors"
-                placeholder="Confirm your new password"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-normal py-2 sm:py-3 rounded-lg transition-opacity text-sm sm:text-base disabled:opacity-70"
-            >
-              {loading ? "Resetting..." : "Reset Password"}
-            </button>
-          </form>
-
-          <p className="text-center text-gray-600 text-xs sm:text-sm mt-4 sm:mt-6">
-            Back to <Link to="/login" className="text-gray-900 font-semibold hover:underline">login</Link>
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+  return <AuthShell eyebrow="Secure your account" title={<>Create a new <span className="text-[#E58C1A]">password.</span></>} description="Choose a strong password that you have not used elsewhere." footer={<>Back to <Link to="/login" className="font-bold text-[#C97112] hover:underline">login</Link></>}>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {error ? <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
+      {successMessage ? <p className="rounded-xl border border-[#7AB589]/30 bg-[#EDF8EE] px-4 py-3 text-sm text-[#246B35]">{successMessage}</p> : null}
+      <PasswordField label="New password" value={password} onChange={(event) => setPassword(event.target.value)} visible={showPassword} toggle={() => setShowPassword((current) => !current)} autoComplete="new-password" />
+      <PasswordField label="Confirm new password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} visible={showConfirmation} toggle={() => setShowConfirmation((current) => !current)} autoComplete="new-password" />
+      <p className="-mt-2 text-xs font-medium text-[#765F55]">Use 12+ characters with uppercase, lowercase, and a number.</p>
+      <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#2D2E30] px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#2D2E30]/20 transition hover:-translate-y-0.5 hover:bg-[#E58C1A] disabled:opacity-70">{loading ? "Resetting password..." : "Reset password"}</button>
+    </form>
+  </AuthShell>;
 }
 
 export default ResetPassword;

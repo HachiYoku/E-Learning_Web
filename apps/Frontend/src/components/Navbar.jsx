@@ -173,7 +173,7 @@ function Navbar() {
           <img
             src={logo}
             alt="Arun Thai"
-            className="w-[180px] h-auto object-contain"
+            className="w-[150px] h-auto object-contain"
           />
         </button>
 

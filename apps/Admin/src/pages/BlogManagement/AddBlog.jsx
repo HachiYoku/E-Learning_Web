@@ -9,6 +9,8 @@ function AddBlog() {
   const contentRef = useRef(null);
   const titleRef = useRef(null);
   const selectedRangeRef = useRef(null);
+  const editorHistoryRef = useRef({ entries: [""], index: 0 });
+  const initialFormRef = useRef(JSON.stringify({ title: "", content: "", image: "", hasImageFile: false }));
   const [formData, setFormData] = useState({
     title: "",
     content: "",
@@ -16,6 +18,7 @@ function AddBlog() {
     imageFile: null,
   });
   const [isEditorEmpty, setIsEditorEmpty] = useState(true);
+  const [activeFormats, setActiveFormats] = useState({ bold: false, italic: false, heading: false, quote: false, link: false });
   const [toolbar, setToolbar] = useState({
     visible: false,
     top: 0,
@@ -29,6 +32,24 @@ function AddBlog() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [isDiscardDialogOpen, setIsDiscardDialogOpen] = useState(false);
+
+  const getFormSnapshot = ({ title, content, image, imageFile }) =>
+    JSON.stringify({ title, content, image, hasImageFile: Boolean(imageFile) });
+
+  const getActiveFormats = () => {
+    const selection = window.getSelection();
+    const selectedNode = selection?.anchorNode;
+    const selectedElement = selectedNode?.nodeType === 1 ? selectedNode : selectedNode?.parentElement;
+
+    return {
+      bold: document.queryCommandState("bold"),
+      italic: document.queryCommandState("italic"),
+      heading: selectedElement?.closest("h3") != null,
+      quote: selectedElement?.closest("blockquote") != null,
+      link: selectedElement?.closest("a") != null,
+    };
+  };
 
   useEffect(() => {
     const titleField = titleRef.current;
@@ -40,6 +61,22 @@ function AddBlog() {
     titleField.style.height = `${Math.min(titleField.scrollHeight, 160)}px`;
   }, [formData.title]);
 
+  const hasUnsavedChanges = getFormSnapshot(formData) !== initialFormRef.current;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) {
+      return undefined;
+    }
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -48,7 +85,18 @@ function AddBlog() {
     }));
   };
 
-  const handleEditorChange = () => {
+  const recordEditorHistory = (content) => {
+    const history = editorHistoryRef.current;
+
+    if (history.entries[history.index] === content) {
+      return;
+    }
+
+    const entries = [...history.entries.slice(0, history.index + 1), content];
+    editorHistoryRef.current = { entries, index: entries.length - 1 };
+  };
+
+  const handleEditorChange = ({ recordHistory = true } = {}) => {
     const content = contentRef.current?.innerHTML || "";
     const plainText = contentRef.current?.textContent || "";
 
@@ -57,12 +105,26 @@ function AddBlog() {
       content,
     }));
     setIsEditorEmpty(plainText.trim() === "");
+
+    if (recordHistory) {
+      recordEditorHistory(content);
+    }
   };
 
-  const handleUndoRedo = (command) => {
-    contentRef.current?.focus();
-    document.execCommand(command, false, null);
-    handleEditorChange();
+  const handleUndoRedo = (direction) => {
+    const editor = contentRef.current;
+    const history = editorHistoryRef.current;
+    const nextIndex = direction === "undo" ? history.index - 1 : history.index + 1;
+
+    if (!editor || nextIndex < 0 || nextIndex >= history.entries.length) {
+      return;
+    }
+
+    editor.innerHTML = history.entries[nextIndex];
+    editorHistoryRef.current = { ...history, index: nextIndex };
+    editor.focus();
+    handleEditorChange({ recordHistory: false });
+    setActiveFormats(getActiveFormats());
   };
 
   const handleEditorKeyDown = (event) => {
@@ -106,6 +168,8 @@ function AddBlog() {
     const selection = window.getSelection();
     const selectedText = selection?.toString() || "";
 
+    setActiveFormats(getActiveFormats());
+
     if (!selectedText.length) {
       setToolbar((prev) => ({ ...prev, visible: false }));
       setLinkInput((prev) => ({ ...prev, visible: false }));
@@ -128,6 +192,7 @@ function AddBlog() {
     }
 
     editor.focus();
+    const currentFormats = getActiveFormats();
 
     switch (format) {
       case "bold":
@@ -137,12 +202,17 @@ function AddBlog() {
         document.execCommand("italic", false, null);
         break;
       case "heading":
-        document.execCommand("formatBlock", false, "h3");
+        document.execCommand("formatBlock", false, currentFormats.heading ? "p" : "h3");
         break;
       case "quote":
-        document.execCommand("formatBlock", false, "blockquote");
+        document.execCommand("formatBlock", false, currentFormats.quote ? "p" : "blockquote");
         break;
       case "link": {
+        if (currentFormats.link) {
+          document.execCommand("unlink", false, null);
+          break;
+        }
+
         const selection = window.getSelection();
         if (!selection?.toString()) {
           setError("Please select text before adding a link.");
@@ -164,8 +234,9 @@ function AddBlog() {
     }
 
     handleEditorChange();
+    setActiveFormats(getActiveFormats());
     if (format !== "link") {
-      setToolbar((prev) => ({ ...prev, visible: false }));
+      setToolbar((prev) => ({ ...prev, visible: true }));
     }
   };
 
@@ -185,6 +256,7 @@ function AddBlog() {
     document.execCommand("createLink", false, url);
 
     handleEditorChange();
+    setActiveFormats(getActiveFormats());
     setLinkInput((prev) => ({ ...prev, visible: false }));
     setToolbar((prev) => ({ ...prev, visible: false }));
     setError("");
@@ -192,6 +264,15 @@ function AddBlog() {
 
   const handleLinkCancel = () => {
     setLinkInput((prev) => ({ ...prev, visible: false }));
+  };
+
+  const handleBackClick = () => {
+    if (hasUnsavedChanges) {
+      setIsDiscardDialogOpen(true);
+      return;
+    }
+
+    navigate("/blog");
   };
 
   const handleSubmit = async (e) => {
@@ -212,6 +293,7 @@ function AddBlog() {
         content: formData.content,
         imageFile: formData.imageFile,
       });
+      initialFormRef.current = getFormSnapshot(formData);
       navigate("/blog");
     } catch (submitError) {
       setError(submitError.message || "Failed to publish blog");
@@ -225,7 +307,8 @@ function AddBlog() {
       <div className="border-b border-gray-200 px-4 py-4 sm:px-6 md:px-8">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center sm:gap-0">
           <button
-            onClick={() => navigate("/blog")}
+            type="button"
+            onClick={handleBackClick}
             className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 sm:text-base"
           >
             <ArrowLeft size={18} className="sm:h-5 sm:w-5" />
@@ -329,16 +412,20 @@ function AddBlog() {
           <button
             onClick={() => applyFormat("bold")}
             onMouseDown={(event) => event.preventDefault()}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.bold ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
             title="Bold"
+            aria-label="Bold"
+            aria-pressed={activeFormats.bold}
           >
             <Bold size={18} />
           </button>
           <button
             onClick={() => applyFormat("italic")}
             onMouseDown={(event) => event.preventDefault()}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.italic ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
             title="Italic"
+            aria-label="Italic"
+            aria-pressed={activeFormats.italic}
           >
             <Italic size={18} />
           </button>
@@ -346,24 +433,30 @@ function AddBlog() {
           <button
             onClick={() => applyFormat("heading")}
             onMouseDown={(event) => event.preventDefault()}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.heading ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
             title="Heading"
+            aria-label="Heading"
+            aria-pressed={activeFormats.heading}
           >
             <Type size={18} />
           </button>
           <button
             onClick={() => applyFormat("quote")}
             onMouseDown={(event) => event.preventDefault()}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.quote ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
             title="Quote"
+            aria-label="Quote"
+            aria-pressed={activeFormats.quote}
           >
             <Quote size={18} />
           </button>
           <button
             onClick={() => applyFormat("link")}
             onMouseDown={(event) => event.preventDefault()}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.link ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
             title="Link"
+            aria-label="Link"
+            aria-pressed={activeFormats.link}
           >
             <Link2 size={18} />
           </button>
@@ -423,6 +516,19 @@ function AddBlog() {
             >
               Apply
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {isDiscardDialogOpen ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-bold text-gray-900">Discard unsaved changes?</h2>
+            <p className="mt-2 text-sm text-gray-600">Your blog draft has changes that have not been published. If you leave now, they will be lost.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setIsDiscardDialogOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Keep editing</button>
+              <button type="button" onClick={() => navigate("/blog")} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">Discard changes</button>
+            </div>
           </div>
         </div>
       ) : null}
