@@ -1,6 +1,6 @@
 import Navbar from "../components/Navbar"
 import Hero from "../components/Hero"
-import Service from "../components/ServiceCards"
+import OurServices from "../components/OurServices"
 import Benefits from "../components/Benefits"
 import MotivationBanner from "../components/MotivationBanner"
 import Courses from "../components/Courses"
@@ -16,10 +16,10 @@ function Home() {
       <Hero />
       <Courses />
       <Benefits />
-      <MotivationBanner />
-      <StudentReview />
       <Article />
-      <Service />
+      <MotivationBanner />
+      <OurServices />
+      <StudentReview />
       <ContactSection />
       <Footer />
     </div>

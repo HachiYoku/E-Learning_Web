@@ -12,6 +12,9 @@ function normalizeUser(user) {
     dateCreated: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "",
     purchasedCourses: Array.isArray(user.purchasedCourses) ? user.purchasedCourses : [],
     isActive: Boolean(user.isActive),
+    recordType: user.recordType || "system",
+    marketingOptIn: Boolean(user.marketingOptIn),
+    message: user.message || "",
     avatar:
       user.avatar ||
       `https://ui-avatars.com/api/?background=f8b2c0&color=111827&name=${encodeURIComponent(user.name || "User")}`,

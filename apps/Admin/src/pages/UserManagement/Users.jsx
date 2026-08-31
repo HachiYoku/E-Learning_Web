@@ -1,4 +1,4 @@
-import { Plus, Trash2, Eye, EyeOff, X, Check } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, X, Check, Copy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import ConfirmationModal from '../../components/ConfirmationModal'
 import { fetchCourses } from '../../services/courseService'
@@ -20,6 +20,7 @@ function Users() {
   const [adminPassword, setAdminPassword] = useState("")
   const [modalError, setModalError] = useState("")
   const [modalSuccess, setModalSuccess] = useState("")
+  const [copiedEmail, setCopiedEmail] = useState("")
 
   useEffect(() => {
     async function loadUserManagementData() {
@@ -52,6 +53,9 @@ function Users() {
       ),
     [searchTerm, users]
   )
+
+  const systemUsers = filteredUsers.filter((user) => user.recordType === "system")
+  const displayedRecords = systemUsers
 
   const handleDeleteClick = (userId) => {
     setSelectedUserId(userId)
@@ -176,14 +180,21 @@ function Users() {
     )
   }
 
-  const getCourseTitles = (userCourses) => {
-    return userCourses.map((course) => course.title).join(', ')
+  const copyEmail = async (email) => {
+    try {
+      await navigator.clipboard.writeText(email)
+      setCopiedEmail(email)
+      window.setTimeout(() => setCopiedEmail(""), 1600)
+    } catch {
+      setError("Unable to copy the email address.")
+    }
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
       <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4 md:mb-6">Manage Users</h1>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Manage Users</h1>
+        <p className="mb-4 text-sm text-gray-600 md:mb-6">Registered student accounts and course access controls.</p>
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="relative w-full sm:w-96">
@@ -214,12 +225,12 @@ function Users() {
               <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Name</th>
               <th className="hidden sm:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Email</th>
               <th className="hidden md:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Date created</th>
-              <th className="hidden lg:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Purchased Course</th>
+              <th className="hidden lg:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Purchased courses</th>
               <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Action</th>
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.map((user) => (
+            {displayedRecords.map((user) => (
               <tr key={user.id} className={`border-b border-gray-200 transition-colors ${user.isActive ? 'hover:bg-gray-50' : 'bg-gray-100 opacity-60'}`}>
                 <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                   <div className="flex items-center gap-2 sm:gap-3">
@@ -235,16 +246,29 @@ function Users() {
                         </div>
                       ) : null}
                     </div>
-                    <div className="min-w-0">
-                      <span className={`font-medium text-xs sm:text-sm truncate block ${user.isActive ? 'text-gray-900' : 'text-gray-500'}`}>{user.name}</span>
+                    <div>
+                      <span className={`block whitespace-normal break-words font-medium text-xs sm:text-sm ${user.isActive ? 'text-gray-900' : 'text-gray-500'}`}>{user.name}</span>
+                      <span className="mt-0.5 flex items-center gap-1 text-xs text-gray-500 sm:hidden">
+                        <span className="max-w-36 truncate">{user.email}</span>
+                        <button type="button" onClick={() => copyEmail(user.email)} className="rounded p-0.5 hover:bg-gray-100" title="Copy email address" aria-label={`Copy ${user.email}`}>
+                          {copiedEmail === user.email ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+                        </button>
+                      </span>
                       {!user.isActive ? <div className="text-xs text-red-500 font-semibold">Inactive</div> : null}
                     </div>
                   </div>
                 </td>
-                <td className={`hidden sm:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm truncate ${user.isActive ? 'text-gray-700' : 'text-gray-400'}`}>{user.email}</td>
+                <td className={`hidden sm:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm ${user.isActive ? 'text-gray-700' : 'text-gray-400'}`}>
+                  <div className="flex min-w-[11rem] items-center gap-2">
+                    <span className="truncate">{user.email}</span>
+                    <button type="button" onClick={() => copyEmail(user.email)} className="shrink-0 rounded p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900" title="Copy email address" aria-label={`Copy ${user.email}`}>
+                      {copiedEmail === user.email ? <Check size={15} className="text-green-600" /> : <Copy size={15} />}
+                    </button>
+                  </div>
+                </td>
                 <td className={`hidden md:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm ${user.isActive ? 'text-gray-700' : 'text-gray-400'}`}>{user.dateCreated}</td>
                 <td className={`hidden lg:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm ${user.isActive ? 'text-gray-700' : 'text-gray-400'}`}>
-                  {user.purchasedCourses.length > 0 ? getCourseTitles(user.purchasedCourses) : 'N/A'}
+                  <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-pink-100 px-2 py-1 font-semibold text-pink-700">{user.purchasedCourses.length}</span>
                 </td>
                 <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                   <div className="flex items-center gap-2 md:gap-3">
@@ -275,7 +299,7 @@ function Users() {
               </tr>
             ))}
 
-            {!loading && filteredUsers.length === 0 ? (
+            {!loading && displayedRecords.length === 0 ? (
               <tr>
                 <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500">
                   No users found.
@@ -434,6 +458,7 @@ function Users() {
           </div>
         </div>
       ) : null}
+
     </div>
   )
 }
