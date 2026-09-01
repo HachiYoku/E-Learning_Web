@@ -1,7 +1,7 @@
 import { clearToken, getToken } from "./tokenStorage";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3000";
+  import.meta.env.ARUN_API_URL || "http://localhost:3000";
 
 export const SESSION_EXPIRED_EVENT = "user-session-expired";
 
