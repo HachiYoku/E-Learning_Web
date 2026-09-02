@@ -223,7 +223,20 @@ const submitQuiz = async (req, res) => {
     }
 
     if (!attempt) return res.status(409).json({ message: "Please try submitting the quiz again." });
-    return res.json({ score, total: quiz.questions.length, results, attemptId: attempt._id, attemptsUsed: attemptsUsed + 1, maxAttempts: quiz.maxAttempts });
+
+    const completedAttempts = attemptsUsed + 1;
+    const showCorrectAnswers = Boolean(quiz.maxAttempts) && completedAttempts >= quiz.maxAttempts;
+
+    return res.json({
+      score,
+      total: quiz.questions.length,
+      ...(showCorrectAnswers ? { results } : {}),
+      showCorrectAnswers,
+      attemptId: attempt._id,
+      attemptNumber: completedAttempts,
+      attemptsUsed: completedAttempts,
+      maxAttempts: quiz.maxAttempts,
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -235,6 +248,36 @@ const getQuizAttempts = async (req, res) => {
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
     const attempts = await QuizAttempt.find({ quiz: quiz._id }).populate("user", "name email").sort({ createdAt: -1 });
     return res.json({ quiz, attempts });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const getStudentQuizHistory = async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.quizId).select("course maxAttempts");
+    if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+
+    if (req.user.role !== "admin") {
+      const enrollment = await Enrollment.exists({ userId: req.user.id, courseId: quiz.course });
+      if (!enrollment) return res.status(403).json({ message: "You are not enrolled in this course" });
+    }
+
+    const attempts = await QuizAttempt.find({ quiz: quiz._id, user: req.user.id })
+      .select("attemptNumber score total createdAt")
+      .sort({ attemptNumber: 1 });
+
+    const bestScore = attempts.reduce((best, attempt) => {
+      const percentage = attempt.total ? (attempt.score / attempt.total) * 100 : 0;
+      return Math.max(best, percentage);
+    }, 0);
+
+    return res.json({
+      attempts,
+      attemptsUsed: attempts.length,
+      maxAttempts: quiz.maxAttempts,
+      bestScore,
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -253,4 +296,4 @@ const getStudentCourseQuizzes = async (req, res) => {
   }
 };
 
-module.exports = { createQuiz, getAdminQuizzes, getAdminQuiz, updateQuiz, deleteQuiz, getStudentQuizzesForLesson, submitQuiz, getQuizAttempts, getStudentCourseQuizzes };
+module.exports = { createQuiz, getAdminQuizzes, getAdminQuiz, updateQuiz, deleteQuiz, getStudentQuizzesForLesson, submitQuiz, getQuizAttempts, getStudentQuizHistory, getStudentCourseQuizzes };
