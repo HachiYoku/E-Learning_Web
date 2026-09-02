@@ -7,6 +7,7 @@ import { validateFileSize } from '../../utils/fileValidation'
 function AddCourse() {
   const navigate = useNavigate()
   const titleRef = useRef(null)
+  const initialFormRef = useRef('')
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -21,6 +22,14 @@ function AddCourse() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [isDiscardDialogOpen, setIsDiscardDialogOpen] = useState(false)
+
+  const getFormSnapshot = ({ imageFile, paymentQrFile, ...values }) =>
+    JSON.stringify({ ...values, hasImageFile: Boolean(imageFile), hasPaymentQrFile: Boolean(paymentQrFile) })
+
+  if (!initialFormRef.current) {
+    initialFormRef.current = getFormSnapshot(formData)
+  }
 
   useEffect(() => {
     const titleField = titleRef.current
@@ -29,6 +38,20 @@ function AddCourse() {
     titleField.style.height = 'auto'
     titleField.style.height = `${Math.min(titleField.scrollHeight, 144)}px`
   }, [formData.title])
+
+  const hasUnsavedChanges = getFormSnapshot(formData) !== initialFormRef.current
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return undefined
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -125,6 +148,7 @@ function AddCourse() {
         price: Number(formData.price),
       })
 
+      initialFormRef.current = getFormSnapshot(formData)
       navigate('/courses')
     } catch (submitError) {
       setError(submitError.message)
@@ -133,12 +157,21 @@ function AddCourse() {
     }
   }
 
+  const handleBackClick = () => {
+    if (hasUnsavedChanges) {
+      setIsDiscardDialogOpen(true)
+      return
+    }
+
+    navigate('/courses')
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="border-b border-gray-200 bg-white px-4 py-4 sm:px-6 sm:py-5 md:px-8">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 sm:flex-row sm:items-center sm:gap-4">
           <button
-            onClick={() => navigate('/courses')}
+            onClick={handleBackClick}
             className="flex items-center gap-2 text-gray-700 hover:text-gray-900 text-sm sm:text-base"
           >
             <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
@@ -340,6 +373,19 @@ function AddCourse() {
           </div>
         </form>
       </div>
+
+      {isDiscardDialogOpen ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-bold text-gray-900">Discard unsaved changes?</h2>
+            <p className="mt-2 text-sm text-gray-600">Your course draft has changes that have not been created. If you leave now, they will be lost.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setIsDiscardDialogOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Keep editing</button>
+              <button type="button" onClick={() => navigate('/courses')} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">Discard changes</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
