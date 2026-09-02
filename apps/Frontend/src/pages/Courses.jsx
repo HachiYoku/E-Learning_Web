@@ -6,6 +6,8 @@ import TestimonialVideo from '../components/TestimonialVideo'
 import ContactSection from '../components/ContactSection'
 import Footer from '../components/Footer'
 import { fetchCourses } from '../services/courseService'
+import { fetchMyEnrollments } from '../services/enrollmentService'
+import { useAuth } from '../contexts/AuthContext'
 import image1 from '../assets/courses/IELTS speaking.jpg'
 import image2 from '../assets/courses/daily english.jpg'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -17,7 +19,9 @@ function Courses() {
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState(() => new Set())
   const coursesSectionRef = useRef(null)
+  const { isAuthenticated } = useAuth()
 
   useEffect(() => {
     async function loadCourses() {
@@ -35,6 +39,38 @@ function Courses() {
 
     loadCourses()
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setEnrolledCourseIds(new Set())
+      return
+    }
+
+    let isMounted = true
+
+    async function loadEnrollments() {
+      try {
+        const enrollments = await fetchMyEnrollments()
+        if (isMounted) {
+          setEnrolledCourseIds(new Set(
+            enrollments
+              .map((enrollment) => enrollment.course?.id)
+              .filter(Boolean)
+          ))
+        }
+      } catch {
+        if (isMounted) {
+          setEnrolledCourseIds(new Set())
+        }
+      }
+    }
+
+    loadEnrollments()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isAuthenticated])
 
   const totalPages = Math.max(1, Math.ceil(courses.length / COURSES_PER_PAGE))
   const activePage = Math.min(currentPage, totalPages)
@@ -102,6 +138,7 @@ function Courses() {
                     price={course.price}
                     rating={course.rating}
                     reviews={course.reviews}
+                    isEnrolled={enrolledCourseIds.has(course.id)}
                   />
                 ))}
               </div>
