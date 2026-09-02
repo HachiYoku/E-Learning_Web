@@ -30,10 +30,10 @@ export async function fetchAllPayments() {
   return payments.map(normalizePayment);
 }
 
-export async function approvePayment(paymentId) {
-  return apiClient.patch(`/payments/${paymentId}/approve`, {});
+export async function approvePayment(paymentId, adminPassword) {
+  return apiClient.patch(`/payments/${paymentId}/approve`, { adminPassword });
 }
 
-export async function rejectPayment(paymentId, rejectReason) {
-  return apiClient.patch(`/payments/${paymentId}/reject`, { rejectReason });
+export async function rejectPayment(paymentId, rejectReason, adminPassword) {
+  return apiClient.patch(`/payments/${paymentId}/reject`, { rejectReason, adminPassword });
 }
