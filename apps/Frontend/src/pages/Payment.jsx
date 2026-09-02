@@ -1,6 +1,16 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Maximize2, TvMinimalPlay, X } from "lucide-react";
+import {
+  ArrowLeft,
+  CircleCheck,
+  CreditCard,
+  LockKeyhole,
+  Maximize2,
+  Star,
+  TvMinimalPlay,
+  Upload,
+  X,
+} from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -24,6 +34,7 @@ function Payment() {
   const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptName, setReceiptName] = useState("");
+  const [receiptPreview, setReceiptPreview] = useState("");
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -47,6 +58,12 @@ function Payment() {
     loadCourse();
   }, [courseId]);
 
+  useEffect(() => {
+    return () => {
+      if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    };
+  }, [receiptPreview]);
+
   const handleReceiptChange = (e) => {
     const file = e.target.files?.[0];
     const sizeError = validateFileSize(file, "Receipt image");
@@ -54,6 +71,7 @@ function Payment() {
     if (sizeError) {
       setReceiptFile(null);
       setReceiptName("");
+      setReceiptPreview("");
       setError(sizeError);
       e.target.value = "";
       return;
@@ -61,6 +79,7 @@ function Payment() {
 
     setReceiptFile(file || null);
     setReceiptName(file?.name || "");
+    setReceiptPreview(file ? URL.createObjectURL(file) : "");
     setError("");
   };
 
@@ -116,125 +135,92 @@ function Payment() {
     );
   }
 
-  const renderStars = (rating) => (
-    <div className="flex gap-1">
-      {[...Array(5)].map((_, i) => (
-        <span
-          key={i}
-          className={
-            i < Math.floor(rating) ? "text-yellow-400" : "text-gray-300"
-          }
-        >
-          ★
-        </span>
-      ))}
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-blue-50">
+    <div className="min-h-screen bg-[#FFFDF8] text-[#2D2E30]">
       <Navbar />
 
-      {/* Back Button */}
-      <div className="px-4 sm:px-6 md:px-10 pt-6 sm:pt-8">
+      <div className="bg-[#FFF9EA] px-4 pt-6 sm:px-6 sm:pt-8 md:px-10">
         <div className="max-w-7xl mx-auto">
           <button
             onClick={() => navigate(`/enroll/${courseId}`)}
-            className="flex items-center gap-2 text-gray-700 hover:text-gray-900 font-semibold transition-colors text-sm sm:text-base"
+            className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"
           >
-            <span className="text-xl sm:text-2xl">←</span>
-            Back To Order Summary
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back to order summary
           </button>
         </div>
       </div>
 
-      <div className="px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-12">
+      <main className="bg-[#FFF9EA] px-4 pb-14 pt-8 sm:px-6 sm:pb-16 md:px-10 md:pb-20">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900">
-              Complete Your Enrollment
+          <div className="mx-auto mb-8 max-w-3xl text-center sm:mb-10 md:mb-12">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Secure checkout</p>
+            <h1 className="mt-3 text-[clamp(1.65rem,5vw,2.65rem)] font-bold leading-[1.15] tracking-tight text-[#2D2E30]">
+              Complete your <span className="font-serif font-normal italic text-[#B96128]">enrollment.</span>
             </h1>
+            <p className="mt-4 text-sm leading-relaxed text-[#765F55] sm:text-base">Pay securely, upload your receipt, and we’ll take care of the verification.</p>
           </div>
 
-          {/* Error - moved to be shown only under submit button */}
-          {/* {error ? (
-            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          ) : null} */}
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-7 md:gap-8">
-            {/* Left — Course Details */}
-            <div className="bg-white rounded-3xl p-5 sm:p-7 md:p-8 shadow-lg">
-              {/* Course Image */}
-              <div className="mb-4 sm:mb-6">
+          <div className="grid grid-cols-1 items-start gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
+            <aside className="md:col-span-1 lg:col-span-2">
+              <div className="overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-4 shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] sm:p-6 md:p-8 lg:sticky lg:top-20">
+                <div className="mb-5 overflow-hidden rounded-[1.3rem] bg-[#F3E9D9] sm:mb-6">
                 {course.image ? (
                   <img
                     src={course.image}
                     alt={course.title}
-                    className="w-full h-44 sm:h-56 md:h-72 lg:h-90 object-cover rounded-2xl"
+                    className="h-48 w-full object-cover sm:h-56 md:h-64"
                   />
                 ) : (
-                  <div className="flex w-full h-44 sm:h-56 md:h-72 lg:h-80 items-center justify-center rounded-2xl bg-gray-100 text-gray-500">
+                  <div className="flex h-48 w-full items-center justify-center text-sm text-[#765F55] sm:h-56 md:h-64">
                     No image
                   </div>
                 )}
               </div>
 
-              {/* Badge */}
-              <div className="mb-2">
-                <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full">
-                  {course.title}
-                </span>
-              </div>
-
-              {/* Info */}
-              <div className="mb-2">
-                <h1 className="text-lg sm:text-xl md:text-2xl font-medium">
-                  Course name — {course.title}
-                </h1>
-                <div className="space-y-3">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5">
+                <span className="inline-block rounded-full border border-[#E58C1A]/20 bg-[#FFF4D8] px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Your selected course</span>
+                <h2 className="mt-3 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl">{course.title}</h2>
+                <div className="mt-4 flex flex-col gap-3 border-y border-[#2D2E30]/10 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5">
                     <div className="flex items-center gap-2">
                       <TvMinimalPlay
-                        className="h-5 w-5 text-gray-700"
+                        className="h-5 w-5 text-[#E58C1A]"
                         strokeWidth={2}
                         aria-hidden="true"
                       />
-                      <span className="text-gray-700 font-semibold text-sm sm:text-base">
+                      <span className="text-[#2D2E30] font-semibold text-sm sm:text-base">
                         {course.lessons} lessons
                       </span>
                     </div>
-
                     <div className="flex items-center gap-2">
-                      {renderStars(course.rating)}
-                      <span className="text-gray-700 font-semibold text-sm sm:text-base">
+                      <Star className="h-4 w-4 fill-[#F4B63F] text-[#F4B63F]" aria-hidden="true" />
+                      <span className="text-[#2D2E30] font-semibold text-sm sm:text-base">
                         ({course.rating.toFixed(1)}/5)
                       </span>
                     </div>
-                  </div>
-
-                  <p className="text-gray-600 text-sm sm:text-base md:text-md leading-relaxed">
-                    {course.fullDescription}
-                  </p>
-
-                  <div className="text-xl sm:text-2xl font-semibold text-gray-900">
-                    Price - {course.price}
-                  </div>
+                </div>
+                <div className="mt-5 flex items-end justify-between gap-4">
+                  <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Total</p><p className="mt-1 text-2xl font-bold text-[#B96128]">{course.price}</p></div>
+                  <CreditCard className="h-6 w-6 text-[#E58C1A]" aria-hidden="true" />
                 </div>
               </div>
-            </div>
+            </aside>
 
-            {/* Right — Payment Section */}
-            <div className="bg-white rounded-3xl p-5 sm:p-7 md:p-8 shadow-lg">
-              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-5 sm:mb-6 md:mb-8">
-                Click to upload receipt
-              </h3>
+            <section className="overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] md:col-span-1 lg:col-span-1">
+              <div className="relative overflow-hidden bg-[#2D2E30] px-5 py-6 sm:px-6 sm:py-7 md:px-8">
+                <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-[#F8C56A]/15" aria-hidden="true" />
+                <div className="absolute -bottom-20 right-24 h-32 w-32 rounded-full border border-white/10" aria-hidden="true" />
+                <div className="relative flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 text-[#F8C56A]"><span className="h-1.5 w-1.5 rounded-full bg-[#F8C56A]" /><p className="text-xs font-bold uppercase tracking-[0.18em]">Secure payment</p></div>
+                    <h2 className="mt-3 text-xl font-bold tracking-tight text-white sm:text-2xl">Finish your payment</h2>
+                    <p className="mt-2 max-w-md text-xs leading-relaxed text-white/65 sm:text-sm">Scan, pay, then upload your receipt. Your course access will be ready once it’s verified.</p>
+                  </div>
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-[#F8C56A] sm:h-12 sm:w-12"><LockKeyhole className="h-5 w-5" aria-hidden="true" /></div>
+                </div>
+              </div>
 
-              {/* Step Indicator */}
-              <div className="mb-4 sm:mb-6 flex justify-center rounded-2xl border border-[#F3D6DF] bg-[#FFF8FA] px-3 py-3 sm:px-6 sm:py-6 shadow-sm">
-                <div className="inline-flex items-start justify-center gap-1 sm:gap-3">
+              <div className="mx-5 mt-5 rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-2 sm:mx-6 sm:mt-6 md:mx-8">
+                <div className="grid grid-cols-3 gap-2">
                   {paymentSteps.map((label, index) => {
                     const stepNumber = index + 1;
                     const isCompleted = currentStep > stepNumber;
@@ -243,78 +229,65 @@ function Payment() {
                     return (
                       <div
                         key={label}
-                        className="flex items-center justify-center"
+                        className={`rounded-xl px-2 py-3 text-center transition-all sm:px-3 ${
+                          isActive
+                            ? "bg-[#2D2E30] text-white shadow-[0_8px_18px_-10px_rgba(45,46,48,0.8)]"
+                            : isCompleted
+                              ? "bg-[#FFF1CE] text-[#9A5816]"
+                              : "bg-white text-[#9A8775]"
+                        }`}
                       >
-                        <div className="flex w-16 sm:w-24 flex-col items-center text-center">
-                          <div
-                            className={`mb-2 sm:mb-3 flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-full border-2 text-xs sm:text-sm font-bold transition-all ${
-                              isActive
-                                ? "border-[#F8B2C0] bg-[#F8B2C0] text-gray-900 shadow-md shadow-pink-100"
-                                : isCompleted
-                                  ? "border-[#CDEAFA] bg-[#CDEAFA] text-gray-900"
-                                  : "border-gray-300 bg-white text-gray-500"
-                            }`}
-                          >
-                            {isCompleted ? "✓" : stepNumber}
-                          </div>
-                          <p
-                            className={`text-[10px] sm:text-xs font-semibold leading-tight ${isActive || isCompleted ? "text-gray-900" : "text-gray-500"}`}
-                          >
-                            {label}
-                          </p>
-                          <p className="mt-0.5 text-[9px] sm:text-[11px] text-gray-400">
-                            Step {stepNumber}
-                          </p>
+                        <div className={`mx-auto mb-2 flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${
+                          isActive
+                            ? "bg-[#F8C56A] text-[#2D2E30]"
+                            : isCompleted
+                              ? "bg-[#E58C1A] text-white"
+                              : "bg-[#F1E8DC] text-[#9A8775]"
+                        }`}>
+                          {isCompleted ? "✓" : stepNumber}
                         </div>
-
-                        {index < paymentSteps.length - 1 ? (
-                          <div className="mb-5 w-5 sm:w-10 mx-0.5 sm:mx-1">
-                            <div className="h-1 w-full rounded-full bg-gray-200">
-                              <div
-                                className={`h-full rounded-full transition-all ${currentStep > stepNumber ? "w-full bg-[#F8B2C0]" : "w-0"}`}
-                              />
-                            </div>
-                          </div>
-                        ) : null}
+                        <p className="text-[10px] font-bold leading-tight sm:text-xs">{label}</p>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
+              <div className="px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6 md:px-8 md:pb-8">
               {/* Step 1 — QR Code */}
               {currentStep === 1 ? (
                 <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                  <div>
-                    <p className="text-gray-700 font-semibold text-sm sm:text-base mb-2">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#FFF4D8] text-xs font-bold text-[#C97112]">1</span>
+                    <div><p className="font-semibold text-sm text-[#2D2E30] sm:text-base mb-2">
                       Step 1. Scan the QR code to complete your payment.
                     </p>
-                    <p className="text-xs sm:text-sm text-gray-600">
+                    <p className="text-xs sm:text-sm text-[#765F55]">
                       Next step: Upload your payment receipt.
-                    </p>
+                    </p></div>
                   </div>
 
-                  <div className="bg-gray-100 p-2 sm:p-4 rounded-xl flex items-center justify-center">
+                  <div className="rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-4 sm:p-6 flex items-center justify-center">
                     {paymentQr ? (
                       <button
                         type="button"
                         onClick={() => setQrPreviewOpen(true)}
-                        className="group relative rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300"
+                        className="group relative rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E58C1A] focus:ring-offset-2"
                         aria-label="Open payment QR preview"
                       >
                         <img
                           src={paymentQr}
                           alt="Bank QR code for payment"
-                          className="w-32 sm:w-54 h-32 sm:h-54 object-contain transition-transform group-hover:scale-[1.02]"
+                          className="h-40 w-40 object-contain transition-transform group-hover:scale-[1.02] sm:h-56 sm:w-56"
                         />
                         <div className="absolute top-2 right-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                          <div className="bg-[#F8B2C0] text-black p-1.5 rounded-lg shadow-sm">
+                          <div className="rounded-lg bg-[#2D2E30] p-1.5 text-white shadow-sm">
                             <Maximize2 size={12} />
                           </div>
                         </div>
                       </button>
                     ) : (
-                      <div className="flex h-32 w-32 items-center justify-center px-3 text-center text-xs text-gray-500 sm:h-54 sm:w-54 sm:text-sm">
+                      <div className="flex h-40 w-40 items-center justify-center px-3 text-center text-xs text-[#765F55] sm:h-56 sm:w-56 sm:text-sm">
                         Payment QR is not available yet. Please contact support.
                       </div>
                     )}
@@ -323,7 +296,7 @@ function Payment() {
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button
                       onClick={() => navigate(`/courses/${courseId}`)}
-                      className="flex-1 border-2 border-gray-300 text-gray-900 font-bold py-2.5 sm:py-3 px-4 rounded-full hover:bg-gray-50 transition-colors text-sm sm:text-base"
+                      className="flex-1 rounded-xl border border-[#2D2E30]/20 px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#FFF9EA] sm:text-base"
                     >
                       Go Back
                     </button>
@@ -332,7 +305,7 @@ function Payment() {
                         setCurrentStep(2);
                         setError(""); // Clear error when moving to step 2
                       }}
-                      className="flex-1 bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-bold py-2.5 sm:py-3 px-4 rounded-full transition-colors text-sm sm:text-base"
+                      className="flex-1 rounded-xl bg-[#F8C56A] px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] sm:text-base"
                     >
                       Upload Receipt
                     </button>
@@ -343,30 +316,44 @@ function Payment() {
               {/* Step 2 — Upload Receipt */}
               {currentStep === 2 ? (
                 <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                  <div>
-                    <p className="text-gray-700 font-semibold text-sm sm:text-base mb-2">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#FFF4D8] text-xs font-bold text-[#C97112]">2</span>
+                    <div><p className="font-semibold text-sm text-[#2D2E30] sm:text-base mb-2">
                       Step 2. Upload your payment receipt.
                     </p>
-                    <p className="text-xs sm:text-sm text-gray-600">
+                    <p className="text-xs sm:text-sm text-[#765F55]">
                       Please upload a clear image or screenshot of your payment
                       confirmation.
-                    </p>
+                    </p></div>
                   </div>
 
-                  <label className="block border-2 border-dashed border-gray-300 rounded-xl p-6 sm:p-8 text-center hover:border-pink-400 transition-colors cursor-pointer">
+                  <label className={`block cursor-pointer rounded-2xl border-2 border-dashed p-4 text-center transition sm:p-5 ${
+                    receiptFile
+                      ? "border-[#7EAF85] bg-[#F4FAF4]"
+                      : "border-[#D9CEBE] bg-[#FFFDF8] hover:border-[#E58C1A] hover:bg-[#FFF9EA]"
+                  }`}>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleReceiptChange}
                       className="hidden"
                     />
-                    <div className="text-3xl sm:text-4xl mb-2">📄</div>
-                    <p className="text-gray-700 font-semibold text-sm sm:text-base mb-1">
-                      {receiptName || "Click to upload receipt"}
-                    </p>
-                    <p className="text-xs sm:text-sm text-gray-500">
-                      PNG or JPG, max 5 MB
-                    </p>
+                    {receiptFile && receiptPreview ? (
+                      <div className="flex items-center gap-3 text-left">
+                        <img src={receiptPreview} alt="Selected payment receipt preview" className="h-16 w-16 shrink-0 rounded-xl border border-[#7EAF85]/30 bg-white object-cover sm:h-20 sm:w-20" />
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex items-center gap-1.5 text-[#4D7C57]"><CircleCheck className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="text-xs font-bold uppercase tracking-[0.1em]">Receipt ready</span></div>
+                          <p className="truncate text-sm font-bold text-[#2D2E30]">{receiptName}</p>
+                          <p className="mt-1 text-xs text-[#4D7C57]">{(receiptFile.size / 1024 / 1024).toFixed(2)} MB · Tap to replace</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF4D8] text-[#C97112]"><Upload className="h-5 w-5" aria-hidden="true" /></div>
+                        <p className="mb-1 text-sm font-semibold text-[#2D2E30] sm:text-base">Click to upload receipt</p>
+                        <p className="text-xs text-[#765F55] sm:text-sm">PNG or JPG, max 5 MB</p>
+                      </>
+                    )}
                   </label>
 
                   <div className="flex flex-col sm:flex-row gap-3">
@@ -375,14 +362,14 @@ function Payment() {
                         setCurrentStep(1);
                         setError(""); // Clear error when going back to step 1
                       }}
-                      className="flex-1 border-2 border-gray-300 text-gray-900 font-bold py-2.5 sm:py-3 px-4 rounded-full hover:bg-gray-50 transition-colors text-sm sm:text-base"
+                      className="flex-1 rounded-xl border border-[#2D2E30]/20 px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#FFF9EA] sm:text-base"
                     >
                       Back
                     </button>
                     <button
                       onClick={handleUploadReceipt}
                       disabled={submitting}
-                      className="flex-1 bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-bold py-2.5 sm:py-3 px-4 rounded-full transition-colors text-sm sm:text-base disabled:opacity-60"
+                      className="flex-1 rounded-xl bg-[#F8C56A] px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] sm:text-base disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? "Submitting..." : "Submit Payment"}
                     </button>
@@ -390,7 +377,7 @@ function Payment() {
 
                   {/* Error message under submit button */}
                   {error ? (
-                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                       {error}
                     </div>
                   ) : null}
@@ -401,10 +388,11 @@ function Payment() {
               {currentStep === 3 ? (
                 <div className="space-y-4 sm:space-y-5 md:space-y-6">
                   <div>
-                    <h4 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 sm:mb-3 flex items-center gap-2">
-                      ⏳ Payment Under Review
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E9F4EA] text-[#4D7C57]"><CircleCheck className="h-6 w-6" aria-hidden="true" /></div>
+                    <h4 className="text-lg sm:text-xl font-bold text-[#2D2E30] mb-2 sm:mb-3">
+                      Payment under review
                     </h4>
-                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                    <p className="text-xs sm:text-sm text-[#765F55] leading-relaxed">
                       Your payment has been submitted successfully. You will be
                       notified once your enrollment is approved.
                     </p>
@@ -412,16 +400,17 @@ function Payment() {
 
                   <button
                     onClick={() => navigate("/my-course-order")}
-                    className="w-full bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-bold py-2.5 sm:py-3 px-4 rounded-full transition-colors text-sm sm:text-base"
+                    className="w-full rounded-xl bg-[#F8C56A] px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] sm:text-base"
                   >
                     View My Course Orders
                   </button>
                 </div>
               ) : null}
-            </div>
+              </div>
+            </section>
           </div>
         </div>
-      </div>
+      </main>
 
       {qrPreviewOpen && paymentQr ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
