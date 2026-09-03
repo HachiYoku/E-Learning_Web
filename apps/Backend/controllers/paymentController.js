@@ -46,6 +46,7 @@ const createPayment = async (req, res) => {
     const payment = await Payment.create({
       userId: req.user.id,
       courseId,
+      amount: Number(course.price || 0),
       paymentImage: uploadedProof.secure_url,
       paymentImagePublicId: uploadedProof.public_id,
       status: "pending",
@@ -111,6 +112,15 @@ const approvePayment = async (req, res) => {
       return res.status(400).json({ message: "Only pending payments can be approved" });
     }
 
+    const course = await Course.findById(payment.courseId).select("title price");
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    if (payment.amount == null) {
+      payment.amount = Number(course.price || 0);
+    }
+
     payment.status = "approved";
     payment.reviewedBy = req.user.id;
     payment.reviewedAt = new Date();
@@ -133,8 +143,6 @@ const approvePayment = async (req, res) => {
         setDefaultsOnInsert: true,
       }
     );
-
-    const course = await Course.findById(payment.courseId).select("title");
 
     await createNotification({
       userId: payment.userId,
@@ -192,6 +200,14 @@ const rejectPayment = async (req, res) => {
 
     if (payment.status !== "pending") {
       return res.status(400).json({ message: "Only pending payments can be rejected" });
+    }
+
+    if (payment.amount == null) {
+      const course = await Course.findById(payment.courseId).select("price");
+      if (!course) {
+        return res.status(404).json({ message: "Course not found" });
+      }
+      payment.amount = Number(course.price || 0);
     }
 
     payment.status = "rejected";

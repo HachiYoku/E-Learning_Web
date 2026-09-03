@@ -14,9 +14,14 @@ function normalizePayment(payment) {
       `https://ui-avatars.com/api/?background=f8b2c0&color=111827&name=${encodeURIComponent(payment.userId?.name || "User")}`,
     userDate: payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : "",
     courseName: payment.courseId?.title || "Unknown course",
-    coursePrice: `${Number(payment.courseId?.price || 0).toLocaleString()} บาท`,
-    amount: `${Number(payment.courseId?.price || 0).toLocaleString()} ฿`,
-    date: payment.createdAt ? new Date(payment.createdAt).toLocaleString() : "",
+    amountValue: Number(payment.amount ?? payment.courseId?.price ?? 0),
+    feeValue: Number(payment.fee || 0),
+    refundValue: Number(payment.refundAmount || 0),
+    coursePrice: `${Number(payment.amount ?? payment.courseId?.price ?? 0).toLocaleString()} บาท`,
+    amount: `${Number(payment.amount ?? payment.courseId?.price ?? 0).toLocaleString()} ฿`,
+    date: payment.status === "approved" && payment.reviewedAt
+      ? new Date(payment.reviewedAt).toLocaleString()
+      : payment.createdAt ? new Date(payment.createdAt).toLocaleString() : "",
     paymentMethod: "Uploaded transfer slip",
     cardInfo: payment.userId?.email || "",
     status: payment.status,

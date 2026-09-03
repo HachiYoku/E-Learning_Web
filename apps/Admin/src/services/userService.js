@@ -9,6 +9,7 @@ function normalizeUser(user) {
     id: user._id,
     name: user.name,
     email: user.email,
+    createdAt: user.createdAt || null,
     dateCreated: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "",
     purchasedCourses: Array.isArray(user.purchasedCourses) ? user.purchasedCourses : [],
     isActive: Boolean(user.isActive),

@@ -14,6 +14,21 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    fee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    refundAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     paymentImage: {
       type: String,
       required: true,
