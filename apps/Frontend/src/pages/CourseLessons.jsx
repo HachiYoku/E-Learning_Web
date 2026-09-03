@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { fetchCourseById } from '../services/courseService'
 import { fetchLessonsByCourse } from '../services/lessonService'
 import { fetchCourseQuizzes } from '../services/quizService'
+import { fetchEnrollmentProgress, saveLastOpenedLesson, setLessonCompleted } from '../services/enrollmentService'
 
 function getEmbedUrl(src) {
   if (!src) {
@@ -59,6 +60,7 @@ function CourseLessons() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeLesson, setActiveLesson] = useState(null)
+  const [progress, setProgress] = useState(null)
 
   const activeVideoUrl = useMemo(() => getEmbedUrl(activeLesson?.videoUrl), [activeLesson])
 
@@ -68,15 +70,17 @@ function CourseLessons() {
         setLoading(true)
         setError('')
 
-        const [courseResponse, lessonsResponse, quizzesResponse] = await Promise.all([
+        const [courseResponse, lessonsResponse, quizzesResponse, progressResponse] = await Promise.all([
           fetchCourseById(courseId),
           fetchLessonsByCourse(courseId),
           fetchCourseQuizzes(courseId),
+          fetchEnrollmentProgress(courseId),
         ])
 
         setCourse(courseResponse)
         setLessons(lessonsResponse)
         setCourseQuizzes(quizzesResponse)
+        setProgress(progressResponse)
       } catch (loadError) {
         setError(loadError.message)
       } finally {
@@ -86,6 +90,24 @@ function CourseLessons() {
 
     loadCourseLessons()
   }, [courseId])
+
+  const handleOpenLesson = (lesson) => {
+    if (!lesson.videoUrl) return
+
+    setActiveLesson(lesson)
+    saveLastOpenedLesson(courseId, lesson.id)
+      .then(setProgress)
+      .catch(() => {})
+  }
+
+  const handleCompletionToggle = async (lesson) => {
+    const isCompleted = progress?.completedLessonIds?.includes(lesson.id)
+    try {
+      setProgress(await setLessonCompleted(courseId, lesson.id, !isCompleted))
+    } catch (progressError) {
+      setError(progressError.message)
+    }
+  }
 
   if (loading) {
     return (
@@ -195,7 +217,10 @@ function CourseLessons() {
                 ) : (
                   <div>
                     <div className="mb-8">
-                      <h3 className="text-lg font-bold text-gray-900 mb-4">Lessons</h3>
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-lg font-bold text-gray-900">Lessons</h3>
+                        <span className="rounded-full bg-pink-100 px-3 py-1 text-xs font-semibold text-pink-700">{progress?.completedLessons || 0} of {progress?.totalLessons || lessons.length} complete</span>
+                      </div>
                       <div className="space-y-3">
                         {lessons.map((lesson) => (
                           <div
@@ -204,7 +229,7 @@ function CourseLessons() {
                           >
                             <button
                               type="button"
-                              onClick={() => lesson.videoUrl && setActiveLesson(lesson)}
+                              onClick={() => handleOpenLesson(lesson)}
                               className="group flex flex-1 items-center gap-4 p-1 text-left"
                             >
                             <div className="flex items-center gap-4 text-left flex-1">
@@ -225,6 +250,13 @@ function CourseLessons() {
                               className="shrink-0 rounded-lg bg-pink-100 px-3 py-2 text-sm font-semibold text-pink-700 transition hover:bg-pink-200"
                             >
                               Quiz
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCompletionToggle(lesson)}
+                              className={`shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition ${progress?.completedLessonIds?.includes(lesson.id) ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                            >
+                              {progress?.completedLessonIds?.includes(lesson.id) ? 'Completed' : 'Mark complete'}
                             </button>
                           </div>
                         ))}
