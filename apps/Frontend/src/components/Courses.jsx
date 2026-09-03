@@ -4,12 +4,16 @@ import { useNavigate } from "react-router-dom"
 import CourseCard from "./CourseCard"
 import LoadingSpinner from "./LoadingSpinner"
 import { fetchCourses } from "../services/courseService"
+import { fetchMyEnrollments } from "../services/enrollmentService"
+import { useAuth } from "../contexts/AuthContext"
 
 function Courses() {
   const navigate = useNavigate()
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState(() => new Set())
+  const { isAuthenticated } = useAuth()
 
   useEffect(() => {
     async function loadFeaturedCourses() {
@@ -27,6 +31,38 @@ function Courses() {
 
     loadFeaturedCourses()
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setEnrolledCourseIds(new Set())
+      return
+    }
+
+    let isMounted = true
+
+    async function loadEnrollments() {
+      try {
+        const enrollments = await fetchMyEnrollments()
+        if (isMounted) {
+          setEnrolledCourseIds(new Set(
+            enrollments
+              .map((enrollment) => enrollment.course?.id)
+              .filter(Boolean)
+          ))
+        }
+      } catch {
+        if (isMounted) {
+          setEnrolledCourseIds(new Set())
+        }
+      }
+    }
+
+    loadEnrollments()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isAuthenticated])
 
   return (
     <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-12 sm:px-6 sm:py-16 md:px-10 md:py-24 lg:px-16">
@@ -63,6 +99,7 @@ function Courses() {
                 price={course.price}
                 rating={course.rating}
                 reviews={course.reviews}
+                isEnrolled={enrolledCourseIds.has(course.id)}
               />
             ))}
           </div>

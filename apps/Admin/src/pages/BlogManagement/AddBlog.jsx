@@ -1,8 +1,21 @@
-import { ArrowLeft, Bold, Italic, Link2, Quote, Redo2, Type, Undo2 } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, Italic, Link2, List, ListOrdered, Quote, Redo2, Table2, Type, Undo2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { createBlog } from "../../services/blogService";
 import { validateFileSize } from "../../utils/fileValidation";
+
+const TEXT_COLORS = [
+  { name: "Black", value: "#111827" },
+  { name: "Gray", value: "#6b7280" },
+  { name: "Red", value: "#dc2626" },
+  { name: "Orange", value: "#ea580c" },
+  { name: "Yellow", value: "#ca8a04" },
+  { name: "Green", value: "#16a34a" },
+  { name: "Blue", value: "#2563eb" },
+  { name: "Purple", value: "#9333ea" },
+  { name: "Pink", value: "#db2777" },
+  { name: "Teal", value: "#0f766e" },
+];
 
 function AddBlog() {
   const navigate = useNavigate();
@@ -31,8 +44,20 @@ function AddBlog() {
     left: 0,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fontSize, setFontSize] = useState(12);
+  const [textColor, setTextColor] = useState("#111827");
+  const [isColorPaletteOpen, setIsColorPaletteOpen] = useState(false);
+  const [tableDialog, setTableDialog] = useState(false);
+  const [tableRows, setTableRows] = useState(3);
+  const [tableColumns, setTableColumns] = useState(3);
   const [error, setError] = useState("");
   const [isDiscardDialogOpen, setIsDiscardDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (contentRef.current && contentRef.current.innerHTML !== formData.content) {
+      contentRef.current.innerHTML = formData.content;
+    }
+  }, [formData.content]);
 
   const getFormSnapshot = ({ title, content, image, imageFile }) =>
     JSON.stringify({ title, content, image, hasImageFile: Boolean(imageFile) });
@@ -49,6 +74,20 @@ function AddBlog() {
       quote: selectedElement?.closest("blockquote") != null,
       link: selectedElement?.closest("a") != null,
     };
+  };
+
+  const getSelectedFontSize = () => {
+    const selection = window.getSelection();
+    const selectedNode = selection?.anchorNode;
+    const selectedElement = selectedNode?.nodeType === 1 ? selectedNode : selectedNode?.parentElement;
+    const formattedElement = selectedElement?.closest("span[style*='font-size'], h2, h3, h4");
+
+    if (!formattedElement || !contentRef.current?.contains(formattedElement)) {
+      return 12;
+    }
+
+    const size = Number.parseFloat(window.getComputedStyle(formattedElement).fontSize);
+    return Number.isFinite(size) ? Math.round(size) : 12;
   };
 
   useEffect(() => {
@@ -170,6 +209,10 @@ function AddBlog() {
 
     setActiveFormats(getActiveFormats());
 
+    if (selection?.anchorNode && contentRef.current?.contains(selection.anchorNode)) {
+      setFontSize(getSelectedFontSize());
+    }
+
     if (!selectedText.length) {
       setToolbar((prev) => ({ ...prev, visible: false }));
       setLinkInput((prev) => ({ ...prev, visible: false }));
@@ -185,6 +228,94 @@ function AddBlog() {
     });
   };
 
+  const saveEditorSelection = () => {
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+
+    if (range && contentRef.current?.contains(range.commonAncestorContainer) && selection.toString().trim()) {
+      selectedRangeRef.current = range.cloneRange();
+    }
+  };
+
+  const applyFontSize = (nextSize) => {
+    const editor = contentRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selectedRangeRef.current) {
+      setError("Select text before changing its size.");
+      return;
+    }
+
+    editor.focus();
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRangeRef.current);
+
+    if (!selection?.toString().trim()) {
+      setError("Select text before changing its size.");
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const sizeWrapper = document.createElement("span");
+    sizeWrapper.style.fontSize = `${nextSize}px`;
+    sizeWrapper.appendChild(range.extractContents());
+    range.insertNode(sizeWrapper);
+    const updatedRange = document.createRange();
+    updatedRange.selectNodeContents(sizeWrapper);
+    selection.removeAllRanges();
+    selection.addRange(updatedRange);
+    selectedRangeRef.current = updatedRange.cloneRange();
+    setFontSize(nextSize);
+    handleEditorChange();
+    setError("");
+  };
+
+  const applyTextColor = (color) => {
+    const editor = contentRef.current;
+    const selection = window.getSelection();
+
+    if (!editor || !selectedRangeRef.current || !editor.contains(selectedRangeRef.current.commonAncestorContainer)) {
+      setError("Select text before changing its color.");
+      return;
+    }
+
+    editor.focus();
+    selection?.removeAllRanges();
+    selection?.addRange(selectedRangeRef.current);
+
+    if (!selection?.toString().trim()) {
+      setError("Select text before changing its color.");
+      return;
+    }
+
+    const range = selectedRangeRef.current;
+    const colorWrapper = document.createElement("span");
+    colorWrapper.style.color = color;
+    colorWrapper.appendChild(range.extractContents());
+    range.insertNode(colorWrapper);
+    const updatedRange = document.createRange();
+    updatedRange.selectNodeContents(colorWrapper);
+    selection.removeAllRanges();
+    selection.addRange(updatedRange);
+    selectedRangeRef.current = updatedRange.cloneRange();
+    setTextColor(color);
+    handleEditorChange();
+    setError("");
+  };
+
+  const insertTable = () => {
+    const safeRows = Math.min(Math.max(Number(tableRows) || 1, 1), 8);
+    const safeColumns = Math.min(Math.max(Number(tableColumns) || 1, 1), 8);
+    const headerCells = Array.from({ length: safeColumns }, () => "<th>Header</th>").join("");
+    const bodyRows = Array.from({ length: Math.max(safeRows - 1, 0) }, () => (
+      `<tr>${Array.from({ length: safeColumns }, () => "<td>Write here</td>").join("")}</tr>`
+    )).join("");
+
+    contentRef.current?.focus();
+    document.execCommand("insertHTML", false, `<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table><p><br></p>`);
+    handleEditorChange();
+    setTableDialog(false);
+  };
+
   const applyFormat = (format) => {
     const editor = contentRef.current;
     if (!editor) {
@@ -192,6 +323,11 @@ function AddBlog() {
     }
 
     editor.focus();
+    if (selectedRangeRef.current && editor.contains(selectedRangeRef.current.commonAncestorContainer)) {
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(selectedRangeRef.current);
+    }
     const currentFormats = getActiveFormats();
 
     switch (format) {
@@ -206,6 +342,21 @@ function AddBlog() {
         break;
       case "quote":
         document.execCommand("formatBlock", false, currentFormats.quote ? "p" : "blockquote");
+        break;
+      case "bulletList":
+        document.execCommand("insertUnorderedList", false, null);
+        break;
+      case "numberedList":
+        document.execCommand("insertOrderedList", false, null);
+        break;
+      case "alignLeft":
+        document.execCommand("justifyLeft", false, null);
+        break;
+      case "alignCenter":
+        document.execCommand("justifyCenter", false, null);
+        break;
+      case "alignRight":
+        document.execCommand("justifyRight", false, null);
         break;
       case "link": {
         if (currentFormats.link) {
@@ -317,29 +468,31 @@ function AddBlog() {
           <h1 className="flex-1 text-center text-2xl font-bold text-gray-900 sm:text-3xl md:text-4xl">
             Add Blog
           </h1>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-pink-300 px-4 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-pink-400 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:px-6 sm:text-base"
-          >
-            {isSubmitting ? "Publishing..." : "Publish"}
-          </button>
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="flex-1 rounded-lg bg-pink-300 px-4 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-pink-400 disabled:cursor-not-allowed disabled:opacity-70 sm:flex-none sm:px-6"
+            >
+              {isSubmitting ? "Publishing..." : "Publish"}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="p-4 sm:p-6 md:p-8">
+      <div className="flex flex-col p-4 sm:p-6 md:p-8">
         {error ? (
           <div className="mx-auto mb-6 max-w-6xl rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         ) : null}
 
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 md:gap-12 lg:grid-cols-2">
-          <div>
+        <div className="order-2 mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 md:gap-8 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="lg:col-start-2">
             <label className="mb-3 block text-xs font-semibold text-gray-900 sm:text-sm md:mb-4">
               Upload blog image :
             </label>
-            <div className="relative flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-6 transition-colors hover:bg-gray-100 group sm:min-h-80 sm:p-8 md:min-h-96 md:p-12">
+            <div className="relative flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-5 transition-colors hover:bg-gray-100 group sm:min-h-64 sm:p-6">
                 <input
                   type="file"
                   accept="image/*"
@@ -360,59 +513,49 @@ function AddBlog() {
             <p className="mt-2 text-xs text-gray-500">Image must be 5 MB or smaller.</p>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 lg:col-start-1 lg:row-start-1">
             <textarea
               ref={titleRef}
               name="title"
               value={formData.title}
               onChange={handleInputChange}
-              placeholder="Title"
+              placeholder="Blog title"
               rows={1}
               aria-label="Blog title"
               className="w-full min-h-[2.5rem] max-h-40 resize-none overflow-y-auto border-none bg-transparent p-0 text-2xl font-bold leading-tight text-gray-900 outline-none placeholder:text-gray-400 focus:ring-0 sm:min-h-[3rem] sm:text-3xl md:text-4xl"
             />
 
             <div
-              ref={contentRef}
-              contentEditable
-              suppressContentEditableWarning
-              onMouseUp={handleTextSelection}
-              onKeyUp={handleTextSelection}
-              onKeyDown={handleEditorKeyDown}
-              onInput={handleEditorChange}
-              onFocus={(e) => {
-                if (e.currentTarget.textContent.trim() === "Start writing...") {
-                  e.currentTarget.innerHTML = "";
-                  setIsEditorEmpty(true);
-                }
-              }}
-              onBlur={(e) => {
-                if (e.currentTarget.textContent.trim() === "") {
-                  e.currentTarget.innerHTML = "Start writing...";
-                  setIsEditorEmpty(true);
-                }
-              }}
-              className=" w-full resize-none overflow-y-auto whitespace-pre-wrap px-0 py-4 text-sm text-gray-700 outline-none focus:ring-0 sm:h-80 sm:text-base"
-              style={{
-                minHeight: "420px",
-                color: isEditorEmpty ? "#d1d5db" : "#374151",
-              }}
-            >
-              Start writing...
-            </div>
+                ref={contentRef}
+                contentEditable
+                suppressContentEditableWarning
+                data-placeholder="Start writing your blog..."
+                onMouseUp={handleTextSelection}
+                onSelect={handleTextSelection}
+                onKeyUp={handleTextSelection}
+                onKeyDown={handleEditorKeyDown}
+                onInput={handleEditorChange}
+                className="blog-editor w-full overflow-y-auto whitespace-pre-wrap border-t border-gray-200 px-1 py-6 text-base leading-8 text-gray-700 outline-none focus:ring-0 sm:text-lg"
+                style={{ minHeight: "680px" }}
+              />
           </div>
         </div>
-      </div>
-
-      {toolbar.visible ? (
+      
+      <>
         <div
-          className="animate-fadeIn fixed z-50 flex items-center gap-2 rounded-lg bg-gray-900 p-2 text-white shadow-lg"
-          style={{ top: `${toolbar.top}px`, left: `${toolbar.left}px` }}
+          onMouseDown={(event) => {
+            if (event.target.closest("button")) {
+              event.preventDefault();
+              saveEditorSelection();
+            }
+          }}
+          className="order-1 sticky top-0 z-10 mx-auto mb-5 flex w-full max-w-7xl flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-white p-2 text-gray-700 shadow-[0_10px_30px_rgba(17,24,39,0.12)] sm:gap-2"
         >
+          <span className="hidden px-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 lg:inline">Text</span>
           <button
             onClick={() => applyFormat("bold")}
             onMouseDown={(event) => event.preventDefault()}
-            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.bold ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.bold ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
             title="Bold"
             aria-label="Bold"
             aria-pressed={activeFormats.bold}
@@ -422,18 +565,18 @@ function AddBlog() {
           <button
             onClick={() => applyFormat("italic")}
             onMouseDown={(event) => event.preventDefault()}
-            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.italic ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.italic ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
             title="Italic"
             aria-label="Italic"
             aria-pressed={activeFormats.italic}
           >
             <Italic size={18} />
           </button>
-          <div className="h-6 w-px bg-gray-700" />
+          <div className="mx-1 h-6 w-px bg-gray-200" />
           <button
             onClick={() => applyFormat("heading")}
             onMouseDown={(event) => event.preventDefault()}
-            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.heading ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.heading ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
             title="Heading"
             aria-label="Heading"
             aria-pressed={activeFormats.heading}
@@ -443,7 +586,7 @@ function AddBlog() {
           <button
             onClick={() => applyFormat("quote")}
             onMouseDown={(event) => event.preventDefault()}
-            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.quote ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.quote ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
             title="Quote"
             aria-label="Quote"
             aria-pressed={activeFormats.quote}
@@ -451,21 +594,120 @@ function AddBlog() {
             <Quote size={18} />
           </button>
           <button
+            onClick={() => applyFormat("bulletList")}
+            onMouseDown={(event) => event.preventDefault()}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            title="Bulleted list"
+            aria-label="Bulleted list"
+          >
+            <List size={18} />
+          </button>
+          <button
+            onClick={() => applyFormat("numberedList")}
+            onMouseDown={(event) => event.preventDefault()}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            title="Numbered list"
+            aria-label="Numbered list"
+          >
+            <ListOrdered size={18} />
+          </button>
+          <div className="flex h-9 items-center rounded border border-gray-200 bg-white" aria-label="Text size">
+            <button type="button" onMouseDown={(event) => { event.preventDefault(); saveEditorSelection(); }} onClick={() => applyFontSize(Math.max(fontSize - 1, 8))} className="px-2 text-base font-semibold text-gray-500 transition-colors hover:text-pink-600" title="Decrease font size" aria-label="Decrease font size">-</button>
+            <input
+              type="number"
+              min="8"
+              max="72"
+              value={fontSize}
+              onChange={(event) => setFontSize(Math.min(Math.max(Number(event.target.value) || 8, 8), 72))}
+              onKeyDown={(event) => event.key === "Enter" && applyFontSize(fontSize)}
+              onMouseDown={saveEditorSelection}
+              className="w-9 border-0 p-0 text-center text-xs font-bold text-gray-700 outline-none focus:ring-0"
+              aria-label="Font size in pixels"
+            />
+            <button type="button" onMouseDown={(event) => { event.preventDefault(); saveEditorSelection(); }} onClick={() => applyFontSize(Math.min(fontSize + 1, 72))} className="px-2 text-base font-semibold text-gray-500 transition-colors hover:text-pink-600" title="Increase font size" aria-label="Increase font size">+</button>
+          </div>
+          <div className="relative">
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => setIsColorPaletteOpen((current) => !current)}
+              className="flex h-9 items-center rounded border border-gray-200 bg-white px-2 text-sm font-bold text-gray-700 hover:border-pink-300"
+              title="Text color"
+              aria-label="Text color"
+              aria-expanded={isColorPaletteOpen}
+            >
+              <span className="border-b-4 pb-0.5" style={{ borderColor: textColor }} aria-hidden="true">A</span>
+            </button>
+            {isColorPaletteOpen ? (
+              <div className="absolute left-0 top-11 z-30 grid w-44 grid-cols-5 gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-xl">
+                {TEXT_COLORS.map((color) => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => { applyTextColor(color.value); setIsColorPaletteOpen(false); }}
+                    className={`h-6 w-6 rounded-full border-2 border-white shadow ring-1 ring-gray-300 transition-transform hover:scale-110 ${textColor === color.value ? "ring-2 ring-pink-500" : ""}`}
+                    style={{ backgroundColor: color.value }}
+                    title={color.name}
+                    aria-label={`${color.name} text`}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="mx-1 h-6 w-px bg-gray-200" />
+          <button
+            onClick={() => applyFormat("alignLeft")}
+            onMouseDown={(event) => event.preventDefault()}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            title="Align left"
+            aria-label="Align left"
+          >
+            <AlignLeft size={18} />
+          </button>
+          <button
+            onClick={() => applyFormat("alignCenter")}
+            onMouseDown={(event) => event.preventDefault()}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            title="Align center"
+            aria-label="Align center"
+          >
+            <AlignCenter size={18} />
+          </button>
+          <button
+            onClick={() => applyFormat("alignRight")}
+            onMouseDown={(event) => event.preventDefault()}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            title="Align right"
+            aria-label="Align right"
+          >
+            <AlignRight size={18} />
+          </button>
+          <button
+            onClick={() => setTableDialog((current) => !current)}
+            onMouseDown={(event) => event.preventDefault()}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            title="Insert table"
+            aria-label="Insert table"
+          >
+            <Table2 size={18} />
+          </button>
+          <button
             onClick={() => applyFormat("link")}
             onMouseDown={(event) => event.preventDefault()}
-            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.link ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.link ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
             title="Link"
             aria-label="Link"
             aria-pressed={activeFormats.link}
           >
             <Link2 size={18} />
           </button>
-          <div className="h-6 w-px bg-gray-700" />
+          <div className="mx-1 h-6 w-px bg-gray-200" />
           <button
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => handleUndoRedo("undo")}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
             title="Undo (Ctrl/Cmd + Z)"
             aria-label="Undo"
           >
@@ -475,14 +717,34 @@ function AddBlog() {
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => handleUndoRedo("redo")}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
             title="Redo (Ctrl/Cmd + Shift + Z)"
             aria-label="Redo"
           >
             <Redo2 size={18} />
           </button>
         </div>
+      </>
+      {tableDialog ? (
+        <div className="mx-auto mb-5 w-full max-w-3xl rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
+          <p className="text-sm font-bold text-gray-800">Insert table</p>
+          <div className="mt-3 grid max-w-sm grid-cols-2 gap-3">
+            <label className="text-xs font-semibold text-gray-600">
+              Rows
+              <input type="number" min="1" max="8" value={tableRows} onChange={(event) => setTableRows(event.target.value)} className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm text-gray-800" />
+            </label>
+            <label className="text-xs font-semibold text-gray-600">
+              Columns
+              <input type="number" min="1" max="8" value={tableColumns} onChange={(event) => setTableColumns(event.target.value)} className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm text-gray-800" />
+            </label>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button type="button" onClick={insertTable} className="rounded bg-pink-300 px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-pink-400">Insert table</button>
+            <button type="button" onClick={() => setTableDialog(false)} className="rounded px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-200">Cancel</button>
+          </div>
+        </div>
       ) : null}
+      </div>
 
       {linkInput.visible ? (
         <div
@@ -546,6 +808,60 @@ function AddBlog() {
         }
         .animate-fadeIn {
           animation: fadeIn 0.2s ease-out;
+        }
+        .blog-editor:empty::before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
+          pointer-events: none;
+        }
+        .blog-editor p {
+          margin: 0 0 1rem;
+        }
+        .blog-editor ul,
+        .blog-editor ol {
+          margin: 1rem 0;
+          padding-left: 1.5rem;
+        }
+        .blog-editor ul {
+          list-style-type: disc;
+        }
+        .blog-editor ol {
+          list-style-type: decimal;
+        }
+        .blog-editor h3 {
+          margin: 1.75rem 0 0.75rem;
+          font-size: 1.75rem;
+          font-weight: 700;
+          line-height: 1.25;
+          color: #111827;
+        }
+        .blog-editor blockquote {
+          margin: 1.5rem 0;
+          border-left: 4px solid #f472b6;
+          padding-left: 1rem;
+          color: #6b7280;
+          font-style: italic;
+        }
+        .blog-editor h4 {
+          margin: 1rem 0 0.5rem;
+          font-size: 1rem;
+          font-weight: 600;
+          line-height: 1.5;
+        }
+        .blog-editor table {
+          width: 100%;
+          margin: 1.5rem 0;
+          border-collapse: collapse;
+          text-align: left;
+        }
+        .blog-editor th,
+        .blog-editor td {
+          border: 1px solid #d1d5db;
+          padding: 0.75rem;
+        }
+        .blog-editor th {
+          background: #fdf2f8;
+          font-weight: 700;
         }
         [contenteditable] h3 {
           font-size: 1.875rem;

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { fetchQuizzesForLesson, fetchCourseQuizzes, submitQuiz } from "../services/quizService";
+import { fetchQuizzesForLesson, fetchCourseQuizzes, fetchQuizHistory, submitQuiz } from "../services/quizService";
 
 function scoreMessage(percentage) {
   if (percentage === 100) return "Perfect! Excellent work.";
@@ -20,6 +20,7 @@ function Quiz() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [result, setResult] = useState(null);
+  const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -54,6 +55,28 @@ function Quiz() {
     loadQuizzes();
   }, [courseId, lessonId, quizId, isCourseQuiz]);
 
+  useEffect(() => {
+    if (!quiz?._id) {
+      setHistory(null);
+      return undefined;
+    }
+
+    let isMounted = true;
+    setHistory(null);
+
+    fetchQuizHistory(quiz._id)
+      .then((data) => {
+        if (isMounted) setHistory(data);
+      })
+      .catch(() => {
+        if (isMounted) setHistory({ attempts: [], attemptsUsed: quiz.attemptsUsed || 0, maxAttempts: quiz.maxAttempts, bestScore: 0 });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [quiz?._id]);
+
   const chooseQuiz = (index) => {
     setQuizIndex(index);
     setQuestionIndex(0);
@@ -77,6 +100,9 @@ function Quiz() {
       setError("");
       const submission = await submitQuiz(quiz._id, answers);
       setResult(submission);
+      fetchQuizHistory(quiz._id)
+        .then(setHistory)
+        .catch(() => {});
       setQuizzes((current) =>
         current.map((item) => (item._id === quiz._id ? { ...item, attemptsUsed: submission.attemptsUsed } : item))
       );
@@ -109,6 +135,10 @@ function Quiz() {
   const noQuizMessage = isCourseQuiz ? "This course quiz is not available." : "Your teacher has not added a quiz for this lesson.";
   const attemptsRemaining = quiz ? Math.max((quiz.maxAttempts ?? Infinity) - (quiz.attemptsUsed ?? 0), 0) : 0;
   const isQuizLocked = Boolean(quiz?.maxAttempts) && (quiz?.attemptsUsed ?? 0) >= quiz.maxAttempts && !result;
+  const bestAttempt = history?.attempts?.reduce(
+    (best, attempt) => (!best || attempt.score / attempt.total > best.score / best.total ? attempt : best),
+    null
+  );
 
   return (
     <div className="min-h-screen bg-blue-50">
@@ -156,6 +186,36 @@ function Quiz() {
                 <p className="mt-3 text-center text-sm text-gray-500">Unlimited attempts</p>
               )}
 
+              {history ? (
+                <section className="mt-6 rounded-2xl border border-pink-100 bg-pink-50 p-4 text-left sm:p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="font-bold text-gray-900">Your progress</h2>
+                      <p className="mt-1 text-sm text-gray-600">Your scores from previous attempts.</p>
+                    </div>
+                    {bestAttempt ? (
+                      <div className="rounded-xl bg-white px-3 py-2 text-right shadow-sm">
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Best score</p>
+                        <p className="text-lg font-bold text-pink-700">{bestAttempt.score} / {bestAttempt.total} <span className="text-sm">({Math.round((bestAttempt.score / bestAttempt.total) * 100)}%)</span></p>
+                      </div>
+                    ) : (
+                      <p className="rounded-xl bg-white px-3 py-2 text-sm text-gray-600 shadow-sm">No attempts yet</p>
+                    )}
+                  </div>
+
+                  {history.attempts.length > 0 ? (
+                    <div className="mt-4 space-y-2">
+                      {history.attempts.map((attempt) => (
+                        <div key={attempt._id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
+                          <span className="font-medium">Attempt {attempt.attemptNumber}</span>
+                          <span>{attempt.score} / {attempt.total} · {Math.round((attempt.score / attempt.total) * 100)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+
               {result ? (
                 <div className="py-8 text-center">
                   <div className="mx-auto flex h-32 w-32 items-center justify-center rounded-full bg-pink-100 text-3xl font-bold text-pink-800">
@@ -166,20 +226,26 @@ function Quiz() {
                   </h2>
                   <p className="mt-2 text-gray-600">{scoreMessage(Math.round((result.score / result.total) * 100))}</p>
 
-                  <div className="mt-8 space-y-3 text-left">
-                    {quiz.questions.map((item, index) => (
-                      <div
-                        key={item._id || item.id}
-                        className={`rounded-xl border p-4 ${
-                          result.results[index].correct ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
-                        }`}
-                      >
-                        <p className="font-semibold text-gray-900">
-                          Question {index + 1}: {result.results[index].correct ? "Correct" : `Correct answer: ${item.options[result.results[index].correctAnswer]}`}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                  {result.showCorrectAnswers ? (
+                    <div className="mt-8 space-y-3 text-left">
+                      {quiz.questions.map((item, index) => (
+                        <div
+                          key={item._id || item.id}
+                          className={`rounded-xl border p-4 ${
+                            result.results[index].correct ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                          }`}
+                        >
+                          <p className="font-semibold text-gray-900">
+                            Question {index + 1}: {result.results[index].correct ? "Correct" : `Correct answer: ${item.options[result.results[index].correctAnswer]}`}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : quiz.maxAttempts ? (
+                    <p className="mt-6 text-sm text-gray-600">
+                      Correct answers and detailed review will be shown after your final attempt.
+                    </p>
+                  ) : null}
 
                   {quiz.maxAttempts && quiz.attemptsUsed >= quiz.maxAttempts ? (
                     <p className="mt-8 font-semibold text-gray-600">You have used all available attempts for this quiz.</p>
