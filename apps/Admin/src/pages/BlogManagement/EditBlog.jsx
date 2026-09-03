@@ -596,13 +596,13 @@ function EditBlog() {
               saveEditorSelection();
             }
           }}
-          className="order-1 sticky top-0 z-10 mx-auto mb-5 flex w-full max-w-7xl flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-white p-2 text-gray-700 shadow-[0_10px_30px_rgba(17,24,39,0.12)] sm:gap-2"
+          className="blog-editor-toolbar order-1 sticky top-0 z-10 mx-auto mb-5 flex w-full max-w-7xl flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-white p-2 text-gray-700 shadow-[0_10px_30px_rgba(17,24,39,0.12)] sm:gap-2"
         >
           <button
             onClick={() => applyFormat("bold")}
             onMouseDown={(event) => event.preventDefault()}
             className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.bold ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
-            title="Bold"
+            data-tooltip="Bold"
             aria-label="Bold"
             aria-pressed={activeFormats.bold}
           >
@@ -612,7 +612,7 @@ function EditBlog() {
             onClick={() => applyFormat("italic")}
             onMouseDown={(event) => event.preventDefault()}
             className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.italic ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
-            title="Italic"
+            data-tooltip="Italic"
             aria-label="Italic"
             aria-pressed={activeFormats.italic}
           >
@@ -623,7 +623,7 @@ function EditBlog() {
             onClick={() => applyFormat("heading")}
             onMouseDown={(event) => event.preventDefault()}
             className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.heading ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
-            title="Heading"
+            data-tooltip="Heading"
             aria-label="Heading"
             aria-pressed={activeFormats.heading}
           >
@@ -633,7 +633,7 @@ function EditBlog() {
             onClick={() => applyFormat("quote")}
             onMouseDown={(event) => event.preventDefault()}
             className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.quote ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
-            title="Quote"
+            data-tooltip="Quote"
             aria-label="Quote"
             aria-pressed={activeFormats.quote}
           >
@@ -643,7 +643,7 @@ function EditBlog() {
             onClick={() => applyFormat("bulletList")}
             onMouseDown={(event) => event.preventDefault()}
             className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
-            title="Bulleted list"
+            data-tooltip="Bulleted list"
             aria-label="Bulleted list"
           >
             <List size={18} />
@@ -652,7 +652,7 @@ function EditBlog() {
             onClick={() => applyFormat("numberedList")}
             onMouseDown={(event) => event.preventDefault()}
             className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
-            title="Numbered list"
+            data-tooltip="Numbered list"
             aria-label="Numbered list"
           >
             <ListOrdered size={18} />
@@ -666,14 +666,14 @@ function EditBlog() {
             <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setIsColorPaletteOpen((current) => !current)} className="flex h-9 items-center rounded border border-gray-200 bg-white px-2 text-sm font-bold text-gray-700 hover:border-pink-300" aria-label="Text color" aria-expanded={isColorPaletteOpen}>
               <span className="border-b-4 pb-0.5" style={{ borderColor: textColor }} aria-hidden="true">A</span>
             </button>
-            {isColorPaletteOpen ? <div className="absolute left-0 top-11 z-30 grid w-44 grid-cols-5 gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-xl">{TEXT_COLORS.map((color) => <button key={color.value} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { applyTextColor(color.value); setIsColorPaletteOpen(false); }} className={`h-6 w-6 rounded-full border-2 border-white shadow ring-1 ring-gray-300 hover:scale-110 ${textColor === color.value ? "ring-2 ring-pink-500" : ""}`} style={{ backgroundColor: color.value }} title={color.name} aria-label={`${color.name} text`} />)}</div> : null}
+            {isColorPaletteOpen ? <div className="absolute left-0 top-11 z-30 grid w-44 grid-cols-5 gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-xl">{TEXT_COLORS.map((color) => <button key={color.value} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { applyTextColor(color.value); setIsColorPaletteOpen(false); }} className={`h-6 w-6 rounded-full border-2 border-white shadow ring-1 ring-gray-300 hover:scale-110 ${textColor === color.value ? "ring-2 ring-pink-500" : ""}`} style={{ backgroundColor: color.value }} data-tooltip={color.name} aria-label={`${color.name} text`} />)}</div> : null}
           </div>
           <div className="mx-1 h-6 w-px bg-gray-200" />
           <button
             onClick={() => applyFormat("alignLeft")}
             onMouseDown={(event) => event.preventDefault()}
             className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
-            title="Align left"
+            data-tooltip="Align left"
             aria-label="Align left"
           >
             <AlignLeft size={18} />
@@ -681,8 +681,8 @@ function EditBlog() {
           <button
             onClick={() => applyFormat("alignCenter")}
             onMouseDown={(event) => event.preventDefault()}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
-            title="Align center"
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            data-tooltip="Align center"
             aria-label="Align center"
           >
             <AlignCenter size={18} />
@@ -690,8 +690,8 @@ function EditBlog() {
           <button
             onClick={() => applyFormat("alignRight")}
             onMouseDown={(event) => event.preventDefault()}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
-            title="Align right"
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            data-tooltip="Align right"
             aria-label="Align right"
           >
             <AlignRight size={18} />
@@ -700,17 +700,17 @@ function EditBlog() {
             onClick={() => applyFormat("justify")}
             onMouseDown={(event) => event.preventDefault()}
             className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
-            title="Justify"
+            data-tooltip="Justify"
             aria-label="Justify"
           >
             <AlignJustify size={18} />
           </button>
-          <button type="button" onClick={() => setTableDialog((current) => !current)} onMouseDown={(event) => event.preventDefault()} className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600" title="Insert table" aria-label="Insert table"><Table2 size={18} /></button>
+          <button type="button" onClick={() => setTableDialog((current) => !current)} onMouseDown={(event) => event.preventDefault()} className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600" data-tooltip="Insert table" aria-label="Insert table"><Table2 size={18} /></button>
           <button
             onClick={() => applyFormat("link")}
             onMouseDown={(event) => event.preventDefault()}
-            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.link ? "bg-gray-700 text-pink-300" : "hover:bg-gray-700"}`}
-            title="Link"
+            className={`flex items-center justify-center rounded p-2 transition-colors ${activeFormats.link ? "bg-pink-100 text-pink-600" : "hover:bg-pink-50 hover:text-pink-600"}`}
+            data-tooltip="Link"
             aria-label="Link"
             aria-pressed={activeFormats.link}
           >
@@ -721,8 +721,8 @@ function EditBlog() {
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => handleUndoRedo("undo")}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
-            title="Undo (Ctrl/Cmd + Z)"
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            data-tooltip="Undo (Ctrl/Cmd + Z)"
             aria-label="Undo"
           >
             <Undo2 size={18} />
@@ -731,8 +731,8 @@ function EditBlog() {
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => handleUndoRedo("redo")}
-            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-gray-700"
-            title="Redo (Ctrl/Cmd + Shift + Z)"
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            data-tooltip="Redo (Ctrl/Cmd + Shift + Z)"
             aria-label="Redo"
           >
             <Redo2 size={18} />
@@ -815,6 +815,33 @@ function EditBlog() {
         }
         .animate-fadeIn {
           animation: fadeIn 0.2s ease-out;
+        }
+        .blog-editor-toolbar button[data-tooltip] {
+          position: relative;
+        }
+        .blog-editor-toolbar button[data-tooltip]::after {
+          content: attr(data-tooltip);
+          position: absolute;
+          z-index: 60;
+          bottom: calc(100% + 8px);
+          left: 50%;
+          transform: translateX(-50%) translateY(2px);
+          pointer-events: none;
+          white-space: nowrap;
+          border-radius: 0.5rem;
+          background: #2D2E30;
+          padding: 0.375rem 0.5rem;
+          color: white;
+          font-size: 0.6875rem;
+          font-weight: 600;
+          line-height: 1;
+          opacity: 0;
+          transition: opacity 120ms ease, transform 120ms ease;
+        }
+        .blog-editor-toolbar button[data-tooltip]:hover::after,
+        .blog-editor-toolbar button[data-tooltip]:focus-visible::after {
+          transform: translateX(-50%) translateY(0);
+          opacity: 1;
         }
         .blog-editor:empty::before {
           content: "Start writing your blog...";
