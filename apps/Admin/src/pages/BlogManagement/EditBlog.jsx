@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, Italic, Link2, List, ListOrdered, Quote, Redo2, Table2, Type, Undo2 } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowLeft, Bold, Italic, Link2, List, ListOrdered, Quote, Redo2, Table2, Type, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchBlogById, updateBlog } from "../../services/blogService";
@@ -401,6 +401,9 @@ function EditBlog() {
       case "alignRight":
         document.execCommand("justifyRight", false, null);
         break;
+      case "justify":
+        document.execCommand("justifyFull", false, null);
+        break;
       case "link": {
         if (currentFormats.link) {
           document.execCommand("unlink", false, null);
@@ -692,6 +695,15 @@ function EditBlog() {
             aria-label="Align right"
           >
             <AlignRight size={18} />
+          </button>
+          <button
+            onClick={() => applyFormat("justify")}
+            onMouseDown={(event) => event.preventDefault()}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            title="Justify"
+            aria-label="Justify"
+          >
+            <AlignJustify size={18} />
           </button>
           <button type="button" onClick={() => setTableDialog((current) => !current)} onMouseDown={(event) => event.preventDefault()} className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600" title="Insert table" aria-label="Insert table"><Table2 size={18} /></button>
           <button
