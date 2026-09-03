@@ -1,7 +1,9 @@
-import { ArrowLeft, Users, TrendingUp, Award, Search, ArrowUpDown } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, BarChart3, ChevronDown, ChevronUp, Search, TrendingUp, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchQuizAttempts } from "../../services/quizService";
+
+const percentage = (attempt) => attempt.total ? Math.round((attempt.score / attempt.total) * 100) : 0;
 
 function QuizAttempts() {
   const { id } = useParams();
@@ -9,304 +11,66 @@ function QuizAttempts() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState("date-desc");
+  const [sortBy, setSortBy] = useState("recent");
+  const [expandedStudentId, setExpandedStudentId] = useState(null);
 
   useEffect(() => {
-    fetchQuizAttempts(id)
-      .then(setData)
-      .catch((err) => setError(err.message));
+    fetchQuizAttempts(id).then(setData).catch((err) => setError(err.message));
   }, [id]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-red-50 p-6 sm:p-8">
-        <button
-          onClick={() => navigate("/quizzes")}
-          className="mb-6 inline-flex items-center gap-2 text-red-700 transition hover:text-red-900"
-        >
-          <ArrowLeft size={18} />
-          Back to quizzes
-        </button>
-        <div className="rounded-2xl border border-red-200 bg-white p-6 text-red-700 shadow-sm">
-          <p className="font-semibold">Error loading quiz attempts</p>
-          <p className="mt-2 text-sm text-red-600">{error}</p>
-        </div>
-      </div>
-    );
-  }
+  const students = useMemo(() => {
+    if (!data) return [];
+    const grouped = new Map();
+    data.attempts.forEach((attempt) => {
+      const studentId = attempt.user?._id || attempt.user?.email || `deleted-${attempt._id}`;
+      if (!grouped.has(studentId)) grouped.set(studentId, { id: studentId, name: attempt.user?.name || "Deleted user", email: attempt.user?.email || "", attempts: [] });
+      grouped.get(studentId).attempts.push(attempt);
+    });
+    return [...grouped.values()].map((student) => {
+      const attempts = [...student.attempts].sort((a, b) => a.attemptNumber - b.attemptNumber || new Date(a.createdAt) - new Date(b.createdAt));
+      const bestAttempt = attempts.reduce((best, attempt) => !best || percentage(attempt) > percentage(best) ? attempt : best, null);
+      const latestAttempt = attempts.reduce((latest, attempt) => !latest || new Date(attempt.createdAt) > new Date(latest.createdAt) ? attempt : latest, null);
+      return { ...student, attempts, bestAttempt, latestAttempt };
+    });
+  }, [data]);
 
-  if (!data) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="inline-block rounded-full bg-slate-200 p-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-slate-700"></div>
-          </div>
-          <p className="mt-4 text-slate-600">Loading quiz scores...</p>
-        </div>
-      </div>
-    );
-  }
+  const visibleStudents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return students
+      .filter((student) => !query || student.name.toLowerCase().includes(query) || student.email.toLowerCase().includes(query))
+      .sort((a, b) => {
+        if (sortBy === "best-high") return percentage(b.bestAttempt) - percentage(a.bestAttempt);
+        if (sortBy === "best-low") return percentage(a.bestAttempt) - percentage(b.bestAttempt);
+        if (sortBy === "name") return a.name.localeCompare(b.name);
+        return new Date(b.latestAttempt.createdAt) - new Date(a.latestAttempt.createdAt);
+      });
+  }, [students, searchQuery, sortBy]);
 
-  const totalSubmissions = data.attempts.length;
-  const avgScore =
-    totalSubmissions > 0
-      ? Math.round(
-          (data.attempts.reduce((sum, a) => sum + (a.score / a.total) * 100, 0) /
-            totalSubmissions) *
-            100
-        ) / 100
-      : 0;
+  if (error) return <PageMessage title="Error loading quiz scoreboard" message={error} error navigate={navigate} />;
+  if (!data) return <div className="flex min-h-screen items-center justify-center bg-slate-50"><p className="text-slate-600">Loading quiz scoreboard...</p></div>;
 
-  // Filter attempts based on search query
-  const filteredAttempts = data.attempts.filter((attempt) => {
-    const query = searchQuery.toLowerCase();
-    const name = attempt.user?.name || "Deleted user";
-    const email = attempt.user?.email || "";
-    return name.toLowerCase().includes(query) || email.toLowerCase().includes(query);
-  });
+  const totalAttempts = data.attempts.length;
+  const average = totalAttempts ? Math.round(data.attempts.reduce((sum, attempt) => sum + percentage(attempt), 0) / totalAttempts) : 0;
 
-  // Sort attempts
-  const sortedAttempts = [...filteredAttempts].sort((a, b) => {
-    const scoreA = (a.score / a.total) * 100;
-    const scoreB = (b.score / b.total) * 100;
-    const nameA = (a.user?.name || "Deleted user").toLowerCase();
-    const nameB = (b.user?.name || "Deleted user").toLowerCase();
-    const dateA = new Date(a.createdAt).getTime();
-    const dateB = new Date(b.createdAt).getTime();
-
-    switch (sortBy) {
-      case "score-high":
-        return scoreB - scoreA;
-      case "score-low":
-        return scoreA - scoreB;
-      case "name-asc":
-        return nameA.localeCompare(nameB);
-      case "name-desc":
-        return nameB.localeCompare(nameA);
-      case "date-desc":
-        return dateB - dateA;
-      case "date-asc":
-        return dateA - dateB;
-      default:
-        return 0;
-    }
-  });
-
-  // Add attempt numbering for each student
-  const attemptsWithNumber = sortedAttempts.map((attempt) => {
-    const userAttempts = sortedAttempts.filter(
-      (a) => a.user?.email === attempt.user?.email || (a.user?.name === attempt.user?.name && a.user?.name !== "Deleted user")
-    );
-    const attemptNumber = userAttempts.findIndex((a) => a._id === attempt._id) + 1;
-    return { ...attempt, attemptNumber, totalUserAttempts: userAttempts.length };
-  });
-
-  const getScoreColor = (percentage) => {
-    if (percentage >= 80) return { text: "text-emerald-700", bg: "bg-emerald-50", bar: "bg-emerald-500" };
-    if (percentage >= 60) return { text: "text-blue-700", bg: "bg-blue-50", bar: "bg-blue-500" };
-    if (percentage >= 40) return { text: "text-amber-700", bg: "bg-amber-50", bar: "bg-amber-500" };
-    return { text: "text-red-700", bg: "bg-red-50", bar: "bg-red-500" };
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6 md:p-8">
-      {/* Header */}
-      <button
-        onClick={() => navigate("/quizzes")}
-        className="mb-6 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-slate-700 transition hover:bg-slate-200"
-      >
-        <ArrowLeft size={18} />
-        <span className="font-medium">Back to quizzes</span>
-      </button>
-
-      {/* Quiz Info Card */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-4xl font-bold text-slate-900">{data.quiz.title}</h1>
-            <p className="mt-2 text-sm text-slate-600">
-              Attempt limit: <span className="font-semibold text-slate-900">{data.quiz.maxAttempts || "Unlimited"}</span>
-            </p>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                <Users size={16} />
-                SUBMISSIONS
-              </div>
-              <p className="mt-2 text-2xl font-bold text-slate-900">{totalSubmissions}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                <TrendingUp size={16} />
-                AVERAGE
-              </div>
-              <p className="mt-2 text-2xl font-bold text-slate-900">{avgScore}%</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                <Award size={16} />
-                QUESTIONS
-              </div>
-              <p className="mt-2 text-2xl font-bold text-slate-900">{data.quiz.questions?.length || 0}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Attempts Table */}
-      <div className="mt-8">
-        {totalSubmissions === 0 ? (
-          <div className="rounded-3xl border-2 border-dashed border-slate-300 bg-slate-50 p-12 text-center">
-            <div className="inline-block rounded-full bg-slate-200 p-3">
-              <Users size={28} className="text-slate-400" />
-            </div>
-            <p className="mt-4 text-lg font-semibold text-slate-700">No submissions yet</p>
-            <p className="mt-2 text-sm text-slate-600">Students will appear here after completing the quiz.</p>
-          </div>
-        ) : (
-          <>
-            {/* Search and Filter Controls */}
-            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-3">
-              <div className="relative flex-1">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search by name or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-100"
-                />
-              </div>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5">
-                <ArrowUpDown size={16} className="text-slate-500" />
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="border-none bg-transparent text-sm text-slate-700 outline-none"
-                >
-                  <option value="date-desc">Latest first</option>
-                  <option value="date-asc">Oldest first</option>
-                  <option value="score-high">Highest score</option>
-                  <option value="score-low">Lowest score</option>
-                  <option value="name-asc">Name (A-Z)</option>
-                  <option value="name-desc">Name (Z-A)</option>
-                </select>
-              </div>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {/* Results Info */}
-            <div className="mb-4 text-sm text-slate-600">
-              Showing {sortedAttempts.length} of {totalSubmissions} submission{totalSubmissions !== 1 ? "s" : ""}
-              {searchQuery && ` for "${searchQuery}"`}
-            </div>
-
-            {sortedAttempts.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                <p className="font-medium text-slate-700">No results found</p>
-                <p className="mt-1 text-sm text-slate-600">Try adjusting your search terms</p>
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50">
-                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Student
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Email
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Attempt
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Score
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Percentage
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Submitted
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {attemptsWithNumber.map((attempt, index) => {
-                        const percentage = Math.round((attempt.score / attempt.total) * 100);
-                        const colors = getScoreColor(percentage);
-
-                        return (
-                          <tr
-                            key={attempt._id}
-                            className={`border-b border-slate-200 transition ${
-                              index % 2 === 0 ? "bg-white" : "bg-slate-50"
-                            } hover:bg-pink-50`}
-                          >
-                            <td className="px-6 py-4">
-                              <p className="font-semibold text-slate-900">
-                                {attempt.user?.name || "Deleted user"}
-                              </p>
-                            </td>
-                            <td className="px-6 py-4">
-                              <p className="text-sm text-slate-600">
-                                {attempt.user?.email || "—"}
-                              </p>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
-                                #{attempt.attemptNumber}
-                                {attempt.totalUserAttempts > 1 && <span className="text-blue-600">/{attempt.totalUserAttempts}</span>}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 font-semibold ${colors.bg} ${colors.text}`}>
-                                {attempt.score} / {attempt.total}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-24 rounded-full bg-slate-200 h-2 overflow-hidden">
-                                  <div
-                                    className={`h-full transition ${colors.bar}`}
-                                    style={{ width: `${percentage}%` }}
-                                  />
-                                </div>
-                                <span className={`font-bold text-sm ${colors.text}`}>
-                                  {percentage}%
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <p className="text-sm text-slate-600">
-                                {new Date(attempt.createdAt).toLocaleString()}
-                              </p>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
+  return <div className="min-h-screen bg-slate-50 p-4 sm:p-6 md:p-8"><div className="mx-auto max-w-6xl">
+    <button onClick={() => navigate("/quizzes")} className="mb-6 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-slate-700 transition hover:bg-slate-200"><ArrowLeft size={18} /><span className="font-medium">Back to quizzes</span></button>
+    <header className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"><div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-sm font-semibold uppercase tracking-wider text-pink-600">Student scoreboard</p><h1 className="mt-1 text-3xl font-bold text-slate-900 sm:text-4xl">{data.quiz.title}</h1><p className="mt-2 text-sm text-slate-600">Attempt limit: <span className="font-semibold text-slate-900">{data.quiz.maxAttempts || "Unlimited"}</span></p></div><div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-slate-200 divide-x divide-slate-200"><Stat icon={<Users size={16} />} label="Students" value={students.length} /><Stat icon={<TrendingUp size={16} />} label="Average" value={`${average}%`} /><Stat icon={<BarChart3 size={16} />} label="Attempts" value={totalAttempts} /></div></div></header>
+    <section className="mt-8">
+      {students.length === 0 ? <div className="rounded-3xl border-2 border-dashed border-slate-300 bg-white p-12 text-center"><Users size={30} className="mx-auto text-slate-400" /><h2 className="mt-4 text-lg font-bold text-slate-800">No submissions yet</h2><p className="mt-2 text-sm text-slate-600">Students will appear here after completing the quiz.</p></div> : <>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search student name or email..." className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100" /></div><select value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100"><option value="recent">Recent activity</option><option value="best-high">Best score: high to low</option><option value="best-low">Best score: low to high</option><option value="name">Name: A to Z</option></select></div>
+        <p className="mb-3 text-sm text-slate-600">Showing {visibleStudents.length} of {students.length} student{students.length === 1 ? "" : "s"}. Select a student to view their attempts.</p>
+        {visibleStudents.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">No students match your search.</div> : <div className="space-y-3">{visibleStudents.map((student) => <StudentRow key={student.id} student={student} expanded={expandedStudentId === student.id} onToggle={() => setExpandedStudentId((current) => current === student.id ? null : student.id)} />)}</div>}
+      </>}
+    </section>
+  </div></div>;
 }
+
+function StudentRow({ student, expanded, onToggle }) {
+  const best = percentage(student.bestAttempt);
+  return <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><button onClick={onToggle} className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-slate-50 sm:p-5"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-pink-100 font-bold text-pink-700">{student.name.charAt(0).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate font-bold text-slate-900">{student.name}</p><p className="truncate text-sm text-slate-500">{student.email || "No email available"}</p></div><div className="hidden text-right sm:block"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Best score</p><p className="mt-1 font-bold text-pink-700">{student.bestAttempt.score} / {student.bestAttempt.total} · {best}%</p></div><div className="hidden w-32 text-right md:block"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">Attempts</p><p className="mt-1 font-semibold text-slate-700">{student.attempts.length}</p></div><span className="ml-1 rounded-lg p-2 text-slate-500">{expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</span></button>{expanded && <div className="border-t border-slate-100 bg-slate-50 p-4 sm:p-5"><div className="mb-3 flex items-center justify-between"><h3 className="font-semibold text-slate-900">Attempt history</h3><span className="text-sm font-semibold text-pink-700">Best: {best}%</span></div><div className="space-y-2">{student.attempts.map((attempt) => <div key={attempt._id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-4 py-3 text-sm shadow-sm"><div><span className="font-semibold text-slate-900">Attempt {attempt.attemptNumber}</span><span className="ml-2 text-slate-500">{new Date(attempt.createdAt).toLocaleString()}</span></div><span className="rounded-lg bg-pink-50 px-3 py-1 font-bold text-pink-700">{attempt.score} / {attempt.total} · {percentage(attempt)}%</span></div>)}</div></div>}</article>;
+}
+
+function Stat({ icon, label, value }) { return <div className="min-w-[92px] px-3 py-3 text-center sm:px-5"><span className="mx-auto flex w-fit items-center gap-1 text-xs font-medium text-slate-500">{icon}{label}</span><p className="mt-1 text-xl font-bold text-slate-900">{value}</p></div>; }
+function PageMessage({ title, message, error, navigate }) { return <div className={`min-h-screen p-6 sm:p-8 ${error ? "bg-red-50" : "bg-slate-50"}`}><button onClick={() => navigate("/quizzes")} className="mb-6 inline-flex items-center gap-2 text-slate-700"><ArrowLeft size={18} />Back to quizzes</button><div className="rounded-2xl bg-white p-6 shadow-sm"><h1 className="font-bold text-slate-900">{title}</h1><p className="mt-2 text-sm text-slate-600">{message}</p></div></div>; }
 
 export default QuizAttempts;

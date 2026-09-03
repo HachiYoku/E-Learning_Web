@@ -116,9 +116,11 @@ function Blog() {
                   {featuredBlog.title}
                 </h3>
 
-                <p className="mb-6 text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg break-words">
-                  {featuredBlog.excerpt}
-                </p>
+                {!isExpanded ? (
+                  <p className="mb-6 text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg break-words">
+                    {featuredBlog.excerpt}
+                  </p>
+                ) : null}
 
                 {isExpanded ? (
                   <div
@@ -258,6 +260,7 @@ function Blog() {
           color: #374151;
           font-size: 1rem;
           line-height: 1.75;
+          text-align: justify;
           max-width: 100%;
           overflow: hidden;
           word-wrap: break-word;
@@ -314,9 +317,29 @@ function Blog() {
           display: block;
         }
         .blog-content table {
+          width: 100%;
           max-width: 100%;
-          overflow-x: auto;
-          display: block;
+          border-collapse: collapse;
+          table-layout: fixed;
+          overflow-wrap: break-word;
+        }
+        .blog-content thead {
+          background: #fdf2f8;
+        }
+        .blog-content th,
+        .blog-content td {
+          border: 1px solid #d1d5db;
+          padding: 0.75rem;
+          text-align: left;
+          vertical-align: top;
+          overflow-wrap: break-word;
+        }
+        .blog-content th {
+          color: #111827;
+          font-weight: 700;
+        }
+        .blog-content span[style*="font-size"] {
+          line-height: inherit;
         }
       `}</style>
     </div>

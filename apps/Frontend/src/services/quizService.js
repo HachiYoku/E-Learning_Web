@@ -17,3 +17,7 @@ export function fetchCourseQuizzes(courseId) {
 export function submitQuiz(quizId, answers) {
   return apiClient.post(`/quizzes/${quizId}/submit`, { answers });
 }
+
+export function fetchQuizHistory(quizId) {
+  return apiClient.get(`/quizzes/${quizId}/history`);
+}

@@ -108,6 +108,15 @@ const deleteLesson = async (req, res) => {
       return res.status(404).json({ message: "Lesson not found" });
     }
 
+    await Enrollment.updateMany(
+      { courseId: lesson.course },
+      { $pull: { completedLessonIds: lesson._id } }
+    );
+    await Enrollment.updateMany(
+      { courseId: lesson.course, lastOpenedLesson: lesson._id },
+      { $unset: { lastOpenedLesson: 1, lastOpenedAt: 1 } }
+    );
+
     return res.status(200).json({ message: "Lesson deleted successfully" });
   } catch (error) {
     return res.status(500).json({ message: error.message });

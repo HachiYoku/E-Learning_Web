@@ -19,6 +19,13 @@ const ALLOWED_TAGS = new Set([
   "p",
   "pre",
   "strong",
+  "span",
+  "table",
+  "tbody",
+  "td",
+  "th",
+  "thead",
+  "tr",
   "u",
   "ul",
 ]);
@@ -26,6 +33,7 @@ const ALLOWED_TAGS = new Set([
 const ALLOWED_ATTRS = {
   a: new Set(["href", "title", "target", "rel"]),
   img: new Set(["src", "alt", "title"]),
+  span: new Set(["style"]),
 };
 
 function escapeHtml(value = "") {
@@ -93,7 +101,7 @@ function sanitizeAttributes(tagName, rawAttributes = "") {
     if (
       !allowedAttributes.has(attributeName) ||
       attributeName.startsWith("on") ||
-      attributeName === "style"
+      (attributeName === "style" && !(tagName === "span" && allowedAttributes.has("style")))
     ) {
       continue;
     }
@@ -101,6 +109,29 @@ function sanitizeAttributes(tagName, rawAttributes = "") {
     const normalizedValue = normalizeAttributeValue(attributeMatch[2] || "");
 
     if (!normalizedValue) {
+      continue;
+    }
+
+    if (tagName === "span" && attributeName === "style") {
+      const fontSizeMatch = normalizedValue.match(/(?:^|;)\s*font-size:\s*(\d{1,2})px\s*(?:;|$)/i);
+      const colorMatch = normalizedValue.match(/(?:^|;)\s*color:\s*(#[0-9a-f]{6}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))\s*(?:;|$)/i);
+      const numericFontSize = Number(fontSizeMatch?.[1]);
+
+      if (!fontSizeMatch && !colorMatch || fontSizeMatch && (numericFontSize < 8 || numericFontSize > 72)) {
+        continue;
+      }
+
+      const safeStyles = [];
+      if (fontSizeMatch) safeStyles.push(`font-size: ${numericFontSize}px`);
+      if (colorMatch) {
+        const colorValue = colorMatch[1].toLowerCase();
+        const rgbValues = colorValue.match(/\d+/g)?.map(Number);
+        const hexValue = rgbValues?.length === 3
+          ? `#${rgbValues.map((value) => Math.min(value, 255).toString(16).padStart(2, "0")).join("")}`
+          : colorValue;
+        safeStyles.push(`color: ${hexValue}`);
+      }
+      safeAttributes.push(`style="${safeStyles.join("; ")}"`);
       continue;
     }
 

@@ -1,6 +1,8 @@
 const Course = require("../models/courseModel");
 const Enrollment = require("../models/enrollmentModel");
 const Payment = require("../models/paymentModel");
+const User = require("../models/userModel");
+const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
 const { uploadStream } = require("../services/uploadStream");
 
@@ -84,6 +86,21 @@ const getAllPayments = async (req, res) => {
 const approvePayment = async (req, res) => {
   try {
     const { paymentId } = req.params;
+    const { adminPassword } = req.body || {};
+
+    if (typeof adminPassword !== "string" || !adminPassword.trim()) {
+      return res.status(400).json({ message: "Admin password is required to approve a payment" });
+    }
+
+    const adminUser = await User.findById(req.user?.id);
+    if (!adminUser) {
+      return res.status(403).json({ message: "Admin user not found" });
+    }
+
+    const isAdminPasswordValid = bcrypt.compareSync(adminPassword, adminUser.password);
+    if (!isAdminPasswordValid) {
+      return res.status(403).json({ message: "Invalid admin password" });
+    }
 
     const payment = await Payment.findById(paymentId);
     if (!payment) {
@@ -148,10 +165,24 @@ const approvePayment = async (req, res) => {
 const rejectPayment = async (req, res) => {
   try {
     const { paymentId } = req.params;
-    const { rejectReason } = req.body;
+    const { rejectReason, adminPassword } = req.body || {};
 
     if (!rejectReason || !rejectReason.trim()) {
       return res.status(400).json({ message: "Reject reason is required" });
+    }
+
+    if (typeof adminPassword !== "string" || !adminPassword.trim()) {
+      return res.status(400).json({ message: "Admin password is required to deny a payment" });
+    }
+
+    const adminUser = await User.findById(req.user?.id);
+    if (!adminUser) {
+      return res.status(403).json({ message: "Admin user not found" });
+    }
+
+    const isAdminPasswordValid = bcrypt.compareSync(adminPassword, adminUser.password);
+    if (!isAdminPasswordValid) {
+      return res.status(403).json({ message: "Invalid admin password" });
     }
 
     const payment = await Payment.findById(paymentId);
@@ -168,6 +199,16 @@ const rejectPayment = async (req, res) => {
     payment.reviewedAt = new Date();
     payment.rejectReason = rejectReason.trim();
     await payment.save();
+
+    const course = await Course.findById(payment.courseId).select("title");
+
+    await createNotification({
+      userId: payment.userId,
+      type: "payment",
+      title: "Payment needs attention",
+      message: `We could not verify your payment for ${course?.title || "the course"}. Please review the reason and submit a new receipt.`,
+      link: `/order-status/${payment._id}`,
+    });
 
     return res.status(200).json({ message: "Payment rejected successfully", payment });
   } catch (error) {

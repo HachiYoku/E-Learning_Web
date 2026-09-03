@@ -19,6 +19,19 @@ const enrollmentSchema = new mongoose.Schema(
       ref: "Payment",
       required: false,
     },
+    completedLessonIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Lesson" }],
+      default: [],
+    },
+    lastOpenedLesson: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Lesson",
+      default: null,
+    },
+    lastOpenedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

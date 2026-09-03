@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 
-function CourseCard({ id, image, title, description, price, rating }) {
+function CourseCard({ id, image, title, description, price, rating, isEnrolled = false }) {
   const navigate = useNavigate()
 
   const handleViewDetails = () => {
@@ -60,17 +60,19 @@ function CourseCard({ id, image, title, description, price, rating }) {
 
         {/* Buttons */}
         <div className="flex flex-col gap-2 border-t border-[#2D2E30]/10 pt-4 md:flex-row">
+          {!isEnrolled && (
+            <button 
+              onClick={handleViewDetails}
+              className="flex-1 rounded-xl border border-[#2D2E30]/18 px-3 py-2.5 text-xs font-semibold text-[#2D2E30] transition-colors hover:border-[#E58C1A] hover:text-[#C97112] md:text-sm"
+            >
+              View details
+            </button>
+          )}
           <button 
-            onClick={handleViewDetails}
-            className="flex-1 rounded-xl border border-[#2D2E30]/18 px-3 py-2.5 text-xs font-semibold text-[#2D2E30] transition-colors hover:border-[#E58C1A] hover:text-[#C97112] md:text-sm"
-          >
-            View details
-          </button>
-          <button 
-            onClick={() => navigate(`/enroll/${id}`)}
+            onClick={() => navigate(isEnrolled ? `/course-lessons/${id}` : `/enroll/${id}`)}
             className="flex-1 rounded-xl bg-[#2D2E30] px-3 py-2.5 text-xs font-semibold text-white shadow-md shadow-[#2D2E30]/15 transition-colors hover:bg-[#E58C1A] md:text-sm"
           >
-            Enroll Now
+            {isEnrolled ? 'Learn Now' : 'Enroll Now'}
           </button>
         </div>
       </div>
