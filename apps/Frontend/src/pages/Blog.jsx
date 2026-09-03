@@ -260,6 +260,7 @@ function Blog() {
           color: #374151;
           font-size: 1rem;
           line-height: 1.75;
+          text-align: justify;
           max-width: 100%;
           overflow: hidden;
           word-wrap: break-word;

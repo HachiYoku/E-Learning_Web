@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, Italic, Link2, List, ListOrdered, Quote, Redo2, Table2, Type, Undo2 } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowLeft, Bold, Italic, Link2, List, ListOrdered, Quote, Redo2, Table2, Type, Undo2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { createBlog } from "../../services/blogService";
@@ -358,6 +358,9 @@ function AddBlog() {
       case "alignRight":
         document.execCommand("justifyRight", false, null);
         break;
+      case "justify":
+        document.execCommand("justifyFull", false, null);
+        break;
       case "link": {
         if (currentFormats.link) {
           document.execCommand("unlink", false, null);
@@ -682,6 +685,15 @@ function AddBlog() {
             aria-label="Align right"
           >
             <AlignRight size={18} />
+          </button>
+          <button
+            onClick={() => applyFormat("justify")}
+            onMouseDown={(event) => event.preventDefault()}
+            className="flex items-center justify-center rounded p-2 transition-colors hover:bg-pink-50 hover:text-pink-600"
+            title="Justify"
+            aria-label="Justify"
+          >
+            <AlignJustify size={18} />
           </button>
           <button
             onClick={() => setTableDialog((current) => !current)}
