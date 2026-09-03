@@ -200,6 +200,16 @@ const rejectPayment = async (req, res) => {
     payment.rejectReason = rejectReason.trim();
     await payment.save();
 
+    const course = await Course.findById(payment.courseId).select("title");
+
+    await createNotification({
+      userId: payment.userId,
+      type: "payment",
+      title: "Payment needs attention",
+      message: `We could not verify your payment for ${course?.title || "the course"}. Please review the reason and submit a new receipt.`,
+      link: `/order-status/${payment._id}`,
+    });
+
     return res.status(200).json({ message: "Payment rejected successfully", payment });
   } catch (error) {
     return res.status(500).json({ message: error.message });

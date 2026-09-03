@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { ArrowLeft, CalendarDays, Check, CircleCheck, Clock3, ReceiptText, XCircle } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -33,235 +34,73 @@ function OrderStatus() {
   }, [orderId])
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-blue-50">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <LoadingSpinner message="Loading order..." />
-        </div>
-      </div>
-    )
+    return <div className="min-h-screen bg-[#FFFDF8]"><Navbar /><div className="flex h-screen items-center justify-center bg-[#FFF9EA]"><LoadingSpinner message="Loading order..." /></div></div>
   }
 
   if (!payment || !payment.course) {
-    return (
-      <div className="min-h-screen bg-blue-50">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <p className="text-lg sm:text-2xl text-gray-600">{error || 'Order not found'}</p>
-        </div>
-      </div>
-    )
+    return <div className="min-h-screen bg-[#FFFDF8]"><Navbar /><div className="flex h-screen items-center justify-center bg-[#FFF9EA] px-4 text-center"><p className="text-lg text-[#765F55] sm:text-2xl">{error || 'Order not found'}</p></div></div>
   }
 
   const course = payment.course
+  const isApproved = payment.status === 'approved'
+  const isRejected = payment.status === 'rejected'
+  const status = isApproved
+    ? { eyebrow: 'Verified payment', title: 'Enrollment confirmed', description: 'Your payment has been verified and your course is ready to explore.', Icon: CircleCheck, iconClasses: 'bg-[#E9F4EA] text-[#4D7C57]', buttonLabel: 'Start learning', onClick: () => navigate(`/course-lessons/${course.id}`), buttonClasses: 'bg-[#F8C56A] text-[#2D2E30] hover:bg-[#E58C1A]' }
+    : isRejected
+      ? { eyebrow: 'Action needed', title: 'Payment needs attention', description: payment.rejectReason || 'We could not verify this receipt. Please upload a new one to continue.', Icon: XCircle, iconClasses: 'bg-[#FFF0EE] text-[#A34D45]', buttonLabel: 'Resubmit receipt', onClick: () => navigate(`/payment/${course.id}`), buttonClasses: 'bg-[#2D2E30] text-white hover:bg-[#E58C1A]' }
+      : { eyebrow: 'Verification in progress', title: 'Payment under review', description: 'Your receipt was submitted successfully. Our team is reviewing it now.', Icon: Clock3, iconClasses: 'bg-[#FFF4D8] text-[#C97112]', buttonLabel: 'Back to orders', onClick: () => navigate('/my-course-order'), buttonClasses: 'bg-[#2D2E30] text-white hover:bg-[#E58C1A]' }
+  const StatusIcon = status.Icon
 
-  const renderStars = (rating) => (
-    <div className="flex gap-1">
-      {[...Array(5)].map((_, i) => (
-        <span key={i} className={i < Math.floor(rating) ? 'text-yellow-400' : 'text-gray-300'}>★</span>
-      ))}
-    </div>
-  )
-
-  const renderStatusStepper = (steps) => (
-    <div className="mb-6 sm:mb-8 flex justify-center rounded-2xl border border-[#F3D6DF] bg-[#FFF8FA] px-3 py-3 sm:px-6 sm:py-6 shadow-sm">
-      <div className="inline-flex items-start justify-center gap-1 sm:gap-3">
-        {steps.map((step, index) => (
-          <div key={step.label} className="flex items-center justify-center">
-            <div className="flex w-16 sm:w-24 flex-col items-center text-center">
-              <div className={`mb-2 sm:mb-3 flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-full border-2 text-xs sm:text-sm font-bold transition-all ${step.circleClass}`}>
-                {step.icon}
-              </div>
-              <p className={`text-[10px] sm:text-xs font-semibold leading-tight ${step.labelClass || 'text-gray-900'}`}>
-                {step.label}
-              </p>
-              <p className="mt-0.5 text-[9px] sm:text-[11px] text-gray-400">
-                Step {index + 1}
-              </p>
-            </div>
-
-            {index < steps.length - 1 ? (
-              <div className="mb-5 w-5 sm:w-10 mx-0.5 sm:mx-1">
-                <div className="h-1 w-full rounded-full bg-gray-200">
-                  <div className={`h-full w-full rounded-full ${step.lineClass}`} />
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-
-  const renderApprovedStatus = () => (
-    <div>
-      <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-        <div className="text-green-500 text-2xl sm:text-3xl">✓</div>
-        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Enrollment Confirmed</h2>
-      </div>
-
-      {renderStatusStepper([
-        { label: orderSteps[0], icon: '✓', circleClass: 'border-[#F8B2C0] bg-[#F8B2C0] text-gray-900', lineClass: 'bg-[#F8B2C0]' },
-        { label: orderSteps[1], icon: '✓', circleClass: 'border-[#F8B2C0] bg-[#F8B2C0] text-gray-900', lineClass: 'bg-green-500' },
-        { label: orderSteps[2], icon: '✓', circleClass: 'border-green-500 bg-green-500 text-white' },
-      ])}
-
-      <p className="text-gray-700 text-sm sm:text-base mb-2">Your payment has been successfully verified.</p>
-      <p className="text-gray-600 text-xs sm:text-sm mb-5 sm:mb-6">You now have full access to this course.</p>
-
-      <button
-        onClick={() => navigate(`/course-lessons/${course.id}`)}
-        className="w-full bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-bold py-2.5 sm:py-3 px-6 rounded-full transition-colors"
-      >
-        Go To Course
-      </button>
-    </div>
-  )
-
-  const renderRejectedStatus = () => (
-    <div>
-      <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-        <div className="text-red-500 text-2xl sm:text-3xl">✕</div>
-        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Payment Not Verified</h2>
-      </div>
-
-      {renderStatusStepper([
-        { label: orderSteps[0], icon: '✓', circleClass: 'border-[#F8B2C0] bg-[#F8B2C0] text-gray-900', lineClass: 'bg-[#F8B2C0]' },
-        { label: orderSteps[1], icon: '✓', circleClass: 'border-[#F8B2C0] bg-[#F8B2C0] text-gray-900', lineClass: 'bg-red-500' },
-        { label: orderSteps[2], icon: '✕', circleClass: 'border-red-500 bg-red-500 text-white' },
-      ])}
-
-      <p className="text-gray-700 text-sm sm:text-base mb-2">We couldn't verify your payment.</p>
-      <p className="text-gray-600 text-xs sm:text-sm mb-4 leading-relaxed">
-        Reject Reason:{" "}
-        <span className="font-semibold">
-          {payment.rejectReason || 'Please re-upload your receipt or contact support for assistance.'}
-        </span>
-      </p>
-
-      <button
-        onClick={() => navigate(`/payment/${course.id}`)}
-        className="w-full bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-bold py-2.5 sm:py-3 px-6 rounded-full transition-colors"
-      >
-        Resubmit Receipt
-      </button>
-    </div>
-  )
-
-  const renderPendingStatus = () => (
-    <div>
-      <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-        <div className="text-yellow-500 text-2xl sm:text-3xl animate-pulse">⏳</div>
-        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Payment Under Review</h2>
-      </div>
-
-      {renderStatusStepper([
-        { label: orderSteps[0], icon: '✓', circleClass: 'border-[#F8B2C0] bg-[#F8B2C0] text-gray-900', lineClass: 'bg-[#F8B2C0]' },
-        { label: orderSteps[1], icon: '✓', circleClass: 'border-[#F8B2C0] bg-[#F8B2C0] text-gray-900', lineClass: 'bg-yellow-400' },
-        { label: orderSteps[2], icon: '⏳', circleClass: 'border-yellow-400 bg-yellow-400 text-white animate-pulse' },
-      ])}
-
-      <p className="text-gray-700 text-sm sm:text-base mb-2">Your payment has been successfully submitted!</p>
-      <p className="text-gray-600 text-xs sm:text-sm mb-5 sm:mb-6">Our admin team is reviewing your payment receipt.</p>
-
-      <button
-        onClick={() => navigate('/my-course-order')}
-        className="w-full bg-[#F8B2C0] hover:bg-[#F8C2C0] text-gray-900 font-bold py-2.5 sm:py-3 px-6 rounded-full transition-colors"
-      >
-        Back to Orders
-      </button>
-    </div>
-  )
+  const stepState = (index) => {
+    if (index < 2) return 'complete'
+    if (isApproved) return 'complete'
+    if (isRejected) return 'rejected'
+    return 'active'
+  }
 
   return (
-    <div className="min-h-screen bg-blue-50">
+    <div className="flex min-h-screen flex-col bg-[#FFFDF8]">
       <Navbar />
 
-      {/* Back Button */}
-      <div className="px-4 sm:px-6 md:px-10 pt-6 sm:pt-8">
-        <div className="max-w-7xl mx-auto">
-          <button
-            onClick={() => navigate('/my-course-order')}
-            className="flex items-center gap-2 text-gray-700 hover:text-gray-900 font-semibold transition-colors text-sm sm:text-base"
-          >
-            <span className="text-xl sm:text-2xl">←</span>
-            Back To My Orders
-          </button>
-        </div>
+      <div className="bg-[#FFF9EA] px-4 pt-6 sm:px-6 sm:pt-8 md:px-10">
+        <div className="mx-auto max-w-7xl"><button onClick={() => navigate('/my-course-order')} className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to orders</button></div>
       </div>
 
-      <div className="px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-12">
-        <div className="max-w-7xl mx-auto">
+      <main className="flex-1 bg-[#FFF9EA] px-4 pb-14 pt-8 sm:px-6 sm:pb-16 md:px-10 md:pb-20">
+        <div className="mx-auto max-w-7xl">
+          <div className="mx-auto mb-8 max-w-3xl text-center sm:mb-10 md:mb-12"><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Order status</p><h1 className="mt-3 text-[clamp(1.85rem,5vw,3rem)] font-bold leading-[1.1] tracking-tight text-[#2D2E30]">Follow your <span className="font-serif font-normal italic text-[#B96128]">enrollment.</span></h1><p className="mt-4 text-sm leading-relaxed text-[#765F55] sm:text-base">We’ll keep this page updated as your payment moves through verification.</p></div>
 
-          {/* Header */}
-          <div className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900">
-              Complete Your Enrollment
-            </h1>
-          </div>
+          <div className="grid grid-cols-1 items-start gap-6 md:gap-8 lg:grid-cols-5">
+            <aside className="lg:col-span-2"><div className="overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-4 shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] sm:p-6 lg:sticky lg:top-20">
+              <div className="h-48 overflow-hidden rounded-[1.3rem] bg-[#E7DCCE] sm:h-56 md:h-64">{course.image ? <img src={course.image} alt={course.title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-[#765F55]">No image</div>}</div>
+              <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Your course</p><h2 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30]">{course.title}</h2><p className="mt-3 line-clamp-3 text-sm leading-relaxed text-[#765F55]">{course.description}</p>
+              <div className="mt-5 flex items-center justify-between border-t border-[#2D2E30]/10 pt-4"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#765F55]">Amount paid</p><p className="mt-1 text-xl font-bold text-[#B96128]">{course.price}</p></div><div className="flex items-center gap-2 text-xs font-semibold text-[#765F55]"><CalendarDays className="h-4 w-4 text-[#C97112]" aria-hidden="true" />{new Date(payment.createdAt).toLocaleDateString()}</div></div>
+            </div></aside>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 md:gap-8">
+            <section className="overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] lg:col-span-3">
+              <div className="bg-[#2D2E30] px-5 py-6 sm:px-7 sm:py-8 md:px-8"><div className="flex items-start gap-4"><div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${status.iconClasses}`}><StatusIcon className="h-6 w-6" aria-hidden="true" /></div><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#F8C56A]">{status.eyebrow}</p><h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">{status.title}</h2>{!isRejected ? <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/65">{status.description}</p> : null}</div></div></div>
 
-            {/* Left — Course Info */}
-            <div className="bg-white rounded-3xl p-5 sm:p-6 md:p-8 shadow-lg">
+              <div className="p-5 sm:p-7 md:p-8">
+                <div className="rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-2"><div className="grid grid-cols-3 gap-2">{orderSteps.map((step, index) => {
+                  const state = stepState(index)
+                  const stateClasses = state === 'complete' ? 'bg-[#FFF1CE] text-[#9A5816]' : state === 'rejected' ? 'bg-[#FFF0EE] text-[#A34D45]' : state === 'active' ? 'bg-[#2D2E30] text-white shadow-[0_8px_18px_-10px_rgba(45,46,48,0.8)]' : 'bg-white text-[#9A8775]'
+                  return <div key={step} className={`rounded-xl px-2 py-3 text-center sm:px-3 ${stateClasses}`}><div className={`mx-auto mb-2 flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${state === 'complete' ? 'bg-[#E58C1A] text-white' : state === 'rejected' ? 'bg-[#A34D45] text-white' : state === 'active' ? 'bg-[#F8C56A] text-[#2D2E30]' : 'bg-[#F1E8DC] text-[#9A8775]'}`}>{state === 'complete' ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : state === 'rejected' ? '!' : index + 1}</div><p className="text-[10px] font-bold leading-tight sm:text-xs">{step}</p></div>
+                })}</div></div>
 
-              {/* Course Image */}
-              <div className="mb-4 sm:mb-6">
-                {course.image ? (
-                  <img
-                    src={course.image}
-                    alt={course.title}
-                    className="w-full h-44 sm:h-56 md:h-64 lg:h-72 object-cover rounded-2xl"
-                  />
-                ) : (
-                  <div className="flex w-full h-44 sm:h-56 md:h-64 items-center justify-center rounded-2xl bg-gray-100 text-gray-500">
-                    No image
+                {isRejected ? (
+                  <div className="mt-6 rounded-2xl border border-[#D78A86]/35 bg-[#FFF3F1] p-4 sm:p-5">
+                    <div className="flex items-center gap-2 text-sm font-bold text-[#8E4039]"><XCircle className="h-4 w-4" aria-hidden="true" />Reason from our team</div>
+                    <p className="mt-2 text-sm leading-relaxed text-[#7D514C]">{payment.rejectReason || 'Please upload a clear payment receipt or contact support for assistance.'}</p>
                   </div>
-                )}
+                ) : null}
+
+                <div className="mt-6 rounded-2xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-4 sm:p-5"><div className="flex items-center gap-2 text-sm font-bold text-[#2D2E30]"><ReceiptText className="h-4 w-4 text-[#C97112]" aria-hidden="true" />Payment receipt</div><p className="mt-2 text-xs leading-relaxed text-[#765F55]">{isApproved ? 'Payment confirmed. You can begin learning now.' : isRejected ? 'Your receipt needs to be replaced before your enrollment can be approved.' : 'Your receipt is safely submitted and waiting for verification.'}</p></div>
+                <button onClick={status.onClick} className={`mt-6 w-full rounded-xl px-4 py-3 text-sm font-bold transition sm:text-base ${status.buttonClasses}`}>{status.buttonLabel}</button>
               </div>
-
-              {/* Badge */}
-              <div className="mb-2">
-                <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full">
-                  {course.title}
-                </span>
-              </div>
-
-              {/* Info */}
-              <div className="mb-3">
-                <h1 className="text-base sm:text-lg font-semibold text-gray-900">
-                  Ordering Course — {course.title}
-                </h1>
-                <h2 className="text-base sm:text-lg font-semibold text-gray-700">
-                  Price — {course.price}
-                </h2>
-              </div>
-
-              {/* Stars + Date */}
-              <div className="flex items-center gap-3">
-                {renderStars(4.5)}
-                <span className="text-gray-600 text-xs sm:text-sm font-semibold">
-                  ({new Date(payment.createdAt).toLocaleDateString()})
-                </span>
-              </div>
-            </div>
-
-            {/* Right — Order Status */}
-            <div className="bg-white rounded-3xl p-5 sm:p-6 md:p-8 shadow-lg">
-              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-5 sm:mb-6 md:mb-8">
-                Order Status
-              </h3>
-
-              {payment.status === 'approved' ? renderApprovedStatus() : null}
-              {payment.status === 'rejected' ? renderRejectedStatus() : null}
-              {payment.status === 'pending' ? renderPendingStatus() : null}
-            </div>
-
+            </section>
           </div>
         </div>
-      </div>
-
+      </main>
       <Footer />
     </div>
   )

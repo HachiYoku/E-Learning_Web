@@ -36,7 +36,7 @@ function NotificationBell({ compact = false }) {
       <button
         type="button"
         onClick={() => setNotificationOpen(!isNotificationOpen)}
-        className={`relative flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 ${compact ? "h-10 w-10" : "h-11 w-11"}`}
+        className={`relative flex items-center justify-center rounded-full border border-[#2D2E30]/10 bg-white text-[#765F55] transition hover:border-[#E58C1A]/30 hover:bg-[#FFF4D8] hover:text-[#C97112] ${compact ? "h-10 w-10" : "h-11 w-11"}`}
         aria-label="Notifications"
       >
         <Bell className={compact ? "h-4 w-4" : "h-5 w-5"} />
@@ -183,10 +183,9 @@ function Navbar() {
             <li
               key={item.path}
               onClick={() => goTo(item.path)}
-              className={`cursor-pointer rounded-full px-4 py-2 transition-all hover:shadow-md lg:px-6 ${
-                isActive(item.path) ? "text-white" : "text-black"
+              className={`cursor-pointer rounded-full px-4 py-2 font-semibold transition-all lg:px-6 ${
+                isActive(item.path) ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#C97112]"
               }`}
-              style={{ backgroundColor: isActive(item.path) ? "#E58C1A" : "transparent" }}
             >
               {item.label}
             </li>
@@ -233,12 +232,12 @@ function Navbar() {
 
                   <button
                     onClick={() => {
-                      goTo('/my-profile')
+                      goTo('/notifications')
                       setShowProfileMenu(false)
                     }}
-                    className="w-full px-4 py-3 text-left font-medium text-gray-700 transition-colors hover:bg-blue-50"
+                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
                   >
-                    My Profile
+                    Notifications
                   </button>
 
                   <button
@@ -246,19 +245,9 @@ function Navbar() {
                       goTo('/my-courses')
                       setShowProfileMenu(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-gray-700 transition-colors hover:bg-blue-50"
+                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
                   >
                     My Courses
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      goTo('/notifications')
-                      setShowProfileMenu(false)
-                    }}
-                    className="w-full px-4 py-3 text-left text-gray-700 transition-colors hover:bg-blue-50"
-                  >
-                    Notifications
                   </button>
 
                   <button
@@ -266,9 +255,19 @@ function Navbar() {
                       goTo('/my-course-order')
                       setShowProfileMenu(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-gray-700 transition-colors hover:bg-blue-50"
+                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
                   >
                     My Course Order
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      goTo('/my-profile')
+                      setShowProfileMenu(false)
+                    }}
+                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                  >
+                    My Profile
                   </button>
 
                   <div className="border-t border-gray-200">
@@ -307,8 +306,11 @@ function Navbar() {
               <button
                 key={item.path}
                 onClick={() => goTo(item.path)}
-                className="w-full rounded-2xl px-4 py-3 text-left font-medium text-gray-900 transition-colors"
-                style={{ backgroundColor: isActive(item.path) ? "#CDEAFA" : "#F9FAFB" }}
+                className={`w-full rounded-2xl border px-4 py-3 text-left font-bold transition-colors ${
+                  isActive(item.path)
+                    ? "border-[#2D2E30] bg-[#2D2E30] text-white"
+                    : "border-[#2D2E30]/10 bg-[#FFF9EA] text-[#2D2E30] hover:border-[#E58C1A]/35 hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                }`}
               >
                 {item.label}
               </button>
@@ -342,31 +344,31 @@ function Navbar() {
                 </div>
 
                 <button
-                  onClick={() => goTo('/my-profile')}
-                  className="w-full rounded-2xl bg-gray-50 px-4 py-3 text-left font-medium text-gray-700 transition-colors hover:bg-blue-50"
-                >
-                  My Profile
-                </button>
-
-                <button
-                  onClick={() => goTo('/my-courses')}
-                  className="w-full rounded-2xl bg-gray-50 px-4 py-3 text-left font-medium text-gray-700 transition-colors hover:bg-blue-50"
-                >
-                  My Courses
-                </button>
-
-                <button
                   onClick={() => goTo('/notifications')}
-                  className="w-full rounded-2xl bg-gray-50 px-4 py-3 text-left font-medium text-gray-700 transition-colors hover:bg-blue-50"
+                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
                 >
                   Notifications
                 </button>
 
                 <button
+                  onClick={() => goTo('/my-courses')}
+                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                >
+                  My Courses
+                </button>
+
+                <button
                   onClick={() => goTo('/my-course-order')}
-                  className="w-full rounded-2xl bg-gray-50 px-4 py-3 text-left font-medium text-gray-700 transition-colors hover:bg-blue-50"
+                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
                 >
                   My Course Order
+                </button>
+
+                <button
+                  onClick={() => goTo('/my-profile')}
+                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                >
+                  My Profile
                 </button>
 
                 <button
