@@ -7,6 +7,8 @@ import CourseCard from "../components/CourseCard";
 import LoadingSpinner from "../components/LoadingSpinner";
 const Watermark = "/benefit/teacher&stduents.jpg";
 import { fetchCourseById, fetchCourses } from "../services/courseService";
+import { fetchMyEnrollments } from "../services/enrollmentService";
+import { useAuth } from "../contexts/AuthContext";
 
 const RELATED_COURSES_PER_PAGE = 4;
 
@@ -18,7 +20,9 @@ function CourseDetail() {
   const [relatedCourses, setRelatedCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState(() => new Set());
   const relatedCoursesRef = useRef(null);
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     async function loadCourseData() {
@@ -45,6 +49,40 @@ function CourseDetail() {
 
     loadCourseData();
   }, [courseId]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      Promise.resolve().then(() => setEnrolledCourseIds(new Set()));
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadEnrollments() {
+      try {
+        const enrollments = await fetchMyEnrollments();
+        if (isMounted) {
+          setEnrolledCourseIds(
+            new Set(
+              enrollments
+                .map((enrollment) => enrollment.course?.id)
+                .filter(Boolean),
+            ),
+          );
+        }
+      } catch {
+        if (isMounted) {
+          setEnrolledCourseIds(new Set());
+        }
+      }
+    }
+
+    loadEnrollments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated]);
 
   const totalPages = Math.max(
     1,
@@ -201,6 +239,7 @@ function CourseDetail() {
                     price={relatedCourse.price}
                     rating={relatedCourse.rating}
                     reviews={relatedCourse.reviews}
+                    isEnrolled={enrolledCourseIds.has(relatedCourse.id)}
                   />
                 ))}
               </div>
