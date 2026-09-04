@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, BookOpen, PlayCircle, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, PlayCircle, RefreshCw } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import CourseCard from '../components/CourseCard'
 import TestimonialVideo from '../components/TestimonialVideo'
@@ -19,6 +19,7 @@ function Courses() {
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [loadVersion, setLoadVersion] = useState(0)
   const [enrolledCourseIds, setEnrolledCourseIds] = useState(() => new Set())
   const coursesSectionRef = useRef(null)
   const { isAuthenticated } = useAuth()
@@ -38,7 +39,7 @@ function Courses() {
     }
 
     loadCourses()
-  }, [])
+  }, [loadVersion])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -82,6 +83,12 @@ function Courses() {
     coursesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const retryLoadingCourses = () => {
+    setError('')
+    setLoading(true)
+    setLoadVersion((current) => current + 1)
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
@@ -116,8 +123,12 @@ function Courses() {
             {!loading && courses.length > 0 ? <p className="text-sm font-medium text-[#765F55]">{courses.length} {courses.length === 1 ? 'course' : 'courses'} available</p> : null}
           </div>
           {error ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-              {error}
+            <div className="mx-auto flex max-w-xl flex-col items-center rounded-[2rem] border border-[#2D2E30]/10 bg-white px-6 py-12 text-center shadow-[0_20px_50px_-36px_rgba(80,48,19,0.4)] sm:px-10">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1CE] text-[#C97112] shadow-sm"><RefreshCw className="h-6 w-6" aria-hidden="true" /></div>
+              <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.2em] text-[#C97112]">Course library</p>
+              <h3 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30]">We couldn’t load the courses</h3>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-[#765F55]">Please check your connection and try again. Your next Thai lesson is waiting.</p>
+              <button type="button" onClick={retryLoadingCourses} className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A]"><RefreshCw className="h-4 w-4" aria-hidden="true" />Try again</button>
             </div>
           ) : loading ? (
               <LoadingSpinner message="Loading courses..." />

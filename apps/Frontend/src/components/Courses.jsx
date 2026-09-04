@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, RefreshCw } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import CourseCard from "./CourseCard"
@@ -12,6 +12,7 @@ function Courses() {
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [loadVersion, setLoadVersion] = useState(0)
   const [enrolledCourseIds, setEnrolledCourseIds] = useState(() => new Set())
   const { isAuthenticated } = useAuth()
 
@@ -30,7 +31,7 @@ function Courses() {
     }
 
     loadFeaturedCourses()
-  }, [])
+  }, [loadVersion])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -64,6 +65,12 @@ function Courses() {
     }
   }, [isAuthenticated])
 
+  const retryLoadingCourses = () => {
+    setError('')
+    setLoading(true)
+    setLoadVersion((current) => current + 1)
+  }
+
   return (
     <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-12 sm:px-6 sm:py-16 md:px-10 md:py-24 lg:px-16">
       <div className="absolute -left-32 top-16 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/20 blur-3xl" aria-hidden="true" />
@@ -78,8 +85,11 @@ function Courses() {
         </div>
 
         {error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+          <div className="mx-auto flex max-w-xl flex-col items-center rounded-[1.75rem] border border-[#2D2E30]/10 bg-white px-6 py-10 text-center shadow-[0_18px_45px_-34px_rgba(80,48,19,0.35)]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1CE] text-[#C97112]"><RefreshCw className="h-5 w-5" aria-hidden="true" /></div>
+            <h3 className="mt-5 text-xl font-bold text-[#2D2E30]">Courses are taking a moment to load</h3>
+            <p className="mt-2 text-sm leading-relaxed text-[#765F55]">Please check your connection and try again.</p>
+            <button type="button" onClick={retryLoadingCourses} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A]"><RefreshCw className="h-4 w-4" aria-hidden="true" />Try again</button>
           </div>
         ) : loading ? (
           <LoadingSpinner message="Loading courses..." />
