@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, PenLine, Quote } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowLeft, ArrowRight, PenLine, RefreshCw } from "lucide-react";
 import Navbar from "../components/Navbar";
 import ArticleCard from "../components/ArticleCard";
 import ContactSection from "../components/ContactSection";
@@ -13,6 +14,26 @@ const fallbackImage =
   "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=1200&h=900&fit=crop";
 const INSIGHTS_PER_PAGE = 6;
 
+function BlogState({ type, onRetry }) {
+  const isError = type === "error";
+
+  return (
+    <div className="mx-auto flex max-w-xl flex-col items-center rounded-[2rem] border border-[#2D2E30]/10 bg-[#FFFDF8] px-6 py-12 text-center shadow-[0_20px_50px_-36px_rgba(80,48,19,0.4)] sm:px-10">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1CE] text-[#C97112] shadow-sm">
+        {isError ? <RefreshCw className="h-6 w-6" aria-hidden="true" /> : <PenLine className="h-6 w-6" aria-hidden="true" />}
+      </div>
+      <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.2em] text-[#C97112]">Arun Thai journal</p>
+      <h3 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30]">{isError ? "We couldn't load the journal" : "New stories are on their way"}</h3>
+      <p className="mt-3 max-w-md text-sm leading-relaxed text-[#765F55]">{isError ? "Please check your connection and try again. Our latest Thai learning stories will be here shortly." : "We’re preparing practical Thai tips, useful words, and fresh learning inspiration. Please check back soon."}</p>
+      {isError ? (
+        <button type="button" onClick={onRetry} className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A]"><RefreshCw className="h-4 w-4" aria-hidden="true" />Try again</button>
+      ) : (
+        <Link to="/courses" className="mt-7 rounded-xl border border-[#2D2E30]/15 bg-white px-5 py-3 text-sm font-bold text-[#2D2E30] transition hover:border-[#E58C1A] hover:bg-[#FFF4D8] hover:text-[#C97112]">Explore courses</Link>
+      )}
+    </div>
+  );
+}
+
 function Blog() {
   const [blogs, setBlogs] = useState([]);
   const [selectedBlogId, setSelectedBlogId] = useState("");
@@ -20,6 +41,7 @@ function Blog() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [loadVersion, setLoadVersion] = useState(0);
   const moreToReadRef = useRef(null);
 
   useEffect(() => {
@@ -42,7 +64,7 @@ function Blog() {
 
     loadBlogs();
     return () => { isMounted = false; };
-  }, []);
+  }, [loadVersion]);
 
   const featuredBlog = useMemo(() => {
     if (!blogs.length) return null;
@@ -80,6 +102,12 @@ function Blog() {
     });
   };
 
+  const retryLoadingBlogs = () => {
+    setError("");
+    setIsLoading(true);
+    setLoadVersion((current) => current + 1);
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
@@ -94,18 +122,12 @@ function Blog() {
             {!isLoading && blogs.length > 0 ? <p className="hidden text-sm font-medium text-[#765F55] sm:block">Issue 01 · {blogs.length} stories</p> : null}
           </div>
 
-          {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          ) : null}
-
           {isLoading ? (
             <LoadingSpinner message="Loading blog posts..." />
+          ) : error ? (
+            <BlogState type="error" onRetry={retryLoadingBlogs} />
           ) : !featuredBlog ? (
-            <div className="rounded-2xl bg-white p-10 text-center text-gray-600 shadow-sm">
-              No blog posts available yet.
-            </div>
+            <BlogState type="empty" />
           ) : (
             <article className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-start lg:gap-12">
 
@@ -173,7 +195,7 @@ function Blog() {
       </section>
 
       {/* Insights Section */}
-      <section ref={moreToReadRef} className="scroll-mt-20 bg-[#E9EEF0] px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
+      {!isLoading && !error && insightBlogs.length > 0 ? <section ref={moreToReadRef} className="scroll-mt-20 bg-[#E9EEF0] px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
         <div className="mx-auto max-w-7xl">
 
           <div className="mb-8 border-b border-[#2D2E30]/20 pb-6 sm:mb-10 md:mb-12">
@@ -184,9 +206,7 @@ function Blog() {
             <p className="mt-4 max-w-xl text-sm leading-relaxed text-[#536166] sm:text-base">New ideas, useful words, and friendly perspectives for your Thai learning journey.</p>
           </div>
 
-          {isLoading ? (
-            <LoadingSpinner message="Loading more articles..." />
-          ) : insightBlogs.length ? (
+          {insightBlogs.length ? (
             <div className="mb-8">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 justify-items-center gap-4 sm:gap-6">
                 {paginatedInsightBlogs.map((blog) => (
@@ -243,14 +263,10 @@ function Blog() {
                 </nav>
               ) : null}
             </div>
-          ) : (
-            <div className="rounded-2xl bg-white p-10 text-center text-gray-600 shadow-sm">
-              More articles will appear here once blogs are published.
-            </div>
-          )}
+          ) : null}
 
         </div>
-      </section>
+      </section> : null}
 
       <ContactSection />
       <Footer />

@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, PenLine, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ArticleCard from "./ArticleCard";
@@ -10,6 +10,7 @@ function Article() {
   const [articles, setArticles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadVersion, setLoadVersion] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -29,7 +30,13 @@ function Article() {
 
     loadArticles();
     return () => { isMounted = false; };
-  }, []);
+  }, [loadVersion]);
+
+  const retryLoadingArticles = () => {
+    setError("");
+    setIsLoading(true);
+    setLoadVersion((current) => current + 1);
+  };
 
   return (
     <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-16 sm:px-6 md:px-10 md:py-24 lg:px-16">
@@ -59,9 +66,14 @@ function Article() {
           {isLoading ? (
             <LoadingSpinner message="Loading articles..." />
           ) : error ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700">{error}</div>
+            <div className="mx-auto flex max-w-xl flex-col items-center rounded-[2rem] border border-[#2D2E30]/10 bg-white px-6 py-11 text-center shadow-[0_20px_50px_-36px_rgba(80,48,19,0.4)] sm:px-10">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1CE] text-[#C97112] shadow-sm"><RefreshCw className="h-6 w-6" aria-hidden="true" /></div>
+              <h3 className="mt-6 text-2xl font-bold tracking-tight text-[#2D2E30]">We couldn’t load the insights</h3>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-[#765F55]">Please check your connection and try again. Fresh Thai learning ideas will be here shortly.</p>
+              <button type="button" onClick={retryLoadingArticles} className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A]"><RefreshCw className="h-4 w-4" aria-hidden="true" />Try again</button>
+            </div>
           ) : articles.length === 0 ? (
-            <div className="rounded-2xl border border-[#2D2E30]/10 bg-white/60 px-6 py-10 text-center text-[#765F55]">No articles available yet.</div>
+            <div className="mx-auto flex max-w-xl flex-col items-center rounded-[2rem] border border-[#2D2E30]/10 bg-white/70 px-6 py-11 text-center shadow-[0_20px_50px_-36px_rgba(80,48,19,0.3)] sm:px-10"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1CE] text-[#C97112]"><PenLine className="h-6 w-6" aria-hidden="true" /></div><h3 className="mt-6 text-2xl font-bold tracking-tight text-[#2D2E30]">New insights are on their way</h3><p className="mt-3 max-w-md text-sm leading-relaxed text-[#765F55]">We’re preparing more practical Thai tips and learning inspiration. Please check back soon.</p></div>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
               {articles.map((article) => (
