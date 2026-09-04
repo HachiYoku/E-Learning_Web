@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import { useNotification } from "../contexts/NotificationContext"
+import LogoutConfirmModal from "./LogoutConfirmModal"
 
 const NOTIFICATION_FILTERS = [
   { key: "all", label: "All" },
@@ -128,6 +129,7 @@ function Navbar() {
   const location = useLocation()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
   const { setIsOpen: setNotificationOpen } = useNotification();
 
@@ -155,7 +157,14 @@ function Navbar() {
     logout()
     setShowProfileMenu(false)
     setShowMobileMenu(false)
+    setIsLogoutConfirmOpen(false)
     navigate('/')
+  }
+
+  const requestLogout = () => {
+    setShowProfileMenu(false)
+    setShowMobileMenu(false)
+    setIsLogoutConfirmOpen(true)
   }
 
   const profileImage = user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || 'user'}`
@@ -272,7 +281,7 @@ function Navbar() {
 
                   <div className="border-t border-gray-200">
                     <button
-                      onClick={handleLogout}
+                      onClick={requestLogout}
                       className="w-full px-4 py-3 text-left font-medium text-gray-700 transition-colors hover:bg-red-50"
                     >
                       Log Out
@@ -372,7 +381,7 @@ function Navbar() {
                 </button>
 
                 <button
-                  onClick={handleLogout}
+                  onClick={requestLogout}
                   className="w-full rounded-2xl bg-red-50 px-4 py-3 text-left font-medium text-red-700 transition-colors hover:bg-red-100"
                 >
                   Log Out
@@ -382,6 +391,11 @@ function Navbar() {
           </div>
         </div>
       ) : null}
+      <LogoutConfirmModal
+        isOpen={isLogoutConfirmOpen}
+        onCancel={() => setIsLogoutConfirmOpen(false)}
+        onConfirm={handleLogout}
+      />
     </nav>
   )
 }
