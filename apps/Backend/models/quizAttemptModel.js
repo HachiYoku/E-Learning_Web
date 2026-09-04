@@ -5,6 +5,7 @@ const quizAttemptSchema = new mongoose.Schema(
     quiz: { type: mongoose.Schema.Types.ObjectId, ref: "Quiz", required: true, index: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     attemptNumber: { type: Number, required: true, min: 1 },
+    answers: { type: [Number], default: [] },
     score: { type: Number, required: true, min: 0 },
     total: { type: Number, required: true, min: 1 },
   },

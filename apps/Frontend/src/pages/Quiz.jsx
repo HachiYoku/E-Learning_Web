@@ -30,6 +30,30 @@ function clearSavedQuizDraft(key) {
   }
 }
 
+function FinalAnswerReview({ questions, answers, correctAnswers }) {
+  return (
+    <div className="mt-8 space-y-5 text-left">
+      {questions.map((item, index) => {
+        const answerIndex = answers[index];
+        const correctAnswerIndex = correctAnswers[index];
+        const isCorrect = answerIndex === correctAnswerIndex;
+
+        return (
+          <article key={item._id || item.id || index} className={`overflow-hidden rounded-2xl border ${isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+            {item.image ? <img src={item.image} alt={`Question ${index + 1}`} className="h-48 w-full object-cover sm:h-64" /> : null}
+            <div className="p-4 sm:p-5">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Question {index + 1}</p>
+              <h3 className="mt-1 text-lg font-bold text-[#2D2E30]">{item.prompt || "Question"}</h3>
+              <p className={`mt-4 rounded-xl bg-white/80 px-3 py-2.5 text-sm ${isCorrect ? "text-[#4D7C57]" : "text-[#A84646]"}`}><span className="font-bold">Your answer:</span> {item.options[answerIndex] ?? "Answer unavailable"}</p>
+              {!isCorrect ? <p className="mt-2 rounded-xl bg-white/80 px-3 py-2.5 text-sm text-[#4D7C57]"><span className="font-bold">Correct answer:</span> {item.options[correctAnswerIndex] ?? "Answer unavailable"}</p> : null}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 function Quiz() {
   const { courseId, lessonId, quizId } = useParams();
   const navigate = useNavigate();
@@ -207,6 +231,7 @@ function Quiz() {
     (best, attempt) => (!best || attempt.score / attempt.total > best.score / best.total ? attempt : best),
     null
   );
+  const lastAttempt = history?.attempts?.at(-1);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FFFDF8]">
@@ -310,20 +335,11 @@ function Quiz() {
                   <p className="mt-2 text-gray-600">{scoreMessage(Math.round((result.score / result.total) * 100))}</p>
 
                   {result.showCorrectAnswers ? (
-                    <div className="mt-8 space-y-3 text-left">
-                      {quiz.questions.map((item, index) => (
-                        <div
-                          key={item._id || item.id}
-                          className={`rounded-xl border p-4 ${
-                            result.results[index].correct ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
-                          }`}
-                        >
-                          <p className="font-semibold text-gray-900">
-                            Question {index + 1}: {result.results[index].correct ? "Correct" : `Correct answer: ${item.options[result.results[index].correctAnswer]}`}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                    <FinalAnswerReview
+                      questions={quiz.questions}
+                      answers={answers}
+                      correctAnswers={result.results.map((item) => item.correctAnswer)}
+                    />
                   ) : quiz.maxAttempts ? (
                     <p className="mt-6 text-sm text-gray-600">
                       Correct answers and detailed review will be shown after your final attempt.
@@ -343,12 +359,18 @@ function Quiz() {
                 </div>
               ) : isQuizLocked ? (
                 <div className="py-10 text-center">
-                  <div className="mx-auto max-w-md rounded-2xl border border-red-200 bg-red-50 p-8">
-                    <h2 className="text-2xl font-bold text-gray-900">Quiz closed</h2>
-                    <p className="mt-3 text-gray-600">You have no attempts remaining for this quiz.</p>
+                  <div className="mx-auto max-w-2xl rounded-2xl border border-[#E58C1A]/25 bg-[#FFF9EA] p-6 text-left sm:p-8">
+                    <p className="text-center text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">Final attempt</p>
+                    <h2 className="mt-2 text-center text-2xl font-bold text-[#2D2E30]">Your last answers</h2>
+                    <p className="mt-3 text-center text-sm text-[#765F55]">You have used all available attempts. Here is what you selected on your final attempt.</p>
+                    {Array.isArray(lastAttempt?.answers) && lastAttempt.answers.length === quiz.questions.length ? (
+                      <FinalAnswerReview questions={quiz.questions} answers={lastAttempt.answers} correctAnswers={history.correctAnswers || []} />
+                    ) : (
+                      <p className="mt-6 rounded-xl bg-white p-4 text-center text-sm text-[#765F55]">Your final answers are not available for attempts submitted before answer review was added.</p>
+                    )}
                     <button
                       onClick={() => navigate(backPath)}
-                      className="mt-6 rounded-xl bg-[#F8C56A] px-5 py-3 font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]"
+                      className="mx-auto mt-7 block rounded-xl bg-[#F8C56A] px-5 py-3 font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]"
                     >
                       Back to course
                     </button>

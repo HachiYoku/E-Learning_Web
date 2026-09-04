@@ -213,6 +213,7 @@ const submitQuiz = async (req, res) => {
           quiz: quiz._id,
           user: req.user.id,
           attemptNumber: attemptsUsed + 1,
+          answers: answers.map(Number),
           score,
           total: quiz.questions.length,
         });
@@ -255,7 +256,7 @@ const getQuizAttempts = async (req, res) => {
 
 const getStudentQuizHistory = async (req, res) => {
   try {
-    const quiz = await Quiz.findById(req.params.quizId).select("course maxAttempts");
+    const quiz = await Quiz.findById(req.params.quizId).select("course maxAttempts questions.correctAnswer");
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
 
     if (req.user.role !== "admin") {
@@ -264,7 +265,7 @@ const getStudentQuizHistory = async (req, res) => {
     }
 
     const attempts = await QuizAttempt.find({ quiz: quiz._id, user: req.user.id })
-      .select("attemptNumber score total createdAt")
+      .select("attemptNumber answers score total createdAt")
       .sort({ attemptNumber: 1 });
 
     const bestScore = attempts.reduce((best, attempt) => {
@@ -277,6 +278,9 @@ const getStudentQuizHistory = async (req, res) => {
       attemptsUsed: attempts.length,
       maxAttempts: quiz.maxAttempts,
       bestScore,
+      ...(quiz.maxAttempts && attempts.length >= quiz.maxAttempts
+        ? { correctAnswers: quiz.questions.map((question) => question.correctAnswer) }
+        : {}),
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
