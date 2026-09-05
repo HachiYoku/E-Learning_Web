@@ -144,8 +144,9 @@ function Navbar() {
   const navItems = [
     { label: "Home", path: "/" },
     { label: "Courses", path: "/courses" },
+    { label: "Practice", path: "/practice" },
     { label: "Blogs", path: "/blog" },
-    { label: "Services", path: "/service" },
+    { label: "About", path: "/about" },
   ]
 
   const goTo = (path) => {

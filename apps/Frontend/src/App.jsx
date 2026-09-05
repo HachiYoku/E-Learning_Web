@@ -16,7 +16,8 @@ import Notifications from "./pages/Notifications"
 import CourseLessons from "./pages/CourseLessons"
 import OrderStatus from "./pages/OrderStatus"
 import Blog from "./pages/Blog"
-import Service from "./pages/Service"
+import Practice from "./pages/Practice"
+import About from "./pages/About"
 import NotFound from "./pages/NotFound"
 import Quiz from "./pages/Quiz"
 import RequireAuth from "./routes/RequireAuth"
@@ -35,8 +36,9 @@ function App() {
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/courses" element={<Courses />} />
         <Route path="/courses/:courseId" element={<CourseDetail />} />
+        <Route path="/practice" element={<Practice />} />
         <Route path="/blog" element={<Blog />} />
-        <Route path="/service" element={<Service />} />
+        <Route path="/about" element={<About />} />
         <Route element={<RequireAuth />}>
           <Route path="/enroll/:courseId" element={<Enroll />} />
           <Route path="/payment/:courseId" element={<Payment />} />
