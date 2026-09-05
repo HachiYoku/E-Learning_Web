@@ -49,14 +49,14 @@ function NotificationBell({ compact = false }) {
       </button>
 
       {isNotificationOpen && (
-        <div className="absolute right-0 z-50 mt-3 w-[22rem] rounded-2xl border border-gray-200 bg-white shadow-2xl">
-          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
+        <div className="absolute right-0 z-50 mt-3 w-[22rem] overflow-hidden rounded-2xl border border-[#E58C1A]/15 bg-[#FFFDF8] shadow-[0_24px_55px_-30px_rgba(80,48,19,0.5)]">
+          <div className="flex items-center justify-between border-b border-[#E58C1A]/15 px-4 py-3">
+            <h3 className="font-bold text-[#2D2E30]">Notifications</h3>
             {unreadCount > 0 && (
               <button
                 type="button"
                 onClick={markAllRead}
-                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-[#C97112] transition hover:text-[#E58C1A]"
               >
                 <CheckCheck className="h-3.5 w-3.5" />
                 Mark all read
@@ -64,17 +64,17 @@ function NotificationBell({ compact = false }) {
             )}
           </div>
 
-          <div className="border-b border-gray-200 px-3 py-2">
+          <div className="border-b border-[#E58C1A]/15 px-3 py-2.5">
             <div className="flex flex-wrap gap-2">
               {NOTIFICATION_FILTERS.map((filter) => (
                 <button
                   key={filter.key}
                   type="button"
                   onClick={() => setActiveFilter(filter.key)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                  className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
                     activeFilter === filter.key
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      ? "bg-[#2D2E30] text-white shadow-sm"
+                      : "bg-transparent text-[#765F55] hover:bg-[#FFF1D0] hover:text-[#C97112]"
                   }`}
                 >
                   {filter.label}
@@ -85,9 +85,9 @@ function NotificationBell({ compact = false }) {
 
           <div className="max-h-80 overflow-y-auto">
             {loading && notifications.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-gray-500">Loading notifications...</div>
+              <div className="px-4 py-6 text-center text-sm text-[#765F55]">Loading notifications...</div>
             ) : filteredNotifications.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-gray-500">No notifications in this view.</div>
+              <div className="px-4 py-6 text-center text-sm text-[#765F55]">No notifications in this view.</div>
             ) : (
               filteredNotifications.map((notification) => (
                 <button
@@ -98,19 +98,19 @@ function NotificationBell({ compact = false }) {
                     setNotificationOpen(false);
                     if (notification.link) window.location.href = notification.link;
                   }}
-                  className={`flex w-full items-start gap-3 border-b border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50 ${
-                    !notification.isRead ? "bg-blue-50/40" : "bg-white"
+                  className={`flex w-full items-start gap-3 border-b border-[#2D2E30]/8 px-4 py-3 text-left transition hover:bg-[#FFF4D8]/50 ${
+                    !notification.isRead ? "bg-[#FFF7E6]" : "bg-transparent"
                   }`}
                 >
                   <div
                     className={`mt-1 h-2.5 w-2.5 rounded-full ${
-                      notification.isRead ? "bg-gray-300" : "bg-blue-500"
+                      notification.isRead ? "bg-[#D9D2CB]" : "bg-[#E58C1A]"
                     }`}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900">{notification.title}</p>
-                    <p className="mt-1 text-sm text-gray-600">{notification.message}</p>
-                    <p className="mt-2 text-[11px] text-gray-400">
+                    <p className="font-semibold text-[#2D2E30]">{notification.title}</p>
+                    <p className="mt-1 text-sm text-[#765F55]">{notification.message}</p>
+                    <p className="mt-2 text-[11px] text-[#A09288]">
                       {new Date(notification.createdAt).toLocaleString()}
                     </p>
                   </div>
