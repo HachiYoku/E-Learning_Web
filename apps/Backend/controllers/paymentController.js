@@ -5,6 +5,117 @@ const User = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
 const { uploadStream } = require("../services/uploadStream");
+const sendEmail = require("../services/sendEmail");
+
+const escapeHtml = (value = "") =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+const getFrontendUrl = () => {
+  const localUrl = process.env.FRONTEND_URL;
+  const productionUrl = process.env.FRONTEND_URL_PROD;
+  const url = process.env.NODE_ENV === "production"
+    ? productionUrl || localUrl
+    : localUrl || productionUrl || "http://localhost:5173";
+
+  return url.replace(/\/$/, "");
+};
+
+const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason }) => {
+  if (!user?.email) return;
+
+  const safeName = escapeHtml(user.name || "there");
+  const safeCourseTitle = escapeHtml(courseTitle || "your course");
+  const isApproved = status === "approved";
+  const safeReason = escapeHtml(rejectReason);
+  const appUrl = getFrontendUrl();
+  const actionUrl = isApproved ? `${appUrl}/my-courses` : `${appUrl}/my-course-order`;
+  const accentColor = isApproved ? "#4D7C57" : "#C97112";
+  const statusLabel = isApproved ? "PAYMENT APPROVED" : "PAYMENT NEEDS ATTENTION";
+  const heading = isApproved ? "Your enrollment is confirmed" : "Let’s resolve your payment";
+  const message = isApproved
+    ? `Your payment has been verified and <strong>you now have access</strong> to your course.`
+    : "We were unable to verify the receipt you submitted. Please review the details below and submit a new one.";
+  const buttonLabel = isApproved ? "Start learning" : "View order details";
+  const reasonCard = isApproved
+    ? ""
+    : `
+      <tr>
+        <td style="padding: 0 32px 24px;">
+          <div style="border-left: 4px solid #E58C1A; background: #FFF8E8; border-radius: 0 12px 12px 0; padding: 16px 18px; color: #765F55; font-size: 14px; line-height: 22px;">
+            <strong style="display: block; color: #2D2E30; margin-bottom: 4px;">Review note</strong>
+            ${safeReason}
+          </div>
+        </td>
+      </tr>`;
+  const subject = isApproved
+    ? `Enrollment approved: ${courseTitle || "your course"}`
+    : `Payment update: ${courseTitle || "your course"}`;
+  const html = `
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="x-apple-disable-message-reformatting">
+        <title>${escapeHtml(subject)}</title>
+      </head>
+      <body style="margin: 0; padding: 0; background: #F7F4EE; font-family: Arial, Helvetica, sans-serif; color: #2D2E30;">
+        <div style="display: none; max-height: 0; overflow: hidden; opacity: 0;">${isApproved ? "Your course is ready to explore." : "Your payment receipt needs an update."}</div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #F7F4EE;">
+          <tr>
+            <td align="center" style="padding: 32px 16px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(45, 46, 48, 0.08);">
+                <tr>
+                  <td style="padding: 28px 32px; background: #2D2E30; color: #FFFFFF;">
+                    <div style="font-family: Georgia, 'Times New Roman', serif; font-size: 27px; font-style: italic; line-height: 1;">Arun Thai</div>
+                    <div style="margin-top: 8px; color: #F8C56A; font-size: 11px; font-weight: bold; letter-spacing: 1.7px;">LEARN WITH CONFIDENCE</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 32px 32px 20px;">
+                    <div style="display: inline-block; padding: 7px 10px; border-radius: 999px; background: ${isApproved ? "#E9F4EA" : "#FFF1D0"}; color: ${accentColor}; font-size: 11px; font-weight: bold; letter-spacing: 0.8px;">${statusLabel}</div>
+                    <h1 style="margin: 20px 0 12px; font-size: 28px; line-height: 36px; letter-spacing: -0.4px;">${heading}</h1>
+                    <p style="margin: 0; color: #765F55; font-size: 16px; line-height: 25px;">Hi ${safeName},</p>
+                    <p style="margin: 14px 0 0; color: #765F55; font-size: 16px; line-height: 25px;">${message}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 4px 32px 24px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #FFFDF8; border: 1px solid #EEE7DC; border-radius: 12px;">
+                      <tr>
+                        <td style="padding: 17px 18px;">
+                          <div style="color: #9B867C; font-size: 11px; font-weight: bold; letter-spacing: 0.9px; text-transform: uppercase;">Course</div>
+                          <div style="margin-top: 5px; color: #2D2E30; font-size: 16px; font-weight: bold; line-height: 23px;">${safeCourseTitle}</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                ${reasonCard}
+                <tr>
+                  <td align="center" style="padding: 4px 32px 36px;">
+                    <a href="${escapeHtml(actionUrl)}" style="display: inline-block; border-radius: 10px; background: ${isApproved ? "#F8C56A" : "#E58C1A"}; color: #2D2E30; padding: 14px 24px; font-size: 15px; font-weight: bold; text-decoration: none;">${buttonLabel}</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="max-width: 600px; margin: 18px 0 0; color: #9B867C; font-size: 12px; line-height: 18px; text-align: center;">This is an automated notification from Arun Thai. Please do not reply directly to this email.</p>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>`;
+
+  try {
+    await sendEmail(user.email, subject, html);
+  } catch (error) {
+    console.warn(`Failed to send ${status} payment email to ${user.email}:`, error.message);
+  }
+};
 
 const createPayment = async (req, res) => {
   try {
@@ -160,6 +271,13 @@ const approvePayment = async (req, res) => {
       link: "/my-courses",
     });
 
+    const user = await User.findById(payment.userId).select("name email").lean();
+    await sendPaymentReviewEmail({
+      user,
+      courseTitle: course.title,
+      status: "approved",
+    });
+
     return res.status(200).json({
       message: "Payment approved and enrollment created successfully",
       payment,
@@ -224,6 +342,14 @@ const rejectPayment = async (req, res) => {
       title: "Payment needs attention",
       message: `We could not verify your payment for ${course?.title || "the course"}. Please review the reason and submit a new receipt.`,
       link: `/order-status/${payment._id}`,
+    });
+
+    const user = await User.findById(payment.userId).select("name email").lean();
+    await sendPaymentReviewEmail({
+      user,
+      courseTitle: course?.title,
+      status: "rejected",
+      rejectReason: payment.rejectReason,
     });
 
     return res.status(200).json({ message: "Payment rejected successfully", payment });
