@@ -64,12 +64,17 @@ function Courses() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 bg-gray-50 min-h-screen">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0 mb-6 md:mb-8">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Manage Course</h1>
+    <div className="min-h-screen bg-[#FFFDF8] p-4 sm:p-6 md:p-8">
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:mb-8 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112] sm:text-xs">Learning catalogue</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl md:text-4xl">Manage courses</h1>
+          <p className="mt-2 text-sm text-[#765F55] sm:text-base">Create, update, and organise your Thai learning courses.</p>
+        </div>
         <button
+          type="button"
           onClick={() => navigate('/courses/add')}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 bg-pink-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-pink-400 transition-colors font-medium text-sm sm:text-base"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white shadow-md shadow-[#2D2E30]/15 transition-all hover:-translate-y-0.5 hover:bg-[#E58C1A] focus:outline-none focus:ring-2 focus:ring-[#E58C1A] focus:ring-offset-2 sm:w-auto sm:text-base"
         >
           <Plus size={18} className="sm:w-5 sm:h-5" />
           Add Course
@@ -77,18 +82,19 @@ function Courses() {
       </div>
 
       {error ? (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       ) : null}
 
       {loading ? (
-        <div className="rounded-lg bg-white p-8 text-center text-gray-500 shadow-sm">
+        <div className="rounded-2xl border border-[#2D2E30]/10 bg-white p-8 text-center text-[#765F55] shadow-sm">
           Loading courses...
         </div>
       ) : courses.length === 0 ? (
-        <div className="rounded-lg bg-white p-8 text-center text-gray-500 shadow-sm">
-          No courses found. Create your first course to get started.
+        <div className="rounded-2xl border border-dashed border-[#E58C1A]/35 bg-[#FFF9EA] p-8 text-center text-[#765F55] sm:p-12">
+          <p className="text-lg font-bold text-[#2D2E30]">No courses yet</p>
+          <p className="mt-2 text-sm">Create your first course to get started.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">

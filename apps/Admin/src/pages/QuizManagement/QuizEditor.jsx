@@ -1,5 +1,6 @@
-﻿import { ArrowLeft, BookOpenText, CheckCircle2, ImagePlus, Plus, Sparkles, Trash2 } from "lucide-react";
+﻿import { ArrowLeft, BookOpenText, CheckCircle2, ImagePlus, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchCourses } from "../../services/courseService";
 import { fetchLessonsByCourse } from "../../services/lessonService";
@@ -14,6 +15,13 @@ const newQuestion = () => ({
   options: ["", "", "", ""],
   correctAnswer: 0,
 });
+
+function QuizSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find((option) => option.value === value);
+
+  return <div className="relative mt-2"><button type="button" disabled={disabled} onClick={() => setIsOpen((current) => !current)} className="flex w-full items-center justify-between rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2.5 text-left text-sm font-medium text-[#2D2E30] shadow-sm transition hover:border-[#E58C1A]/45 focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/10 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-[#9B867C]" aria-label={ariaLabel} aria-expanded={isOpen} aria-haspopup="listbox"><span className={selectedOption ? "truncate" : "truncate text-[#9B867C]"}>{selectedOption?.label || placeholder}</span><ChevronDown size={18} className={`ml-3 shrink-0 text-[#C97112] transition-transform ${isOpen ? "rotate-180" : ""}`} /></button>{isOpen && !disabled ? <div className="absolute z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-[#E58C1A]/25 bg-white p-1.5 shadow-xl shadow-[#2D2E30]/15" role="listbox" aria-label={ariaLabel}>{options.map((option) => { const selected = option.value === value; return <button key={option.value} type="button" role="option" aria-selected={selected} onClick={() => { onChange(option.value); setIsOpen(false); }} className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${selected ? "bg-[#FFF1CE] font-bold text-[#C97112]" : "font-medium text-[#2D2E30] hover:bg-[#FFF9EA]"}`}><span className="truncate">{option.label}</span>{selected ? <Check size={16} className="shrink-0" /> : null}</button>; })}</div> : null}</div>;
+}
 
 function QuizEditor() {
   const navigate = useNavigate();
@@ -124,8 +132,7 @@ function QuizEditor() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 px-4 py-10 text-slate-700">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="min-h-screen bg-[#FFFDF8] px-4 py-10 text-[#765F55]"><div className="mx-auto max-w-4xl rounded-2xl border border-[#2D2E30]/10 bg-white p-8 shadow-sm">
           <p className="text-lg font-medium">Loading quiz details...</p>
         </div>
       </div>
@@ -133,14 +140,14 @@ function QuizEditor() {
   }
 
   return (
-    <form onSubmit={submit} className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
+    <form onSubmit={submit} className="min-h-screen bg-[#FFFDF8] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-col gap-4 rounded-3xl bg-gradient-to-r from-pink-100 via-rose-50 to-indigo-50 p-5 shadow-sm ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 rounded-3xl border border-[#E58C1A]/15 bg-[#FFF9EA] p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => navigate("/quizzes")}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-900"
+              className="inline-flex items-center gap-2 rounded-full border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold text-[#765F55] transition hover:border-[#E58C1A]/35 hover:bg-[#FFF1CE] hover:text-[#2D2E30]"
             >
               <ArrowLeft size={16} />
               Back
@@ -148,13 +155,11 @@ function QuizEditor() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden rounded-full bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm ring-1 ring-slate-200 sm:block">
-              {editing ? "Update quiz" : "New quiz"}
-            </div>
+            <span className="hidden text-xs font-bold uppercase tracking-[0.18em] text-[#C97112] sm:block">{editing ? "Editing" : "New quiz"}</span>
             <button
               type="submit"
               disabled={saving}
-              className="rounded-xl bg-gradient-to-r from-pink-300 to-rose-300 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+              className="rounded-xl bg-[#2D2E30] px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-[#2D2E30]/15 transition hover:bg-[#E58C1A] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {saving ? "Saving..." : editing ? "Save quiz" : "Create quiz"}
             </button>
@@ -162,14 +167,14 @@ function QuizEditor() {
         </div>
 
         <div className="mb-6 flex items-center gap-3">
-          <div className="rounded-2xl bg-white p-3 text-pink-600 shadow-sm ring-1 ring-slate-200">
+          <div className="rounded-2xl bg-[#FFF1CE] p-3 text-[#C97112] shadow-sm ring-1 ring-[#E58C1A]/20">
             <BookOpenText size={22} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112]">Assessment library</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#2D2E30]">
               {editing ? "Edit Quiz" : "Create Quiz"}
             </h1>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-[#765F55]">
               Build a polished quiz with visual prompts and answer choices for your learners.
             </p>
           </div>
@@ -181,62 +186,24 @@ function QuizEditor() {
           </div>
         )}
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="rounded-xl bg-pink-100 p-2 text-pink-700">
-              <Sparkles size={18} />
-            </div>
-            <h2 className="text-xl font-bold text-slate-900">Quiz details</h2>
-          </div>
+        <section className="rounded-3xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)] sm:p-6">
+          <div className="mb-5"><h2 className="text-xl font-bold text-[#2D2E30]">Quiz details</h2><p className="mt-1 text-sm text-[#765F55]">Set the course, quiz type, and attempt limit.</p></div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-semibold text-slate-800">
+            <label className="text-sm font-bold text-[#2D2E30]">
               Course
-              <select
-                required
-                value={form.courseId}
-                onChange={(e) => setForm((f) => ({ ...f, courseId: e.target.value, lessonId: "" }))}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-pink-300 focus:bg-white focus:ring-2 focus:ring-pink-100"
-              >
-                <option value="">Select course</option>
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.title}
-                  </option>
-                ))}
-              </select>
+              <QuizSelect ariaLabel="Course" value={form.courseId} onChange={(courseId) => setForm((f) => ({ ...f, courseId, lessonId: "" }))} placeholder="Select course" options={courses.map((course) => ({ value: course.id, label: course.title }))} />
             </label>
 
-            <label className="text-sm font-semibold text-slate-800">
+            <label className="text-sm font-bold text-[#2D2E30]">
               Quiz type
-              <select
-                required
-                value={form.quizType}
-                onChange={(e) => setForm((f) => ({ ...f, quizType: e.target.value, lessonId: "" }))}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-pink-300 focus:bg-white focus:ring-2 focus:ring-pink-100"
-              >
-                <option value="lesson">Lesson quiz</option>
-                <option value="course">Course quiz</option>
-              </select>
+              <QuizSelect ariaLabel="Quiz type" value={form.quizType} onChange={(quizType) => setForm((f) => ({ ...f, quizType, lessonId: "" }))} placeholder="Select quiz type" options={[{ value: "lesson", label: "Lesson quiz" }, { value: "course", label: "Course quiz" }]} />
             </label>
 
             {form.quizType === "lesson" && (
-              <label className="text-sm font-semibold text-slate-800 sm:col-span-2">
+              <label className="text-sm font-bold text-[#2D2E30] sm:col-span-2">
                 Lesson
-                <select
-                  required
-                  disabled={!form.courseId}
-                  value={form.lessonId}
-                  onChange={(e) => setForm((f) => ({ ...f, lessonId: e.target.value }))}
-                  className="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-pink-300 focus:bg-white focus:ring-2 focus:ring-pink-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-                >
-                  <option value="">Select lesson</option>
-                  {lessons.map((lesson) => (
-                    <option key={lesson.id} value={lesson.id}>
-                      Lesson {lesson.order}: {lesson.title}
-                    </option>
-                  ))}
-                </select>
+                <QuizSelect ariaLabel="Lesson" disabled={!form.courseId} value={form.lessonId} onChange={(lessonId) => setForm((f) => ({ ...f, lessonId }))} placeholder="Select lesson" options={lessons.map((lesson) => ({ value: lesson.id, label: `Lesson ${lesson.order}: ${lesson.title}` }))} />
               </label>
             )}
 
@@ -271,20 +238,20 @@ function QuizEditor() {
             const optionCount = question.options.filter(Boolean).length;
 
             return (
-              <section key={index} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <section key={index} className="rounded-3xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)] sm:p-6">
                 <div className="mb-5 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-sm font-bold text-pink-700">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF1CE] text-sm font-bold text-[#C97112]">
                       {index + 1}
                     </div>
-                    <h2 className="text-xl font-bold text-slate-900">Question {index + 1}</h2>
+                    <h2 className="text-xl font-bold text-[#2D2E30]">Question {index + 1}</h2>
                   </div>
 
                   {form.questions.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, questions: f.questions.filter((_, i) => i !== index) }))}
-                      className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100"
+                      className="inline-flex items-center gap-2 rounded-xl border border-[#A34D45]/20 bg-[#FFF0EE] px-3 py-2 text-sm font-semibold text-[#A34D45] transition hover:bg-[#FFE1DD]"
                     >
                       <Trash2 size={15} />
                       Remove
@@ -293,7 +260,7 @@ function QuizEditor() {
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
-                  <label className="relative flex min-h-[180px] cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 transition hover:border-pink-300 hover:bg-pink-50">
+                  <label className="relative flex min-h-[180px] cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#E58C1A]/35 bg-[#FFF9EA] transition hover:border-[#E58C1A] hover:bg-[#FFF1CE]">
                     <input
                       type="file"
                       accept="image/*"
@@ -307,7 +274,7 @@ function QuizEditor() {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="flex flex-col items-center gap-2 text-sm font-medium text-slate-500">
+                      <span className="flex flex-col items-center gap-2 text-sm font-semibold text-[#765F55]">
                         <ImagePlus size={24} />
                         Upload prompt image
                       </span>
@@ -336,14 +303,14 @@ function QuizEditor() {
                         {question.options.map((option, optionIndex) => (
                           <label
                             key={optionIndex}
-                            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition hover:border-pink-200 hover:bg-pink-50"
+                            className="flex items-center gap-3 rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8] px-3 py-2.5 transition hover:border-[#E58C1A]/35 hover:bg-[#FFF9EA]"
                           >
                             <input
                               type="radio"
                               name={`correct-${index}`}
                               checked={question.correctAnswer === optionIndex}
                               onChange={() => updateQuestion(index, { correctAnswer: optionIndex })}
-                              className="h-4 w-4 accent-pink-500"
+                              className="h-4 w-4 accent-[#E58C1A]"
                             />
                             <span className="w-6 text-center text-sm font-medium text-slate-500">{String.fromCharCode(65 + optionIndex)}</span>
                             <input
@@ -371,7 +338,7 @@ function QuizEditor() {
           <button
             type="button"
             onClick={() => setForm((f) => ({ ...f, questions: [...f.questions, newQuestion()] }))}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2.5 text-sm font-semibold text-pink-700 transition hover:bg-pink-100"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#E58C1A]/30 bg-[#FFF9EA] px-4 py-2.5 text-sm font-bold text-[#C97112] transition hover:bg-[#FFF1CE]"
           >
             <Plus size={16} />
             Add another question

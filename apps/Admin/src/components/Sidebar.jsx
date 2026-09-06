@@ -1,8 +1,8 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, Send, BarChart3 } from 'lucide-react'
+import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, MailCheck, Send, BarChart3 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-function Sidebar({ isOpen = true }) {
+function Sidebar({ isOpen = true, onNavigate }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { logout } = useAuth()
@@ -19,12 +19,18 @@ function Sidebar({ isOpen = true }) {
     navigate('/login')
   }
 
+  const handleNavigate = (path) => {
+    navigate(path)
+    onNavigate?.()
+  }
+
   const menuItems = [
     { label: 'Dashboard', path: '/', icon: LayoutGrid },
     { label: 'Manage course', path: '/courses', icon: BookOpen },
     { label: 'Quiz management', path: '/quizzes', icon: ListChecks },
     { label: 'Manage blog', path: '/blog', icon: FileText },
     { label: 'Manage users', path: '/users', icon: Users },
+    { label: 'Pending verification', path: '/pending-verifications', icon: MailCheck },
     { label: 'Subscribers & enquiries', path: '/contacts', icon: Mail },
     { label: 'Updates & campaigns', path: '/campaigns', icon: Send },
     { label: 'Review payment', path: '/review-payment', icon: CreditCard },
@@ -33,36 +39,45 @@ function Sidebar({ isOpen = true }) {
   ]
 
   return (
-    <div className={`${isOpen ? 'w-56' : 'w-15'} bg-pink-50 flex flex-col h-screen shadow-sm border-r border-pink-100 transition-all duration-300`}>
+    <aside
+      className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-col border-r border-[#E58C1A]/15 bg-[#2D2E30] text-white shadow-2xl shadow-[#2D2E30]/20 transition-all duration-300 md:relative md:z-auto md:translate-x-0 md:shadow-none ${
+        isOpen ? 'w-72 translate-x-0 md:w-64' : 'w-72 -translate-x-full md:w-[5.5rem]'
+      }`}
+      aria-label="Admin navigation"
+    >
       {/* Logo/Header */}
-      <div className="p-6 border-b bg-pink-100 border-pink-200 flex items-center justify-center gap-2">
+      <div className="flex min-h-24 items-center border-b border-white/10 px-5">
         {isOpen ? (
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <img src="/images/Arun-thai-web-logo.png" alt="Arun Thai" className="w-10 rounded-lg h-10 object-contain shrink-0" />
-            <h1 className="text-sm font-bold text-gray-900 whitespace-nowrap">Arun Thai</h1>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <img src="/images/Arun-thai-web-logo.png" alt="Arun Thai" className="h-11 w-11 shrink-0 rounded-xl object-contain" />
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-bold tracking-tight text-white">Arun Thai</h1>
+              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#F8C56A]">Admin portal</p>
+            </div>
           </div>
         ) : (
-          <img src="/images/Arun-thai-web-logo.png" alt="Arun Thai" className="w-10 rounded-lg h-10 object-contain shrink-0 mx-auto" />
+          <img src="/images/Arun-thai-web-logo.png" alt="Arun Thai" className="mx-auto h-11 w-11 shrink-0 rounded-xl object-contain" />
         )}
       </div>
 
       {/* Menu Items */}
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav className={`flex-1 space-y-1 overflow-y-auto py-5 ${isOpen ? 'px-3' : 'px-3 md:px-2'}`}>
+        {isOpen && <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">Workspace</p>}
         {menuItems.map((item) => {
           const Icon = item.icon
           const active = isActive(item.path)
           return (
             <button
               key={item.path}
-              onClick={() => navigate(item.path)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+              onClick={() => handleNavigate(item.path)}
+              className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all focus:outline-none focus:ring-2 focus:ring-[#F8C56A]/70 ${!isOpen ? 'md:justify-center md:px-0' : ''} ${
                 active
-                  ? 'bg-[#E58C1A] text-white font-medium'
-                  : 'text-gray-700 hover:bg-pink-100'
+                  ? 'bg-[#E58C1A] font-bold text-white shadow-lg shadow-black/15'
+                  : 'font-medium text-white/70 hover:bg-white/10 hover:text-white'
               }`}
               title={!isOpen ? item.label : ''}
             >
-              <Icon size={20} className="shrink-0" />
+              <Icon size={19} className={`shrink-0 ${active ? 'text-white' : 'text-[#F8C56A] group-hover:text-[#F8C56A]'}`} />
               {isOpen && <span className="truncate">{item.label}</span>}
             </button>
           )
@@ -70,17 +85,17 @@ function Sidebar({ isOpen = true }) {
       </nav>
 
       {/* Logout Button */}
-      <div className="p-4 border-t border-pink-200">
+      <div className="border-t border-white/10 p-3">
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-pink-100 transition-colors"
+          className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-white/70 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#F8C56A]/70 ${!isOpen ? 'md:justify-center md:px-0' : ''}`}
           title={!isOpen ? 'Logout' : ''}
         >
-          <LogOut size={20} className="shrink-0" />
+          <LogOut size={19} className="shrink-0 text-[#F8C56A]" />
           {isOpen && <span>Logout</span>}
         </button>
       </div>
-    </div>
+    </aside>
   )
 }
 

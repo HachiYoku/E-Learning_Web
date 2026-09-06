@@ -2,15 +2,17 @@ const User = require("../models/userModel");
 const Course = require("../models/courseModel");
 const Enrollment = require("../models/enrollmentModel");
 const Payment = require("../models/paymentModel");
+const AuditLog = require("../models/auditLogModel");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const { uploadStream } = require("../services/uploadStream");
 const { createNotification } = require("./notificationController");
+const { writeAuditLog } = require("../services/auditLogger");
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
 const getAdminUsersWithEnrollments = async () => {
-  const users = await User.find({ role: "user" }).select("-password").sort({ createdAt: -1 });
+  const users = await User.find({ role: "user", isVerified: true }).select("-password").sort({ createdAt: -1 });
   const enrollments = await Enrollment.find({ userId: { $in: users.map((user) => user._id) } })
     .populate("courseId", "title");
 
@@ -34,6 +36,28 @@ const getAdminUsersWithEnrollments = async () => {
     ...user.toObject(),
     purchasedCourses: userCourseMap.get(String(user._id)) || [],
   }));
+};
+
+const getPendingVerifications = async (_req, res) => {
+  try {
+    const users = await User.find({ role: "user", isVerified: false }).select("name email createdAt verificationTokenExpires unverifiedExpiresAt").sort({ createdAt: -1 });
+    return res.status(200).json(users);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const getAuditLogs = async (_req, res) => {
+  try {
+    const logs = await AuditLog.find()
+      .populate("actorId", "name email")
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .lean();
+    return res.status(200).json(logs);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 const getProfile = async (req, res) => {
@@ -106,6 +130,14 @@ const deletAccount = async (req, res) => {
     await Enrollment.deleteMany({ userId: req.params.id });
     await Payment.deleteMany({ userId: req.params.id });
 
+    await writeAuditLog({
+      actorId: req.user.id,
+      action: "user.deleted",
+      targetType: "user",
+      targetId: user._id,
+      metadata: { email: user.email, name: user.name },
+    });
+
     return res.status(200).json({ message: "User deleted successfully" });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -114,7 +146,21 @@ const deletAccount = async (req, res) => {
 
 const updateUserStatus = async (req, res) => {
   try {
-    const { isActive } = req.body;
+    const { isActive, adminPassword } = req.body;
+
+    if (typeof adminPassword !== "string" || !adminPassword.trim()) {
+      return res.status(400).json({ message: "Admin password is required to change account status" });
+    }
+
+    const adminUser = await User.findById(req.user?.id);
+    if (!adminUser) {
+      return res.status(403).json({ message: "Admin user not found" });
+    }
+
+    if (!bcrypt.compareSync(adminPassword, adminUser.password)) {
+      return res.status(403).json({ message: "Invalid admin password" });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -123,6 +169,7 @@ const updateUserStatus = async (req, res) => {
 
     user.isActive = Boolean(isActive);
     await user.save();
+    await writeAuditLog({ actorId: req.user.id, action: user.isActive ? "user.activated" : "user.deactivated", targetType: "user", targetId: user._id, metadata: { email: user.email } });
 
     return res.status(200).json({ message: "User status updated successfully" });
   } catch (error) {
@@ -238,6 +285,8 @@ const updateUserCourseAccess = async (req, res) => {
     const users = await getAdminUsersWithEnrollments();
     const updatedUser = users.find((item) => String(item._id) === String(user._id));
 
+    await writeAuditLog({ actorId: req.user.id, action: "user.course_access_updated", targetType: "user", targetId: user._id, metadata: { addedCourseIds, removedCourseIds } });
+
     return res.status(200).json({
       message: "User course access updated successfully",
       user: updatedUser,
@@ -249,6 +298,8 @@ const updateUserCourseAccess = async (req, res) => {
 
 module.exports = {
   getProfile,
+  getPendingVerifications,
+  getAuditLogs,
   updateProfile,
   deletAccount,
   updateUserStatus,

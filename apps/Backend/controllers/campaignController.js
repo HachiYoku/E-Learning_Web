@@ -5,7 +5,7 @@ const sendEmail = require("../services/sendEmail");
 const { uploadStream } = require("../services/uploadStream");
 const cloudinary = require("../config/cloudinary");
 
-const escapeHtml = (value = "") => value.replace(/[&<>"']/g, (character) => ({
+const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[character]));
 
@@ -13,6 +13,53 @@ const sixMonthsFrom = (date) => {
   const expiry = new Date(date);
   expiry.setMonth(expiry.getMonth() + 6);
   return expiry;
+};
+
+const uniqueRecipientsByEmail = (recipients) => {
+  const seenEmails = new Set();
+
+  return recipients.filter((recipient) => {
+    const email = String(recipient.email || "").trim().toLowerCase();
+    if (!email || seenEmails.has(email)) return false;
+    seenEmails.add(email);
+    return true;
+  });
+};
+
+const buildCampaignEmail = ({ recipientName, subject, message, image }) => {
+  const safeName = escapeHtml(recipientName || "there");
+  const safeSubject = escapeHtml(subject);
+  const safeMessage = escapeHtml(message).replace(/\n/g, "<br />");
+  const imageBlock = image
+    ? `<tr><td style="padding: 0 32px 8px;"><img src="${escapeHtml(image)}" alt="" width="536" style="display: block; width: 100%; max-width: 536px; height: auto; border: 0; border-radius: 14px;" /></td></tr>`
+    : "";
+
+  return `
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="x-apple-disable-message-reformatting">
+        <title>${safeSubject}</title>
+      </head>
+      <body style="margin: 0; padding: 0; background: #FFF9EA; font-family: Arial, Helvetica, sans-serif; color: #2D2E30;">
+        <div style="display: none; max-height: 0; overflow: hidden; opacity: 0;">${safeSubject}</div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #FFF9EA;">
+          <tr>
+            <td align="center" style="padding: 32px 16px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; overflow: hidden; border-radius: 20px; background: #FFFFFF; box-shadow: 0 10px 30px rgba(45, 46, 48, 0.08);">
+                <tr><td style="padding: 28px 32px; background: #2D2E30; color: #FFFFFF;"><div style="font-family: Georgia, 'Times New Roman', serif; font-size: 27px; font-style: italic; line-height: 1;">Arun Thai</div><div style="margin-top: 8px; color: #F8C56A; font-size: 11px; font-weight: bold; letter-spacing: 1.7px;">LEARN WITH CONFIDENCE</div></td></tr>
+                <tr><td style="padding: 32px 32px 20px;"><div style="display: inline-block; border-radius: 999px; background: #FFF1D0; color: #C97112; padding: 7px 10px; font-size: 11px; font-weight: bold; letter-spacing: 0.8px;">ARUN THAI UPDATE</div><p style="margin: 20px 0 0; color: #765F55; font-size: 16px; line-height: 25px;">Hi ${safeName},</p><h1 style="margin: 12px 0 0; color: #2D2E30; font-size: 28px; line-height: 36px; letter-spacing: -0.4px;">${safeSubject}</h1></td></tr>
+                ${imageBlock}
+                <tr><td style="padding: 20px 32px 34px; color: #765F55; font-size: 16px; line-height: 26px;">${safeMessage}</td></tr>
+              </table>
+              <p style="max-width: 600px; margin: 18px 0 0; color: #9B867C; font-size: 12px; line-height: 18px; text-align: center;">You are receiving this update from Arun Thai because you signed up for course news and updates.</p>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>`;
 };
 
 const createCampaign = async (req, res) => {
@@ -31,13 +78,13 @@ const createCampaign = async (req, res) => {
     const systemIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("system:")).map((key) => key.slice(7));
     const contactIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("contact:")).map((key) => key.slice(8));
     const [systemUsers, optedInLeads] = await Promise.all([
-      User.find({ _id: { $in: systemIds }, role: "user" }).select("_id name email"),
+      User.find({ _id: { $in: systemIds }, role: "user", isVerified: true }).select("_id name email"),
       ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("_id name email"),
     ]);
-    const selectedRecipients = [
+    const selectedRecipients = uniqueRecipientsByEmail([
       ...systemUsers.map((user) => ({ recordType: "system", recipientId: user._id, name: user.name, email: user.email })),
       ...optedInLeads.map((lead) => ({ recordType: "contact", recipientId: lead._id, name: lead.name, email: lead.email })),
-    ];
+    ]);
     if (!selectedRecipients.length) return res.status(400).json({ message: "Choose at least one valid recipient." });
 
     let image = "";
@@ -81,20 +128,23 @@ const sendCampaign = async (req, res) => {
     const systemIds = selectedRecipients.filter((item) => item.recordType === "system").map((item) => item.recipientId);
     const contactIds = selectedRecipients.filter((item) => item.recordType === "contact").map((item) => item.recipientId);
     const [systemUsers, leads] = await Promise.all([
-      User.find({ _id: { $in: systemIds }, role: "user", isActive: true }).select("name email"),
+      User.find({ _id: { $in: systemIds }, role: "user", isActive: true, isVerified: true }).select("name email"),
       ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("name email"),
     ]);
-    const recipients = [
+    const recipients = uniqueRecipientsByEmail([
       ...systemUsers.map((user) => ({ name: user.name, email: user.email, recordType: "system" })),
       ...leads.map((lead) => ({ name: lead.name, email: lead.email, recordType: "contact" })),
-    ];
+    ]);
     if (!recipients.length) return res.status(400).json({ message: "None of the selected recipients are currently eligible." });
-    const safeSubject = escapeHtml(campaign.subject);
-    const safeMessage = escapeHtml(campaign.message).replace(/\n/g, "<br />");
     const results = await Promise.allSettled(recipients.map((lead) => sendEmail(
       lead.email,
       campaign.subject,
-      `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#2D2E30"><p>Hello ${escapeHtml(lead.name)},</p>${campaign.image ? `<img src="${campaign.image}" alt="" style="display:block;width:100%;max-width:620px;border-radius:12px;margin:16px 0" />` : ""}<h2>${safeSubject}</h2><p>${safeMessage}</p><p>— Arun Thai Academy</p></div>`
+      buildCampaignEmail({
+        recipientName: lead.name,
+        subject: campaign.subject,
+        message: campaign.message,
+        image: campaign.image,
+      })
     )));
     const sentCount = results.filter((result) => result.status === "fulfilled").length;
     const failedCount = results.length - sentCount;
@@ -149,13 +199,13 @@ const updateDraftCampaign = async (req, res) => {
     const systemIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("system:")).map((key) => key.slice(7));
     const contactIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("contact:")).map((key) => key.slice(8));
     const [systemUsers, optedInLeads] = await Promise.all([
-      User.find({ _id: { $in: systemIds }, role: "user" }).select("_id name email"),
+      User.find({ _id: { $in: systemIds }, role: "user", isVerified: true }).select("_id name email"),
       ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("_id name email"),
     ]);
-    const selectedRecipients = [
+    const selectedRecipients = uniqueRecipientsByEmail([
       ...systemUsers.map((user) => ({ recordType: "system", recipientId: user._id, name: user.name, email: user.email })),
       ...optedInLeads.map((lead) => ({ recordType: "contact", recipientId: lead._id, name: lead.name, email: lead.email })),
-    ];
+    ]);
     if (!selectedRecipients.length) return res.status(400).json({ message: "Choose at least one valid recipient." });
 
     campaign.subject = subject;

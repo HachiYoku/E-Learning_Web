@@ -6,6 +6,7 @@ const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
 const { uploadStream } = require("../services/uploadStream");
 const sendEmail = require("../services/sendEmail");
+const { writeAuditLog } = require("../services/auditLogger");
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -64,9 +65,9 @@ const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason 
         <meta name="x-apple-disable-message-reformatting">
         <title>${escapeHtml(subject)}</title>
       </head>
-      <body style="margin: 0; padding: 0; background: #F7F4EE; font-family: Arial, Helvetica, sans-serif; color: #2D2E30;">
+      <body style="margin: 0; padding: 0; background: #FFF9EA; font-family: Arial, Helvetica, sans-serif; color: #2D2E30;">
         <div style="display: none; max-height: 0; overflow: hidden; opacity: 0;">${isApproved ? "Your course is ready to explore." : "Your payment receipt needs an update."}</div>
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #F7F4EE;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #FFF9EA;">
           <tr>
             <td align="center" style="padding: 32px 16px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(45, 46, 48, 0.08);">
@@ -238,6 +239,18 @@ const approvePayment = async (req, res) => {
     payment.rejectReason = undefined;
     await payment.save();
 
+    await writeAuditLog({
+      actorId: req.user.id,
+      action: "payment.approved",
+      targetType: "payment",
+      targetId: payment._id,
+      metadata: {
+        userId: payment.userId,
+        courseId: payment.courseId,
+        amount: payment.amount,
+      },
+    });
+
     const enrollment = await Enrollment.findOneAndUpdate(
       {
         userId: payment.userId,
@@ -333,6 +346,19 @@ const rejectPayment = async (req, res) => {
     payment.reviewedAt = new Date();
     payment.rejectReason = rejectReason.trim();
     await payment.save();
+
+    await writeAuditLog({
+      actorId: req.user.id,
+      action: "payment.rejected",
+      targetType: "payment",
+      targetId: payment._id,
+      metadata: {
+        userId: payment.userId,
+        courseId: payment.courseId,
+        amount: payment.amount,
+        rejectReason: payment.rejectReason,
+      },
+    });
 
     const course = await Course.findById(payment.courseId).select("title");
 

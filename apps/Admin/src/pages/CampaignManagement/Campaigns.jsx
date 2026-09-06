@@ -38,6 +38,7 @@ function Campaigns() {
   const selectedSystemCount = selectedRecipients.filter((recipient) => recipient.id.startsWith("system:")).length;
   const selectedSubscriberCount = selectedRecipients.length - selectedSystemCount;
   const deletingDraft = campaigns.find((campaign) => campaign._id === draftToDelete);
+  const getEmailKey = (email) => String(email || "").trim().toLowerCase();
 
   const loadCampaigns = async () => {
     try { setCampaigns(await fetchCampaigns()); } catch (error) { setStatus({ type: "error", message: error.message }); }
@@ -51,10 +52,27 @@ function Campaigns() {
 
   const clearImage = () => { setImageFile(null); setImagePreview(""); };
   const resetComposer = () => { setSubject(""); setMessage(""); setSelectedIds([]); clearImage(); setEditingCampaignId(""); setRecipientSearch(""); setRecipientTab("system"); };
-  const toggleRecipient = (id) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  const selectVisibleRecipients = () => setSelectedIds((current) => allVisibleSelected
-    ? current.filter((id) => !visibleRecipients.some((recipient) => recipient.id === id))
-    : [...new Set([...current, ...visibleRecipients.map((recipient) => recipient.id)])]);
+  const toggleRecipient = (id) => setSelectedIds((current) => {
+    if (current.includes(id)) return current.filter((item) => item !== id);
+    const recipient = recipientOptions.find((item) => item.id === id);
+    if (!recipient) return current;
+    const emailKey = getEmailKey(recipient.email);
+    return [...current.filter((selectedId) => {
+      const selectedRecipient = recipientOptions.find((item) => item.id === selectedId);
+      return getEmailKey(selectedRecipient?.email) !== emailKey;
+    }), id];
+  });
+  const selectVisibleRecipients = () => setSelectedIds((current) => {
+    if (allVisibleSelected) return current.filter((id) => !visibleRecipients.some((recipient) => recipient.id === id));
+
+    return visibleRecipients.reduce((next, recipient) => {
+      const emailKey = getEmailKey(recipient.email);
+      return [...next.filter((selectedId) => {
+        const selectedRecipient = recipientOptions.find((item) => item.id === selectedId);
+        return getEmailKey(selectedRecipient?.email) !== emailKey;
+      }), recipient.id];
+    }, current);
+  });
   const updateImage = (event) => {
     const file = event.target.files?.[0] || null;
     setImageFile(file);

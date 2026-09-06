@@ -11,6 +11,7 @@ import CourseDetail from './pages/CourseManagement/CourseDetail'
 import AddLesson from './pages/CourseManagement/AddLesson'
 import EditLesson from './pages/CourseManagement/EditLesson'
 import Users from './pages/UserManagement/Users'
+import PendingVerifications from './pages/UserManagement/PendingVerifications'
 import ContactLeads from './pages/ContactManagement/ContactLeads'
 import Campaigns from './pages/CampaignManagement/Campaigns'
 import Blogs from './pages/BlogManagement/Blogs'
@@ -28,11 +29,12 @@ import QuizEditor from './pages/QuizManagement/QuizEditor'
 import QuizAttempts from './pages/QuizManagement/QuizAttempts'
 
 function ProtectedLayout() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768)
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Sidebar isOpen={isSidebarOpen} />
+      {isSidebarOpen && <button type="button" className="fixed inset-0 z-30 bg-[#2D2E30]/45 md:hidden" onClick={() => setIsSidebarOpen(false)} aria-label="Close navigation" />}
+      <Sidebar isOpen={isSidebarOpen} onNavigate={() => { if (window.innerWidth < 768) setIsSidebarOpen(false) }} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopNav isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen((current) => !current)} />
         <div className="flex-1 overflow-auto">
@@ -63,6 +65,7 @@ function App() {
             <Route path="/quizzes/:id/edit" element={<QuizEditor />} />
             <Route path="/quizzes/:id/attempts" element={<QuizAttempts />} />
             <Route path="/users" element={<Users />} />
+            <Route path="/pending-verifications" element={<PendingVerifications />} />
             <Route path="/contacts" element={<ContactLeads />} />
             <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/blog" element={<Blogs />} />

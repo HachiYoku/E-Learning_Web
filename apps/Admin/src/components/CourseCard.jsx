@@ -10,37 +10,38 @@ function CourseCard({ course, onEdit, onDelete }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
-      <div className="h-48 w-full overflow-hidden bg-gray-100">
+    <article className="group overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_12px_30px_-24px_rgba(45,46,48,0.55)] transition-all hover:-translate-y-1 hover:border-[#E58C1A]/35 hover:shadow-[0_20px_38px_-24px_rgba(201,113,18,0.4)]">
+      <div className="relative h-48 w-full overflow-hidden bg-[#FFF1CE]">
         <img
           src={image}
           alt={course.title}
-          className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
+        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#2D2E30]/45 to-transparent" aria-hidden="true" />
       </div>
 
       <div className="flex min-h-[20rem] flex-col p-4 sm:p-5">
-        <div className="mb-3 ">
+        <div className="mb-3">
           <span
-            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+            className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
               course.isPublished
-                ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-amber-100 text-amber-700'
+                ? 'bg-[#EDF8EE] text-[#246B35]'
+                : 'bg-[#FFF1CE] text-[#9A5816]'
             }`}
           >
             {course.isPublished ? 'Published' : 'Draft'}
           </span>
         </div>
 
-        <h3 className="mb-2 line-clamp-2 text-lg font-bold text-gray-900">{course.title}</h3>
+        <h3 className="mb-2 line-clamp-2 text-lg font-bold text-[#2D2E30]">{course.title}</h3>
 
-        <p className="mb-4 line-clamp-3 text-sm leading-6 text-gray-600">
+        <p className="mb-4 line-clamp-3 text-sm leading-6 text-[#765F55]">
           {course.description || 'No course description yet.'}
         </p>
 
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-gray-600">
-          <span className="text-lg font-bold text-gray-900">{course.price}</span>
-          <span className="rounded-full bg-gray-100 px-3 py-1 font-medium">
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-[#765F55]">
+          <span className="text-lg font-bold text-[#C97112]">{course.price}</span>
+          <span className="rounded-full bg-[#FFF9EA] px-3 py-1 font-semibold">
             {course.lessons} lessons
           </span>
         </div>
@@ -55,13 +56,13 @@ function CourseCard({ course, onEdit, onDelete }) {
               />
             ))}
           </div>
-          <span className="text-sm text-gray-600">({course.rating})</span>
+          <span className="text-sm text-[#765F55]">({course.rating})</span>
         </div>
 
         <div className="mt-auto space-y-2">
           <button
             onClick={handleAddLesson}
-            className="w-full rounded-xl bg-pink-300 px-4 py-2.5 text-sm font-semibold text-gray-800 transition-colors hover:bg-pink-400"
+            className="w-full rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#E58C1A] focus:outline-none focus:ring-2 focus:ring-[#E58C1A] focus:ring-offset-2"
           >
             Add Lesson
           </button>
@@ -69,7 +70,7 @@ function CourseCard({ course, onEdit, onDelete }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => onEdit(course.id)}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-2.5 text-sm font-semibold text-[#2D2E30] transition-colors hover:border-[#E58C1A]/40 hover:bg-[#FFF9EA]"
               title="Edit course"
             >
               <Edit2 size={16} />
@@ -77,7 +78,7 @@ function CourseCard({ course, onEdit, onDelete }) {
             </button>
             <button
               onClick={() => onDelete(course.id)}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#A34D45]/20 bg-[#FFF0EE] px-4 py-2.5 text-sm font-semibold text-[#A34D45] transition-colors hover:bg-[#FFE1DD]"
               title="Delete course"
             >
               <Trash2 size={16} />
@@ -86,7 +87,7 @@ function CourseCard({ course, onEdit, onDelete }) {
           </div>
         </div>
       </div>
-    </div>
+    </article>
   )
 }
 
