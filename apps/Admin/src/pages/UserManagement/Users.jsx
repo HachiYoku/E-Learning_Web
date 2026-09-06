@@ -1,17 +1,67 @@
-import { Plus, Trash2, Eye, EyeOff, X, Check, Copy } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, X, Check, Copy, KeyRound, ShieldAlert } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import ConfirmationModal from '../../components/ConfirmationModal'
 import { fetchCourses } from '../../services/courseService'
 import { deleteUser, fetchUsers, updateUserCourseAccess, updateUserStatus } from '../../services/userService'
+
+function SecureUserActionModal({ action, user, password, error, success, saving, onPasswordChange, onConfirm, onClose }) {
+  if (!action || !user) return null
+
+  const isDelete = action === 'delete'
+  const isDeactivating = action === 'deactivate'
+  const title = isDelete ? 'Delete user account' : isDeactivating ? 'Deactivate user account' : 'Activate user account'
+  const description = isDelete
+    ? 'This permanently removes the account, course enrollments, and payment records.'
+    : isDeactivating
+      ? 'The student will not be able to sign in until the account is activated again.'
+      : 'The student will be able to sign in and continue learning again.'
+  const confirmText = isDelete ? 'Delete account' : isDeactivating ? 'Deactivate account' : 'Activate account'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D2E30]/60 p-4 backdrop-blur-[2px]">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-2xl shadow-[#2D2E30]/30" role="dialog" aria-modal="true" aria-labelledby="secure-user-action-title">
+        <div className={`border-b p-5 sm:p-6 ${isDelete ? 'border-[#A34D45]/15 bg-[#FFF0EE]' : 'border-[#E58C1A]/15 bg-[#FFF9EA]'}`}>
+          <div className="flex items-start gap-3">
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${isDelete ? 'bg-[#FFE1DD] text-[#A34D45]' : 'bg-[#FFF1CE] text-[#C97112]'}`}>
+              {isDelete ? <Trash2 size={20} /> : <ShieldAlert size={21} />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className={`text-[10px] font-bold uppercase tracking-[0.18em] ${isDelete ? 'text-[#A34D45]' : 'text-[#C97112]'}`}>Protected action</p>
+              <h2 id="secure-user-action-title" className="mt-1 text-lg font-bold text-[#2D2E30] sm:text-xl">{title}</h2>
+            </div>
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-1 text-[#765F55] transition hover:bg-white/70 hover:text-[#2D2E30] disabled:opacity-50" aria-label="Close dialog"><X size={20} /></button>
+          </div>
+        </div>
+
+        <form onSubmit={onConfirm}>
+          <div className="space-y-4 p-5 sm:p-6">
+            <div className="rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-4">
+              <p className="font-semibold text-[#2D2E30]">{user.name}</p>
+              <p className="mt-0.5 break-all text-sm text-[#765F55]">{user.email}</p>
+            </div>
+            <p className="text-sm leading-6 text-[#765F55]">{description}</p>
+            {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div> : null}
+            {success ? <div className="rounded-xl border border-[#7AB589]/30 bg-[#EDF8EE] px-3 py-2.5 text-sm text-[#246B35]">{success}</div> : null}
+            <label className="block text-sm font-bold text-[#2D2E30]">
+              <span className="mb-2 flex items-center gap-2"><KeyRound size={16} className="text-[#C97112]" /> Confirm admin password</span>
+              <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoFocus disabled={saving} autoComplete="current-password" placeholder="Enter your password" className="w-full rounded-xl border border-[#2D2E30]/15 bg-white px-3.5 py-3 text-sm text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 disabled:bg-[#F5F1EA]" />
+            </label>
+          </div>
+          <div className="flex flex-col-reverse gap-2 border-t border-[#2D2E30]/10 bg-[#FFFDF8] p-4 sm:flex-row sm:gap-3 sm:p-5">
+            <button type="button" onClick={onClose} disabled={saving} className="flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-2.5 text-sm font-semibold text-[#2D2E30] transition hover:bg-[#FFF4D8] disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving || Boolean(success)} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${isDelete ? 'bg-[#A34D45] hover:bg-[#8D4039]' : 'bg-[#2D2E30] hover:bg-[#E58C1A]'}`}>{saving ? 'Confirming…' : confirmText}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 function Users() {
   const [users, setUsers] = useState([])
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [deactivateModalOpen, setDeactivateModalOpen] = useState(false)
-  // ask for admin password BEFORE performing delete
-  const [confirmDeletePasswordOpen, setConfirmDeletePasswordOpen] = useState(false)
+  const [secureAction, setSecureAction] = useState(null)
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [addCourseModalOpen, setAddCourseModalOpen] = useState(false)
@@ -21,6 +71,7 @@ function Users() {
   const [modalError, setModalError] = useState("")
   const [modalSuccess, setModalSuccess] = useState("")
   const [copiedEmail, setCopiedEmail] = useState("")
+  const [actionSaving, setActionSaving] = useState(false)
 
   useEffect(() => {
     async function loadUserManagementData() {
@@ -59,52 +110,73 @@ function Users() {
 
   const handleDeleteClick = (userId) => {
     setSelectedUserId(userId)
-    // reset password & modal messages then open password prompt
     setAdminPassword("")
     setModalError("")
     setModalSuccess("")
-    setConfirmDeletePasswordOpen(true)
+    setSecureAction('delete')
   }
 
-  const handleConfirmDelete = async () => {
+  const closeSecureAction = () => {
+    if (actionSaving) return
+    setAdminPassword('')
+    setModalError('')
+    setModalSuccess('')
+    setSecureAction(null)
+    setSelectedUserId(null)
+  }
+
+  const handleConfirmDelete = async (event) => {
+    event.preventDefault()
+    if (!adminPassword.trim()) {
+      setModalError('Please enter your admin password to continue.')
+      return
+    }
     try {
-      // pass adminPassword to server when supported
+      setActionSaving(true)
+      setModalError('')
       await deleteUser(selectedUserId, adminPassword)
-
-      // update UI with success message in the modal
       setUsers((currentUsers) => currentUsers.filter((user) => user.id !== selectedUserId))
-      setModalSuccess("User deleted successfully.")
+      setModalSuccess('User account deleted successfully.')
       setAdminPassword("")
-
-      // close modal after a short delay
       setTimeout(() => {
-        setConfirmDeletePasswordOpen(false)
-        setModalSuccess("")
+        setSecureAction(null)
+        setModalSuccess('')
         setSelectedUserId(null)
       }, 1200)
     } catch (deleteError) {
-      // surface backend error inside the modal
       if (deleteError && deleteError.status === 403) {
-        setModalError("Incorrect admin password. Please try again.")
+        setModalError('Incorrect admin password. Please try again.')
       } else {
-        setModalError(deleteError?.message || "Unable to delete user. Please try again.")
+        setModalError(deleteError?.message || 'Unable to delete user. Please try again.')
       }
+    } finally {
+      setActionSaving(false)
     }
   }
 
   const handleDeactivateClick = (userId) => {
     setSelectedUserId(userId)
-    setDeactivateModalOpen(true)
+    setAdminPassword('')
+    setModalError('')
+    setModalSuccess('')
+    setSecureAction('status')
   }
 
-  const handleConfirmDeactivate = async () => {
+  const handleConfirmDeactivate = async (event) => {
+    event.preventDefault()
+    if (!adminPassword.trim()) {
+      setModalError('Please enter your admin password to continue.')
+      return
+    }
     try {
       const user = users.find((item) => item.id === selectedUserId)
       if (!user) {
         return
       }
 
-      await updateUserStatus(selectedUserId, !user.isActive)
+      setActionSaving(true)
+      setModalError('')
+      await updateUserStatus(selectedUserId, !user.isActive, adminPassword)
       setUsers((currentUsers) =>
         currentUsers.map((item) =>
           item.id === selectedUserId
@@ -112,11 +184,17 @@ function Users() {
             : item
         )
       )
-
-      setDeactivateModalOpen(false)
-      setSelectedUserId(null)
+      setAdminPassword('')
+      setModalSuccess(user.isActive ? 'User account deactivated successfully.' : 'User account activated successfully.')
+      setTimeout(() => {
+        setSecureAction(null)
+        setModalSuccess('')
+        setSelectedUserId(null)
+      }, 1200)
     } catch (statusError) {
-      setError(statusError.message)
+      setModalError(statusError?.status === 403 ? 'Incorrect admin password. Please try again.' : statusError.message)
+    } finally {
+      setActionSaving(false)
     }
   }
 
@@ -311,84 +389,16 @@ function Users() {
         </table>
       </div>
 
-      {/* Prompt for admin password before showing delete confirmation */}
-      {confirmDeletePasswordOpen ? (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
-              <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">Confirm admin password</h2>
-              <button
-                onClick={() => { setAdminPassword(''); setModalError(''); setConfirmDeletePasswordOpen(false); }}
-                className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
-              >
-                <X size={20} className="sm:w-6 sm:h-6" />
-              </button>
-            </div>
-
-            <div className="p-4 sm:p-6">
-              {modalError ? (
-                <div className="mb-3 rounded px-3 py-2 bg-red-50 text-red-700 text-sm">{modalError}</div>
-              ) : null}
-
-              {modalSuccess ? (
-                <div className="mb-3 rounded px-3 py-2 bg-green-50 text-green-700 text-sm">{modalSuccess}</div>
-              ) : null}
-
-              <label className="block text-xs sm:text-sm text-gray-700 font-medium mb-2">Confirm admin password</label>
-              <input
-                type="password"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                placeholder="Enter your admin password to confirm"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
-              />
-            </div>
-
-            <div className="flex gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg">
-              <button
-                onClick={() => { setAdminPassword(''); setModalError(''); setConfirmDeletePasswordOpen(false); }}
-                className="flex-1 px-4 py-2 text-gray-700 font-medium text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  // attempt delete immediately and show success/error in this modal
-                  setModalError('')
-                  if (!adminPassword || adminPassword.trim() === "") {
-                    setModalError('Please enter your admin password to confirm.')
-                    return
-                  }
-
-                  try {
-                    await handleConfirmDelete()
-                  } catch (e) {
-                    // handleConfirmDelete already sets modalError
-                  }
-                }}
-                className="flex-1 px-4 py-2 bg-pink-500 text-white font-medium text-sm rounded-lg hover:bg-pink-600 transition-colors"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      
-
-      <ConfirmationModal
-        isOpen={deactivateModalOpen}
-        title={users.find((user) => user.id === selectedUserId)?.isActive ? 'Deactivate User' : 'Activate User'}
-        message={users.find((user) => user.id === selectedUserId)?.isActive 
-          ? 'Are you sure you want to deactivate this user? They will not be able to access their account.'
-          : 'Are you sure you want to activate this user? They will be able to access their account again.'
-        }
-        confirmText={users.find((user) => user.id === selectedUserId)?.isActive ? 'Deactivate' : 'Activate'}
-        cancelText="Cancel"
-        onConfirm={handleConfirmDeactivate}
-        onCancel={() => setDeactivateModalOpen(false)}
-        isDangerous={users.find((user) => user.id === selectedUserId)?.isActive}
+      <SecureUserActionModal
+        action={secureAction === 'delete' ? 'delete' : secureAction === 'status' && users.find((user) => user.id === selectedUserId)?.isActive ? 'deactivate' : secureAction === 'status' ? 'activate' : null}
+        user={users.find((user) => user.id === selectedUserId)}
+        password={adminPassword}
+        error={modalError}
+        success={modalSuccess}
+        saving={actionSaving}
+        onPasswordChange={setAdminPassword}
+        onConfirm={secureAction === 'delete' ? handleConfirmDelete : handleConfirmDeactivate}
+        onClose={closeSecureAction}
       />
 
       {addCourseModalOpen ? (

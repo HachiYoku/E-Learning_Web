@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, Send, BarChart3 } from 'lucide-react'
+import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, MailCheck, Send, BarChart3 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 function Sidebar({ isOpen = true, onNavigate }) {
@@ -30,6 +30,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
     { label: 'Quiz management', path: '/quizzes', icon: ListChecks },
     { label: 'Manage blog', path: '/blog', icon: FileText },
     { label: 'Manage users', path: '/users', icon: Users },
+    { label: 'Pending verification', path: '/pending-verifications', icon: MailCheck },
     { label: 'Subscribers & enquiries', path: '/contacts', icon: Mail },
     { label: 'Updates & campaigns', path: '/campaigns', icon: Send },
     { label: 'Review payment', path: '/review-payment', icon: CreditCard },
