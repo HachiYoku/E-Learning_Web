@@ -10,16 +10,29 @@ const escapeHtml = (value) => String(value)
   .replace(/\"/g, "&quot;")
   .replace(/'/g, "&#039;");
 
-const buildSubscriptionConfirmation = (name) => `
-  <div style="margin:0;padding:32px 16px;background:#fff9ea;font-family:Arial,sans-serif;color:#2d2e30;">
-    <div style="max-width:600px;margin:0 auto;padding:36px;background:#fffdf8;border:1px solid #f3d9b0;border-radius:24px;">
-      <p style="margin:0 0 12px;color:#c97112;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">Arun Thai Academy</p>
-      <h1 style="margin:0;font-size:28px;line-height:1.25;">You’re on the list, ${escapeHtml(name)}.</h1>
-      <p style="margin:20px 0 0;font-size:16px;line-height:1.65;color:#765f55;">Thank you for keeping in touch. We’ll send you course news, practical Thai learning tips, and helpful updates from Arun Thai Academy.</p>
-      <p style="margin:24px 0 0;font-size:14px;line-height:1.6;color:#765f55;">This is an automated message from our no-reply address, so there is no need to reply.</p>
-      <p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#765f55;">Don’t want these updates? <a href="{{unsubscribeUrl}}" style="color:#c97112;">Unsubscribe</a>.</p>
-    </div>
-  </div>`;
+const buildSubscriptionConfirmation = (name, unsubscribeUrl) => `
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="x-apple-disable-message-reformatting">
+      <title>You're on the Arun Thai list</title>
+    </head>
+    <body style="margin: 0; padding: 0; background: #FFF9EA; font-family: Arial, Helvetica, sans-serif; color: #2D2E30;">
+      <div style="display: none; max-height: 0; overflow: hidden; opacity: 0;">Thai learning tips, course news, and helpful updates are on their way.</div>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #FFF9EA;">
+        <tr><td align="center" style="padding: 32px 16px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; overflow: hidden; border-radius: 20px; background: #FFFFFF; box-shadow: 0 10px 30px rgba(45, 46, 48, 0.08);">
+            <tr><td style="padding: 28px 32px; background: #2D2E30; color: #FFFFFF;"><div style="font-family: Georgia, 'Times New Roman', serif; font-size: 27px; font-style: italic; line-height: 1;">Arun Thai</div><div style="margin-top: 8px; color: #F8C56A; font-size: 11px; font-weight: bold; letter-spacing: 1.7px;">LEARN WITH CONFIDENCE</div></td></tr>
+            <tr><td style="padding: 32px 32px 14px;"><div style="display: inline-block; border-radius: 999px; background: #E9F4EA; color: #4D7C57; padding: 7px 10px; font-size: 11px; font-weight: bold; letter-spacing: 0.8px;">UPDATES CONFIRMED</div><h1 style="margin: 20px 0 12px; font-size: 28px; line-height: 36px; letter-spacing: -0.4px;">You’re on the list.</h1><p style="margin: 0; color: #765F55; font-size: 16px; line-height: 25px;">Hi ${escapeHtml(name)},</p><p style="margin: 14px 0 0; color: #765F55; font-size: 16px; line-height: 25px;">Thank you for keeping in touch. We’ll send you practical Thai learning tips, course news, and helpful updates to support your progress.</p></td></tr>
+            <tr><td style="padding: 10px 32px 32px;"><div style="border-top: 1px solid #EEE7DC; padding-top: 20px; color: #9B867C; font-size: 13px; line-height: 20px;">You can opt out of these updates at any time. <a href="${escapeHtml(unsubscribeUrl)}" style="color: #C97112; font-weight: bold; text-decoration: underline;">Unsubscribe</a>.</div></td></tr>
+          </table>
+          <p style="max-width: 600px; margin: 18px 0 0; color: #9B867C; font-size: 12px; line-height: 18px; text-align: center;">This is an automated notification from Arun Thai. Please do not reply directly to this email.</p>
+        </td></tr>
+      </table>
+    </body>
+  </html>`;
 
 const createContactLead = async (req, res) => {
   try {
@@ -64,8 +77,8 @@ const createContactLead = async (req, res) => {
         const unsubscribeUrl = `${baseUrl}/contacts/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
         await sendEmail(
           normalizedEmail,
-          "You’re on the Arun Thai Academy list",
-          buildSubscriptionConfirmation(lead.name).replace("{{unsubscribeUrl}}", unsubscribeUrl)
+          "You're on the Arun Thai list",
+          buildSubscriptionConfirmation(lead.name, unsubscribeUrl)
         );
         confirmationSent = true;
       } catch (emailError) {
