@@ -35,6 +35,10 @@ const userSchema = new mongoose.Schema(
 
   verificationToken: String,
   verificationTokenExpires: Date,
+  unverifiedExpiresAt: {
+    type: Date,
+    expires: 0,
+  },
 
   resetToken: String,
   resetTokenExpire: Date,
@@ -47,13 +51,6 @@ const userSchema = new mongoose.Schema(
     default: true
     },
   
-  resetToken: {
-      type: String,
-    },
-    resetTokenExpire: {
-      type: Date,
-    },
-
   passwordChangedAt: Date
 
 },

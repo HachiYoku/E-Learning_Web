@@ -27,13 +27,22 @@ export async function fetchUsers() {
   return users.map(normalizeUser);
 }
 
+export async function fetchPendingVerifications() {
+  const users = await apiClient.get("/user/pending-verifications");
+  return users.map((user) => ({
+    ...normalizeUser(user),
+    verificationTokenExpires: user.verificationTokenExpires || null,
+    unverifiedExpiresAt: user.unverifiedExpiresAt || null,
+  }));
+}
+
 export async function deleteUser(id, adminPassword) {
   // Pass adminPassword for server-side re-authentication when supported
   return apiClient.delete(`/user/${id}`, adminPassword ? { adminPassword } : undefined);
 }
 
-export async function updateUserStatus(id, isActive) {
-  return apiClient.put(`/user/${id}/status`, { isActive });
+export async function updateUserStatus(id, isActive, adminPassword) {
+  return apiClient.put(`/user/${id}/status`, { isActive, adminPassword });
 }
 
 export async function updateUserCourseAccess(id, courseIds, adminPassword) {

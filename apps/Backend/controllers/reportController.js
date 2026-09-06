@@ -46,7 +46,7 @@ const exportReportCsv = async (req, res) => {
     let rows;
 
     if (type === "users") {
-      const users = await User.find({ role: "user", ...(createdAt ? { createdAt } : {}) }).select("name email createdAt isActive").lean();
+      const users = await User.find({ role: "user", isVerified: true, ...(createdAt ? { createdAt } : {}) }).select("name email createdAt isActive").lean();
       headers = ["Name", "Email", "Date joined", "Active"];
       rows = users.map((user) => [user.name, user.email, user.createdAt?.toISOString(), user.isActive ? "Yes" : "No"]);
     } else if (type === "courses") {
@@ -80,7 +80,7 @@ const getReportSummary = async (req, res) => {
     const { startDate, endDate } = dateRange;
     const createdAt = startDate || endDate ? { ...(startDate ? { $gte: startDate } : {}), ...(endDate ? { $lte: endDate } : {}) } : undefined;
     const paymentMatch = createdAt ? getEventDateMatch(createdAt) : {};
-    const userMatch = { role: "user", ...(createdAt ? { createdAt } : {}) };
+    const userMatch = { role: "user", isVerified: true, ...(createdAt ? { createdAt } : {}) };
 
     const [paymentSummary, statusCounts, coursePerformance, userCount, publishedCourseCount] = await Promise.all([
       Payment.aggregate([

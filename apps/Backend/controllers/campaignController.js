@@ -78,7 +78,7 @@ const createCampaign = async (req, res) => {
     const systemIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("system:")).map((key) => key.slice(7));
     const contactIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("contact:")).map((key) => key.slice(8));
     const [systemUsers, optedInLeads] = await Promise.all([
-      User.find({ _id: { $in: systemIds }, role: "user" }).select("_id name email"),
+      User.find({ _id: { $in: systemIds }, role: "user", isVerified: true }).select("_id name email"),
       ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("_id name email"),
     ]);
     const selectedRecipients = uniqueRecipientsByEmail([
@@ -128,7 +128,7 @@ const sendCampaign = async (req, res) => {
     const systemIds = selectedRecipients.filter((item) => item.recordType === "system").map((item) => item.recipientId);
     const contactIds = selectedRecipients.filter((item) => item.recordType === "contact").map((item) => item.recipientId);
     const [systemUsers, leads] = await Promise.all([
-      User.find({ _id: { $in: systemIds }, role: "user", isActive: true }).select("name email"),
+      User.find({ _id: { $in: systemIds }, role: "user", isActive: true, isVerified: true }).select("name email"),
       ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("name email"),
     ]);
     const recipients = uniqueRecipientsByEmail([
@@ -199,7 +199,7 @@ const updateDraftCampaign = async (req, res) => {
     const systemIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("system:")).map((key) => key.slice(7));
     const contactIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("contact:")).map((key) => key.slice(8));
     const [systemUsers, optedInLeads] = await Promise.all([
-      User.find({ _id: { $in: systemIds }, role: "user" }).select("_id name email"),
+      User.find({ _id: { $in: systemIds }, role: "user", isVerified: true }).select("_id name email"),
       ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("_id name email"),
     ]);
     const selectedRecipients = uniqueRecipientsByEmail([

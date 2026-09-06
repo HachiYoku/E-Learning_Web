@@ -6,6 +6,7 @@ const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
 const { uploadStream } = require("../services/uploadStream");
 const sendEmail = require("../services/sendEmail");
+const { writeAuditLog } = require("../services/auditLogger");
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -238,6 +239,18 @@ const approvePayment = async (req, res) => {
     payment.rejectReason = undefined;
     await payment.save();
 
+    await writeAuditLog({
+      actorId: req.user.id,
+      action: "payment.approved",
+      targetType: "payment",
+      targetId: payment._id,
+      metadata: {
+        userId: payment.userId,
+        courseId: payment.courseId,
+        amount: payment.amount,
+      },
+    });
+
     const enrollment = await Enrollment.findOneAndUpdate(
       {
         userId: payment.userId,
@@ -333,6 +346,19 @@ const rejectPayment = async (req, res) => {
     payment.reviewedAt = new Date();
     payment.rejectReason = rejectReason.trim();
     await payment.save();
+
+    await writeAuditLog({
+      actorId: req.user.id,
+      action: "payment.rejected",
+      targetType: "payment",
+      targetId: payment._id,
+      metadata: {
+        userId: payment.userId,
+        courseId: payment.courseId,
+        amount: payment.amount,
+        rejectReason: payment.rejectReason,
+      },
+    });
 
     const course = await Course.findById(payment.courseId).select("title");
 
