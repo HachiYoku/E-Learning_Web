@@ -6,6 +6,7 @@ const contactLeadSchema = new mongoose.Schema(
     email: { type: String, required: true, trim: true, lowercase: true, unique: true, index: true },
     message: { type: String, trim: true, maxlength: 2000, default: "" },
     marketingOptIn: { type: Boolean, default: true },
+    isRead: { type: Boolean, default: false, index: true },
   },
   { timestamps: true }
 );

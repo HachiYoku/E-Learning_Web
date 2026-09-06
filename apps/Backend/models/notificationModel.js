@@ -28,6 +28,11 @@ const notificationSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    announcementId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Announcement",
+      index: true,
+    },
     isRead: {
       type: Boolean,
       default: false,
