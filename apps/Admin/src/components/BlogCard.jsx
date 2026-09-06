@@ -15,40 +15,41 @@ function BlogCard({ blog, onDelete, onEdit }) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+    <article className="group overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_12px_30px_-24px_rgba(45,46,48,0.55)] transition-all hover:-translate-y-1 hover:border-[#E58C1A]/35 hover:shadow-[0_20px_38px_-24px_rgba(201,113,18,0.4)]">
       {/* Blog Image */}
-      <div className="relative w-full h-32 sm:h-40 overflow-hidden bg-gray-200">
+      <div className="relative h-40 w-full overflow-hidden bg-[#FFF1CE] sm:h-44">
         <img
           src={image}
           alt={blog.title}
-          className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
+        <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#2D2E30]/45 to-transparent" aria-hidden="true" />
       </div>
 
       {/* Blog Content */}
-      <div className="p-3 sm:p-4">
+      <div className="p-4 sm:p-5">
         {/* Title */}
-        <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-2 line-clamp-2">
+        <h3 className="mb-2 line-clamp-2 text-base font-bold text-[#2D2E30] sm:text-lg">
           {blog.title}
         </h3>
 
         {/* Excerpt */}
-        <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 line-clamp-2">
+        <p className="mb-4 line-clamp-2 text-xs leading-5 text-[#765F55] sm:text-sm sm:leading-6">
           {blog.excerpt}
         </p>
 
         {/* Footer with Author, Date and Actions */}
-        <div className="flex items-center justify-between pt-2 sm:pt-3 border-t border-gray-200 gap-2">
+        <div className="flex items-center justify-between gap-2 border-t border-[#2D2E30]/10 pt-3">
           {/* Author Logo and Date */}
           <div className="flex items-center gap-2 min-w-0">
             <img
               src={authorAvatar}
               alt={blog.author}
-              className="w-4 h-4 sm:w-8 sm:h-8 shrink-0 rounded-full object-cover"
+              className="h-7 w-7 shrink-0 rounded-full border border-[#E58C1A]/25 object-cover sm:h-8 sm:w-8"
             />
             <div className="flex flex-col gap-0 min-w-0">
-              <span className="text-xs font-semibold text-gray-900 truncate">{blog.author}</span>
-              <span className="text-xs text-gray-500">{blog.date}</span>
+              <span className="truncate text-xs font-bold text-[#2D2E30]">{blog.author}</span>
+              <span className="text-xs text-[#765F55]">{blog.date}</span>
             </div>
           </div>
 
@@ -56,14 +57,14 @@ function BlogCard({ blog, onDelete, onEdit }) {
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
               onClick={handleEdit}
-              className="flex items-center justify-center bg-gray-100 text-gray-700 p-1.5 sm:p-2 rounded hover:bg-gray-200 transition-colors"
+              className="flex items-center justify-center rounded-lg bg-[#FFF9EA] p-2 text-[#C97112] transition-colors hover:bg-[#FFF1CE]"
               title="Edit blog"
             >
               <Edit2 size={13} className="sm:w-[14px] sm:h-[14px]" />
             </button>
             <button
               onClick={handleDelete}
-              className="flex items-center justify-center bg-gray-200 text-gray-700 p-1.5 sm:p-2 rounded hover:bg-gray-300 transition-colors"
+              className="flex items-center justify-center rounded-lg bg-[#FFF0EE] p-2 text-[#A34D45] transition-colors hover:bg-[#FFE1DD]"
               title="Delete blog"
             >
               <Trash2 size={13} className="sm:w-[14px] sm:h-[14px]" />
@@ -71,7 +72,7 @@ function BlogCard({ blog, onDelete, onEdit }) {
           </div>
         </div>
       </div>
-    </div>
+    </article>
   )
 }
 

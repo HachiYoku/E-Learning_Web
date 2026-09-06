@@ -130,8 +130,7 @@ function AdminLogin() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full hover:opacity-90 disabled:opacity-70 text-gray-900 font-normal py-2 sm:py-3 rounded-lg transition-opacity text-sm sm:text-base"
-              style={{ backgroundColor: '#F8B2C0' }}
+              className="w-full rounded-lg bg-[#2D2E30] py-2 text-sm font-medium text-white transition-colors hover:bg-[#E58C1A] disabled:cursor-not-allowed disabled:opacity-70 sm:py-3 sm:text-base"
             >
               {loading ? 'Logging in...' : 'Login'}
             </button>

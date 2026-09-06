@@ -124,16 +124,20 @@ function Dashboard() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-6 md:mb-8">Arun Thai Administration Dashboard</h1>
+    <div className="min-h-screen bg-[#FFFDF8] p-4 sm:p-6 md:p-8">
+      <div className="mb-6 sm:mb-8">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112] sm:text-xs">Admin workspace</p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl md:text-4xl">Arun Thai Administration Dashboard</h1>
+        <p className="mt-2 text-sm text-[#765F55] sm:text-base">A quick view of your learning platform.</p>
+      </div>
 
       {error ? (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 md:mb-8">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:mb-8 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 md:gap-6">
         {(loading ? [] : stats).map((stat, index) => {
           const Icon = stat.icon
           return (
@@ -141,60 +145,62 @@ function Dashboard() {
               key={index}
               type="button"
               onClick={() => navigate(stat.path)}
-              className="bg-pink-100 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow text-left focus:outline-none focus:ring-2 focus:ring-pink-300"
+              className="group relative overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white p-4 text-left shadow-[0_12px_30px_-24px_rgba(45,46,48,0.55)] transition-all hover:-translate-y-1 hover:border-[#E58C1A]/35 hover:shadow-[0_20px_38px_-24px_rgba(201,113,18,0.4)] focus:outline-none focus:ring-2 focus:ring-[#E58C1A]/60 sm:p-5"
             >
-              <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <div className="p-2 sm:p-3 bg-pink-200 rounded-lg shrink-0">
-                  <Icon size={20} className="sm:w-6 sm:h-6 text-gray-700" />
+              <div className="absolute inset-x-0 top-0 h-1 bg-[#E58C1A]" />
+              <div className="mb-4 flex items-center gap-3 pt-1 sm:gap-4">
+                <div className="shrink-0 rounded-xl bg-[#FFF1CE] p-2.5 text-[#C97112] transition-colors group-hover:bg-[#E58C1A] group-hover:text-white sm:p-3">
+                  <Icon size={20} className="sm:h-6 sm:w-6" />
                 </div>
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{stat.label}</h3>
+                <h3 className="text-lg font-bold text-[#2D2E30] sm:text-xl">{stat.label}</h3>
               </div>
-              <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">{stat.value}</p>
-              <p className="text-xs sm:text-sm text-gray-600">{stat.lastUpdated}</p>
+              <p className="mb-1 text-3xl font-bold tracking-tight text-[#2D2E30] sm:mb-2 sm:text-4xl">{stat.value}</p>
+              <p className="truncate text-xs text-[#765F55] sm:text-sm">{stat.lastUpdated}</p>
             </button>
           )
         })}
 
         {loading ? (
-          <div className="col-span-full rounded-xl bg-white p-8 text-center text-gray-500 shadow-sm">
+          <div className="col-span-full rounded-2xl border border-[#2D2E30]/10 bg-white p-8 text-center text-[#765F55] shadow-sm">
             Loading dashboard...
           </div>
         ) : null}
       </div>
 
-      <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-pink-100 border-b border-pink-200">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900">Recent Joined:</h2>
+      <div className="overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]">
+        <div className="border-b border-[#E58C1A]/15 bg-[#FFF9EA] px-4 py-4 sm:px-6 sm:py-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C97112]">Community</p>
+          <h2 className="mt-1 text-lg font-bold text-[#2D2E30] sm:text-xl">Recently joined</h2>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="bg-pink-50 border-b border-pink-200">
-                <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Name</th>
-                <th className="hidden sm:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Email</th>
-                <th className="hidden md:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Date created</th>
-                <th className="hidden lg:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Purchased Course</th>
-                <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900">Action</th>
+              <tr className="border-b border-[#2D2E30]/10 bg-[#FFFDF8]">
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#765F55] sm:px-4 md:px-6 sm:py-4 sm:text-sm">Name</th>
+                <th className="hidden px-3 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#765F55] sm:table-cell sm:px-4 md:px-6 sm:py-4 sm:text-sm">Email</th>
+                <th className="hidden px-3 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#765F55] md:table-cell sm:px-4 md:px-6 sm:py-4 sm:text-sm">Date created</th>
+                <th className="hidden px-3 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#765F55] lg:table-cell sm:px-4 md:px-6 sm:py-4 sm:text-sm">Purchased Course</th>
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wide text-[#765F55] sm:px-4 md:px-6 sm:py-4 sm:text-sm">Action</th>
               </tr>
             </thead>
             <tbody>
               {recentUsers.map((user, index) => (
-                <tr key={user.id} className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-pink-50 transition-colors`}>
+                <tr key={user.id} className={`border-b border-[#2D2E30]/8 ${index % 2 === 0 ? 'bg-white' : 'bg-[#FFFDF8]'} transition-colors hover:bg-[#FFF4D8]/45`}>
                   <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                     <div className="flex items-center gap-2 sm:gap-3">
                       <img
                         src={user.avatar}
                         alt={user.name}
-                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shrink-0"
+                        className="h-7 w-7 shrink-0 rounded-full border border-[#E58C1A]/25 object-cover sm:h-8 sm:w-8"
                       />
-                      <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">{user.name}</span>
+                      <span className="truncate text-xs font-semibold text-[#2D2E30] sm:text-sm">{user.name}</span>
                     </div>
                   </td>
-                  <td className="hidden sm:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 truncate">{user.email}</td>
-                  <td className="hidden md:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600">{user.dateCreated}</td>
-                  <td className="hidden lg:table-cell px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600">
-                    <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-pink-100 px-2 py-1 font-semibold text-pink-700">
+                  <td className="hidden truncate px-3 py-3 text-xs text-[#765F55] sm:table-cell sm:px-4 md:px-6 sm:py-4 sm:text-sm">{user.email}</td>
+                  <td className="hidden px-3 py-3 text-xs text-[#765F55] md:table-cell sm:px-4 md:px-6 sm:py-4 sm:text-sm">{user.dateCreated}</td>
+                  <td className="hidden px-3 py-3 text-xs text-[#765F55] lg:table-cell sm:px-4 md:px-6 sm:py-4 sm:text-sm">
+                    <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-[#FFF1CE] px-2 py-1 font-bold text-[#C97112]">
                       {user.purchasedCourses.length}
                     </span>
                   </td>
@@ -202,7 +208,7 @@ function Dashboard() {
                     <div className="flex items-center gap-1 sm:gap-2">
                       <button
                         onClick={() => handleDeleteClick(user.id)}
-                        className="p-1.5 sm:p-2 hover:bg-red-50 rounded-lg transition-colors"
+                        className="rounded-lg p-1.5 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200 sm:p-2"
                         title="Delete user"
                       >
                         <Trash2 size={16} className="sm:w-[18px] sm:h-[18px] text-red-600" />
@@ -227,12 +233,12 @@ function Dashboard() {
       {/* Prompt for admin password before deleting user (shows friendly messages inside modal) */}
       {confirmDeletePasswordOpen ? (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
-              <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">Confirm admin password</h2>
+          <div className="mx-4 w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-[#2D2E30]/10 bg-[#FFF9EA] p-4 sm:p-6">
+              <h2 className="text-base font-bold text-[#2D2E30] sm:text-lg md:text-xl">Confirm admin password</h2>
               <button
                 onClick={() => { setAdminPassword(''); setModalError(''); setConfirmDeletePasswordOpen(false); }}
-                className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                className="shrink-0 rounded-lg p-1 text-[#765F55] transition-colors hover:bg-[#FFF1CE] hover:text-[#2D2E30]"
               >
                 <X size={20} className="sm:w-6 sm:h-6" />
               </button>
@@ -247,20 +253,20 @@ function Dashboard() {
                 <div className="mb-3 rounded px-3 py-2 bg-green-50 text-green-700 text-sm">{modalSuccess}</div>
               ) : null}
 
-              <label className="block text-xs sm:text-sm text-gray-700 font-medium mb-2">Confirm admin password</label>
+              <label className="mb-2 block text-xs font-bold text-[#2D2E30] sm:text-sm">Confirm admin password</label>
               <input
                 type="password"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 placeholder="Enter your admin password to confirm"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+                className="w-full rounded-xl border border-[#2D2E30]/15 px-3 py-2.5 text-sm text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10"
               />
             </div>
 
-            <div className="flex gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+            <div className="flex gap-2 border-t border-[#2D2E30]/10 bg-[#FFFDF8] p-4 sm:gap-3 sm:p-6">
               <button
                 onClick={() => { setAdminPassword(''); setModalError(''); setConfirmDeletePasswordOpen(false); }}
-                className="flex-1 px-4 py-2 text-gray-700 font-medium text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 rounded-xl border border-[#2D2E30]/15 px-4 py-2.5 text-sm font-semibold text-[#2D2E30] transition-colors hover:bg-[#FFF4D8]"
               >
                 Cancel
               </button>
@@ -278,7 +284,7 @@ function Dashboard() {
                     // handleDeleteUser sets modalError
                   }
                 }}
-                className="flex-1 px-4 py-2 bg-pink-500 text-white font-medium text-sm rounded-lg hover:bg-pink-600 transition-colors"
+                className="flex-1 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#E58C1A]"
               >
                 Confirm
               </button>

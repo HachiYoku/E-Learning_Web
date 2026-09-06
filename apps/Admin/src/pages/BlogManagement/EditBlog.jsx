@@ -501,66 +501,71 @@ function EditBlog() {
   };
 
   if (isLoading) {
-    return <div className="flex h-screen items-center justify-center text-gray-600">Loading blog...</div>;
+    return <div className="flex h-screen items-center justify-center bg-[#FFFDF8] text-[#765F55]">Loading blog...</div>;
   }
 
   if (!blog) {
-    return <div className="flex h-screen items-center justify-center text-gray-600">Blog not found</div>;
+    return <div className="flex h-screen items-center justify-center bg-[#FFFDF8] text-[#765F55]">Blog not found</div>;
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="border-b border-gray-200 px-4 py-4 sm:px-6 md:px-8">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center sm:gap-0">
+    <div className="min-h-screen bg-[#FFFDF8]">
+      <div className="border-b border-[#E58C1A]/15 bg-[#FFFDF8] px-4 py-4 sm:px-6 md:px-8"><div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <button
             type="button"
             onClick={handleBackClick}
-            className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 sm:text-base"
+            className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold text-[#765F55] transition-colors hover:bg-[#FFF1CE] hover:text-[#2D2E30] sm:text-base"
           >
             <ArrowLeft size={18} className="sm:h-5 sm:w-5" />
             <span>Back</span>
           </button>
-          <h1 className="flex-1 text-center text-2xl font-bold text-gray-900 sm:text-3xl md:text-4xl">Edit Blog</h1>
+          <div className="flex-1 sm:text-center"><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112]">Content library</p><h1 className="mt-1 text-left text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-center sm:text-3xl">Edit blog post</h1></div>
           <div className="flex w-full items-center gap-2 sm:w-auto">
-            <button onClick={handleSubmit} disabled={isSubmitting} className="flex-1 rounded-lg bg-pink-300 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-pink-400 disabled:opacity-70 sm:flex-none sm:px-6">{isSubmitting ? "Updating..." : "Update"}</button>
+            <button onClick={handleSubmit} disabled={isSubmitting} className="flex-1 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-[#2D2E30]/15 transition-colors hover:bg-[#E58C1A] disabled:opacity-70 sm:flex-none sm:px-6">{isSubmitting ? "Updating..." : "Update"}</button>
           </div>
         </div>
       </div>
 
       <div className="flex flex-col p-4 sm:p-6 md:p-8">
         {error ? (
-          <div className="mx-auto mb-6 max-w-6xl rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mx-auto mb-6 max-w-7xl rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         ) : null}
 
         <div className="order-2 mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 md:gap-8 lg:grid-cols-[minmax(0,1fr)_260px]">
           <div className="lg:col-start-2">
-            <label className="mb-3 block text-xs font-semibold text-gray-900 sm:text-sm md:mb-4">
+            <label className="mb-2 block text-sm font-bold text-[#2D2E30]">
               Blog image :
             </label>
-            <div className="relative flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-5 transition-colors hover:bg-gray-100 group sm:min-h-64 sm:p-6">
+            <p className="mb-4 text-xs leading-5 text-[#765F55]">Choose a clear, engaging image for this story.</p>
+            <div className="group relative flex aspect-[4/3] w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#E58C1A]/40 bg-[radial-gradient(circle_at_top,#FFF1CE,transparent_58%),#FFF9EA] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#E58C1A] hover:shadow-lg hover:shadow-[#E58C1A]/15">
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleImageUpload}
-                  className="absolute inset-0 cursor-pointer opacity-0"
+                  className="absolute inset-0 z-20 cursor-pointer opacity-0"
                 />
               {formData.image ? (
-                <img src={formData.image} alt="Blog preview" className="h-full w-full rounded-lg object-cover" />
+                <>
+                  <img src={formData.image} alt="Blog preview" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#2D2E30]/75 via-[#2D2E30]/20 to-transparent px-4 pb-4 pt-12">
+                    <span className="inline-flex rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-[#2D2E30] shadow-sm">Click to replace image</span>
+                  </div>
+                </>
               ) : (
-                <div className="flex flex-col items-center gap-2 text-gray-500 sm:gap-3">
-                  <svg className="h-6 w-6 sm:h-8 sm:w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex flex-col items-center text-center text-[#765F55]">
+                  <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#C97112] shadow-sm"><svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span className="text-xs font-medium sm:text-sm">Upload</span>
+                  </svg></span>
+                  <span className="text-sm font-bold text-[#2D2E30]">Upload cover image</span><span className="mt-1 text-xs">Click to browse your files</span>
                 </div>
               )}
             </div>
-            <p className="mt-2 text-xs text-gray-500">Image must be 5 MB or smaller.</p>
+            <p className="mt-3 text-xs text-[#765F55]">PNG, JPG, or WEBP &middot; maximum 5 MB</p>
           </div>
 
-          <div className="space-y-4 lg:col-start-1 lg:row-start-1">
+          <div className="space-y-4 rounded-2xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)] sm:p-6 lg:col-start-1 lg:row-start-1">
             <textarea
               ref={titleRef}
               name="title"
@@ -569,7 +574,7 @@ function EditBlog() {
               placeholder="Blog title"
               rows={1}
               aria-label="Blog title"
-              className="w-full min-h-[2.5rem] max-h-40 resize-none overflow-y-auto border-none bg-transparent p-0 text-2xl font-bold leading-tight text-gray-900 outline-none placeholder:text-gray-400 focus:ring-0 sm:min-h-[3rem] sm:text-3xl md:text-4xl"
+              className="min-h-[2.5rem] max-h-40 w-full resize-none overflow-y-auto border-none bg-transparent p-0 text-2xl font-bold leading-tight text-[#2D2E30] outline-none placeholder:text-[#9B867C] focus:ring-0 sm:min-h-[3rem] sm:text-3xl md:text-4xl"
             />
 
             <div
@@ -582,7 +587,7 @@ function EditBlog() {
               onKeyDown={handleEditorKeyDown}
               onInput={handleEditorChange}
               data-placeholder="Start writing your blog..."
-              className="blog-editor w-full overflow-y-auto whitespace-pre-wrap border-t border-gray-200 px-1 py-6 text-base leading-8 text-gray-700 outline-none focus:ring-0 sm:text-lg"
+              className="blog-editor w-full overflow-y-auto whitespace-pre-wrap border-t border-[#2D2E30]/10 px-1 py-6 text-base leading-8 text-[#2D2E30] outline-none focus:ring-0 sm:text-lg"
               style={{ minHeight: "680px" }}
             />
           </div>
@@ -596,7 +601,7 @@ function EditBlog() {
               saveEditorSelection();
             }
           }}
-          className="blog-editor-toolbar order-1 sticky top-0 z-10 mx-auto mb-5 flex w-full max-w-7xl flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-white p-2 text-gray-700 shadow-[0_10px_30px_rgba(17,24,39,0.12)] sm:gap-2"
+          className="blog-editor-toolbar order-1 sticky top-0 z-10 mx-auto mb-5 flex w-full max-w-7xl flex-wrap items-center gap-1 rounded-2xl border border-[#E58C1A]/20 bg-[#FFFDF8] p-2 text-[#2D2E30] shadow-[0_10px_30px_rgba(45,46,48,0.12)] sm:gap-2"
         >
           <button
             onClick={() => applyFormat("bold")}
@@ -791,12 +796,10 @@ function EditBlog() {
 
       {isDiscardDialogOpen ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-bold text-gray-900">Discard unsaved changes?</h2>
-            <p className="mt-2 text-sm text-gray-600">Your edits have not been saved. If you leave now, they will be lost.</p>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"><h2 className="text-lg font-bold text-[#2D2E30]">Discard unsaved changes?</h2>
+            <p className="mt-2 text-sm text-[#765F55]">Your edits have not been saved. If you leave now, they will be lost.</p>
             <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => setIsDiscardDialogOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Keep editing</button>
-              <button type="button" onClick={() => navigate("/blog")} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">Discard changes</button>
+              <button type="button" onClick={() => setIsDiscardDialogOpen(false)} className="rounded-xl border border-[#2D2E30]/15 px-4 py-2 text-sm font-semibold text-[#2D2E30] hover:bg-[#FFF4D8]">Keep editing</button><button type="button" onClick={() => navigate("/blog")} className="rounded-xl bg-[#A34D45] px-4 py-2 text-sm font-semibold text-white hover:bg-[#8D4039]">Discard changes</button>
             </div>
           </div>
         </div>
