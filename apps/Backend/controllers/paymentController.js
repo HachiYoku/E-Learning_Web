@@ -196,6 +196,14 @@ const getAllPayments = async (req, res) => {
   }
 };
 
+const getPendingPaymentCount = async (_req, res) => {
+  try {
+    return res.status(200).json({ count: await Payment.countDocuments({ status: "pending" }) });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 const approvePayment = async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -388,6 +396,7 @@ module.exports = {
   createPayment,
   getMyPayments,
   getAllPayments,
+  getPendingPaymentCount,
   approvePayment,
   rejectPayment,
 };

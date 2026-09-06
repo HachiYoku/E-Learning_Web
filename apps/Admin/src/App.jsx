@@ -68,6 +68,7 @@ function App() {
             <Route path="/pending-verifications" element={<PendingVerifications />} />
             <Route path="/contacts" element={<ContactLeads />} />
             <Route path="/campaigns" element={<Campaigns />} />
+            <Route path="/announcements" element={<Campaigns />} />
             <Route path="/blog" element={<Blogs />} />
             <Route path="/blog/add" element={<AddBlog />} />
             <Route path="/blog/edit/:id" element={<EditBlog />} />
