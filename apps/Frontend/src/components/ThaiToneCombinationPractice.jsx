@@ -75,7 +75,7 @@ function ThaiToneCombinationPractice() {
   return (
     <section className="rounded-[2rem] border border-[#E58C1A]/15 bg-white/80 p-5 shadow-[0_24px_60px_-38px_rgba(80,48,19,0.38)] backdrop-blur-sm sm:p-8 md:rounded-[2.5rem] md:p-10">
       <div className="border-b border-[#2D2E30]/10 pb-7">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Thai foundations · Step 2</p>
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Thai Consonants · Step 2</p>
         <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">Tone combinations</h2>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#765F55] sm:text-base">Choose any consonant, then explore how each tone mark changes the combination.</p>
       </div>
