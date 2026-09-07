@@ -80,10 +80,6 @@ function ThaiToneCombinationPractice() {
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#765F55] sm:text-base">Choose any consonant, then explore how each tone mark changes the combination.</p>
       </div>
 
-      <div className="mt-7 rounded-2xl border border-[#E58C1A]/15 bg-[#FFF9EA] p-5 sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">How to read this chart</p>
-        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#765F55]">Build a standard Thai syllable step by step. The result uses consonant class, vowel length, ending type, and tone mark.</p>
-      </div>
 
       <div className="mt-7">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
