@@ -48,10 +48,38 @@ const thaiConsonants = [
   { letter: "ฮ", name: "ฮอ นกฮูก", pronunciation: "hɔɔ nók-hûuk", word: "นกฮูก", meaning: "owl" },
 ];
 
+const consonantClasses = [
+  {
+    name: "Mid class",
+    thaiName: "อักษรกลาง",
+    description: "9 consonants",
+    letters: ["ก", "จ", "ฎ", "ฏ", "ด", "ต", "บ", "ป", "อ"],
+    styles: "border-[#E58C1A]/25 bg-[#FFF7E8] text-[#A85B09]",
+    selectedStyles: "border-[#E58C1A] bg-[#F8C56A] text-[#2D2E30]",
+  },
+  {
+    name: "High class",
+    thaiName: "อักษรสูง",
+    description: "11 consonants",
+    letters: ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"],
+    styles: "border-[#9D7568]/25 bg-[#FCF1EC] text-[#8A5143]",
+    selectedStyles: "border-[#C87762] bg-[#E9A9A0] text-[#2D2E30]",
+  },
+  {
+    name: "Low class",
+    thaiName: "อักษรต่ำ",
+    description: "24 consonants",
+    letters: ["ค", "ฅ", "ฆ", "ง", "ช", "ซ", "ฌ", "ญ", "ฑ", "ฒ", "ณ", "ท", "ธ", "น", "พ", "ฟ", "ภ", "ม", "ย", "ร", "ล", "ว", "ฬ", "ฮ"],
+    styles: "border-[#6E9C8F]/25 bg-[#EDF8F3] text-[#397A69]",
+    selectedStyles: "border-[#4D927F] bg-[#A9D7C7] text-[#203B33]",
+  },
+];
+
 function ThaiAlphabetPractice() {
   const [selectedLetter, setSelectedLetter] = useState(thaiConsonants[0]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioRef = useRef(null);
+  const selectedCardRef = useRef(null);
 
   useEffect(() => () => {
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
@@ -70,6 +98,20 @@ function ThaiAlphabetPractice() {
   const selectLetter = (consonant) => {
     stopPlayback();
     setSelectedLetter(consonant);
+
+    if (!window.matchMedia("(max-width: 1023px)").matches) return;
+
+    window.requestAnimationFrame(() => {
+      const selectedCard = selectedCardRef.current;
+      if (!selectedCard) return;
+
+      const { top, bottom } = selectedCard.getBoundingClientRect();
+      const isOutsideViewport = top < 0 || bottom > window.innerHeight;
+      if (!isOutsideViewport) return;
+
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      selectedCard.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    });
   };
 
   const speakWithBrowserVoice = () => {
@@ -117,8 +159,46 @@ function ThaiAlphabetPractice() {
         <p className="rounded-full bg-[#FFF1D0] px-3 py-1.5 text-xs font-bold text-[#C97112]">{thaiConsonants.length} letters</p>
       </div>
 
+      <div className="mt-7">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Tone classes</p>
+            <h3 className="mt-2 text-xl font-bold text-[#2D2E30] sm:text-2xl">Thai consonants by class</h3>
+          </div>
+          <p className="text-sm text-[#765F55]">Select a letter to practise it.</p>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          {consonantClasses.map((consonantClass) => (
+            <section key={consonantClass.name} className={`rounded-2xl border p-4 sm:p-5 ${consonantClass.styles}`} aria-labelledby={`${consonantClass.name.replace(" ", "-")}-heading`}>
+              <div className="flex items-baseline justify-between gap-3">
+                <h4 id={`${consonantClass.name.replace(" ", "-")}-heading`} className="text-lg font-bold">{consonantClass.name} <span className="font-medium">({consonantClass.thaiName})</span></h4>
+                <span className="shrink-0 text-xs font-bold opacity-75">{consonantClass.description}</span>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {consonantClass.letters.map((letter) => {
+                  const consonant = thaiConsonants.find((item) => item.letter === letter);
+                  const isSelected = letter === selectedLetter.letter;
+                  return (
+                    <button
+                      key={letter}
+                      type="button"
+                      onClick={() => selectLetter(consonant)}
+                      aria-pressed={isSelected}
+                      aria-label={`${consonant.name}, ${consonantClass.name}`}
+                      className={`flex h-10 w-10 items-center justify-center rounded-lg border text-xl font-bold transition focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20 ${isSelected ? consonantClass.selectedStyles : "border-current/15 bg-white/70 hover:bg-white"}`}
+                    >
+                      {letter}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+
       <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(270px,0.62fr)] lg:items-start">
-        <div className="grid grid-cols-5 gap-2 sm:grid-cols-7 sm:gap-3">
+        <div className="order-2 grid grid-cols-5 gap-2 sm:grid-cols-7 sm:gap-3 lg:order-1">
           {thaiConsonants.map((consonant) => {
             const isSelected = consonant.letter === selectedLetter.letter;
             return (
@@ -136,7 +216,7 @@ function ThaiAlphabetPractice() {
           })}
         </div>
 
-        <div className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-6 sm:p-7">
+        <div ref={selectedCardRef} className="order-1 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-6 sm:p-7 lg:order-2">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Selected letter</p>
           <div className="mt-5 flex items-center gap-5">
             <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-[#2D2E30] text-5xl font-bold text-[#F8C56A]">{selectedLetter.letter}</div>
