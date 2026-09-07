@@ -1,5 +1,5 @@
 const logo = "/Nav/Arun-thai-web-logo.png"
-import { Bell, CheckCheck, Menu, X } from "lucide-react"
+import { Bell, CheckCheck, ChevronDown, Menu, X } from "lucide-react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { useAuth } from "../contexts/AuthContext"
@@ -129,15 +129,18 @@ function Navbar() {
   const location = useLocation()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showPracticeMenu, setShowPracticeMenu] = useState(false)
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
   const { setIsOpen: setNotificationOpen } = useNotification();
 
   const isActive = (path) => location.pathname === path
+  const isPracticeActive = location.pathname === "/practice" || location.pathname.startsWith("/practice/")
 
   useEffect(() => {
     setShowMobileMenu(false)
     setShowProfileMenu(false)
+    setShowPracticeMenu(false)
     setNotificationOpen(false)
   }, [location.pathname, setNotificationOpen])
 
@@ -148,10 +151,17 @@ function Navbar() {
     { label: "Blogs", path: "/blog" },
     { label: "About", path: "/about" },
   ]
+  const practiceItems = [
+    { label: "Thai foundations", path: "/practice/foundations" },
+    { label: "Tone combinations", path: "/practice/tone-combinations" },
+    { label: "Level test", path: null },
+    { label: "Quiz", path: null },
+  ]
 
   const goTo = (path) => {
     navigate(path)
     setShowMobileMenu(false)
+    setShowPracticeMenu(false)
   }
 
   const handleLogout = () => {
@@ -189,16 +199,17 @@ function Navbar() {
 
         {/* Desktop Menu */}
         <ul className="hidden md:flex gap-4 lg:gap-8 font-medium">
-          {navItems.map((item) => (
-            <li
-              key={item.path}
-              onClick={() => goTo(item.path)}
-              className={`cursor-pointer rounded-full px-4 py-2 font-semibold transition-all lg:px-6 ${
-                isActive(item.path) ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#C97112]"
-              }`}
-            >
-              {item.label}
+          {navItems.map((item) => item.label === "Practice" ? (
+            <li key={item.path} className="relative">
+              <button type="button" onClick={() => setShowPracticeMenu((isOpen) => !isOpen)} aria-expanded={showPracticeMenu} className={`flex items-center gap-2.5 rounded-full px-4 py-2 font-semibold transition-all lg:px-6 ${isPracticeActive ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#C97112]"}`}>
+                Practice <ChevronDown className={`h-3.5 w-3.5 transition ${showPracticeMenu ? "rotate-180" : ""}`} aria-hidden="true" />
+              </button>
+              {showPracticeMenu ? <div className="absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[#E58C1A]/20 bg-white p-2 shadow-[0_20px_40px_-24px_rgba(80,48,19,0.45)]">
+                {practiceItems.map((practiceItem) => practiceItem.path ? <button key={practiceItem.label} type="button" onClick={() => goTo(practiceItem.path)} className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${location.pathname === practiceItem.path ? "bg-[#FFF1D0] text-[#C97112]" : "text-[#2D2E30] hover:bg-[#FFF9EA]"}`}>{practiceItem.label}</button> : <div key={practiceItem.label} className="rounded-xl px-3 py-2.5 text-sm font-semibold text-[#765F55] opacity-50">{practiceItem.label} <span className="text-xs">Coming soon</span></div>)}
+              </div> : null}
             </li>
+          ) : (
+            <li key={item.path} onClick={() => goTo(item.path)} className={`cursor-pointer rounded-full px-4 py-2 font-semibold transition-all lg:px-6 ${isActive(item.path) ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#C97112]"}`}>{item.label}</li>
           ))}
         </ul>
 
@@ -312,19 +323,10 @@ function Navbar() {
       {showMobileMenu ? (
         <div className="border-t border-gray-200 bg-white px-4 pb-4 pt-3 shadow-sm md:hidden">
           <div className="space-y-2">
-            {navItems.map((item) => (
-              <button
-                key={item.path}
-                onClick={() => goTo(item.path)}
-                className={`w-full rounded-2xl border px-4 py-3 text-left font-bold transition-colors ${
-                  isActive(item.path)
-                    ? "border-[#2D2E30] bg-[#2D2E30] text-white"
-                    : "border-[#2D2E30]/10 bg-[#FFF9EA] text-[#2D2E30] hover:border-[#E58C1A]/35 hover:bg-[#FFF4D8] hover:text-[#C97112]"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+            {navItems.map((item) => item.label === "Practice" ? <div key={item.path} className="rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-1">
+              <button type="button" onClick={() => setShowPracticeMenu((isOpen) => !isOpen)} aria-expanded={showPracticeMenu} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left font-bold transition-colors ${isPracticeActive ? "bg-[#2D2E30] text-white" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#C97112]"}`}>Practice <ChevronDown className={`h-4 w-4 transition ${showPracticeMenu ? "rotate-180" : ""}`} aria-hidden="true" /></button>
+              {showPracticeMenu ? <div className="space-y-1 px-2 pb-2 pt-1">{practiceItems.map((practiceItem) => practiceItem.path ? <button key={practiceItem.label} type="button" onClick={() => goTo(practiceItem.path)} className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold ${location.pathname === practiceItem.path ? "bg-[#FFF1D0] text-[#C97112]" : "text-[#2D2E30] hover:bg-white"}`}>{practiceItem.label}</button> : <div key={practiceItem.label} className="px-3 py-2 text-sm font-semibold text-[#765F55] opacity-50">{practiceItem.label} <span className="text-xs">Coming soon</span></div>)}</div> : null}
+            </div> : <button key={item.path} onClick={() => goTo(item.path)} className={`w-full rounded-2xl border px-4 py-3 text-left font-bold transition-colors ${isActive(item.path) ? "border-[#2D2E30] bg-[#2D2E30] text-white" : "border-[#2D2E30]/10 bg-[#FFF9EA] text-[#2D2E30] hover:border-[#E58C1A]/35 hover:bg-[#FFF4D8] hover:text-[#C97112]"}`}>{item.label}</button>)}
           </div>
 
           <div className="mt-4 border-t border-gray-200 pt-4">

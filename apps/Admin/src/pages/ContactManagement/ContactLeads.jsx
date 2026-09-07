@@ -1,57 +1,59 @@
-import { Check, Copy, Mail, Send } from "lucide-react";
+import { Check, Copy, Mail, MessageSquare, Search, Send, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchContactLeads } from "../../services/contactLeadService";
 
+const formatDate = (value) => value ? new Date(value).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }) : "—";
+
+function LeadMessageModal({ lead, onClose }) {
+  if (!lead) return null;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D2E30]/60 p-4 backdrop-blur-[2px]" role="presentation">
+    <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-2xl shadow-[#2D2E30]/30" role="dialog" aria-modal="true" aria-labelledby="enquiry-message-title">
+      <div className="flex items-start gap-3 border-b border-[#E58C1A]/15 bg-[#FFF9EA] p-4 sm:p-6"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#FFF1CE] text-[#C97112]"><MessageSquare size={20} /></span><div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C97112]">Customer enquiry</p><h2 id="enquiry-message-title" className="mt-1 truncate text-lg font-bold text-[#2D2E30]">Message from {lead.name || "visitor"}</h2><p className="mt-1 truncate text-sm text-[#765F55]">{lead.email}</p></div><button type="button" onClick={onClose} className="rounded-lg p-1 text-[#765F55] transition hover:bg-white/70 hover:text-[#2D2E30]" aria-label="Close message"><X size={20} /></button></div>
+      <div className="overflow-y-auto p-4 sm:p-6"><div className="whitespace-pre-wrap break-words rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-4 text-sm leading-7 text-[#51443E] sm:p-5">{lead.message || "No message was submitted with this contact."}</div></div>
+      <div className="border-t border-[#2D2E30]/10 bg-[#FFFDF8] p-4 sm:px-6"><button type="button" onClick={onClose} className="w-full rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#E58C1A] sm:w-auto">Done</button></div>
+    </div>
+  </div>;
+}
+
+function LeadStatus({ subscribed }) { return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${subscribed ? "bg-[#EDF8EE] text-[#246B35]" : "bg-[#F5F1EA] text-[#765F55]"}`}>{subscribed ? "Subscribed" : "Enquiry only"}</span>; }
+
 function ContactLeads() {
   const navigate = useNavigate();
-  const [leads, setLeads] = useState([]);
-  const [search, setSearch] = useState("");
-  const [copiedEmail, setCopiedEmail] = useState("");
-  const [error, setError] = useState("");
+  const [leads, setLeads] = useState([]); const [search, setSearch] = useState(""); const [activeFilter, setActiveFilter] = useState("all");
+  const [copiedEmail, setCopiedEmail] = useState(""); const [selectedLead, setSelectedLead] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetchContactLeads().then(setLeads).catch((loadError) => setError(loadError.message));
-  }, []);
-
-  const filteredLeads = useMemo(() => leads.filter((lead) =>
-    lead.name.toLowerCase().includes(search.toLowerCase()) || lead.email.toLowerCase().includes(search.toLowerCase())
-  ), [leads, search]);
+  useEffect(() => { fetchContactLeads().then((items) => { setLeads(items); window.dispatchEvent(new Event('admin-badges-refresh')); }).catch((loadError) => setError(loadError.message)).finally(() => setLoading(false)); }, []);
   const subscribedCount = leads.filter((lead) => lead.marketingOptIn).length;
+  const enquiryCount = leads.filter((lead) => !lead.marketingOptIn).length;
+  const filteredLeads = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return leads.filter((lead) => {
+      const matchesFilter = activeFilter === "all" || (activeFilter === "subscribed" ? lead.marketingOptIn : !lead.marketingOptIn);
+      const matchesSearch = !term || [lead.name, lead.email, lead.message].some((value) => String(value || "").toLowerCase().includes(term));
+      return matchesFilter && matchesSearch;
+    });
+  }, [activeFilter, leads, search]);
+  const copyEmail = async (email) => { try { await navigator.clipboard.writeText(email); setCopiedEmail(email); window.setTimeout(() => setCopiedEmail(""), 1600); } catch { setError("Unable to copy the email address."); } };
+  const FilterButton = ({ id, label, count }) => <button type="button" onClick={() => setActiveFilter(id)} className={`rounded-lg px-3 py-2 text-xs font-bold transition sm:text-sm ${activeFilter === id ? "bg-white text-[#C97112] shadow-sm" : "text-[#765F55] hover:text-[#2D2E30]"}`}>{label} <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${activeFilter === id ? "bg-[#FFF1CE]" : "bg-[#2D2E30]/8"}`}>{count}</span></button>;
 
-  const copyEmail = async (email) => {
-    try {
-      await navigator.clipboard.writeText(email);
-      setCopiedEmail(email);
-      window.setTimeout(() => setCopiedEmail(""), 1600);
-    } catch {
-      setError("Unable to copy the email address.");
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
-      <div className="mb-6 flex flex-col gap-4 md:mb-8 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Marketing contacts</p>
-          <h1 className="mt-2 text-2xl font-bold text-gray-900 sm:text-3xl md:text-4xl">Subscribers & Enquiries</h1>
-          <p className="mt-2 text-sm text-gray-600">People who submitted the Get in touch form. Only opted-in contacts receive updates.</p>
-        </div>
-        <button onClick={() => navigate("/campaigns")} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-pink-600">
-          <Send size={16} /> Send update ({subscribedCount})
-        </button>
-      </div>
-      <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search subscribers and enquiries" className="mb-5 w-full max-w-md rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-100" />
-      {error ? <div className="mb-5 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-      <div className="overflow-x-auto rounded-xl bg-white shadow">
-        <table className="w-full min-w-[740px]">
-          <thead><tr className="border-b border-pink-200 bg-pink-100 text-left text-sm text-gray-900"><th className="px-5 py-4">Name</th><th className="px-5 py-4">Email</th><th className="px-5 py-4">Subscription</th><th className="px-5 py-4">Message</th><th className="px-5 py-4">Submitted</th></tr></thead>
-          <tbody>{filteredLeads.map((lead) => <tr key={lead._id} className="border-b border-gray-100 align-top text-sm text-gray-700"><td className="px-5 py-4 font-semibold text-gray-900">{lead.name}</td><td className="px-5 py-4"><div className="flex items-center gap-2"><Mail size={15} className="text-gray-400" /><span>{lead.email}</span><button onClick={() => copyEmail(lead.email)} className="rounded p-1 text-gray-500 hover:bg-gray-100" title="Copy email">{copiedEmail === lead.email ? <Check size={15} className="text-green-600" /> : <Copy size={15} />}</button></div></td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${lead.marketingOptIn ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{lead.marketingOptIn ? "Subscribed" : "Enquiry only"}</span></td><td className="max-w-xs px-5 py-4 leading-relaxed text-gray-600">{lead.message || "—"}</td><td className="px-5 py-4 text-gray-500">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : ""}</td></tr>)}</tbody>
-        </table>
-        {!filteredLeads.length ? <p className="px-6 py-10 text-center text-sm text-gray-500">No subscribers or enquiries found.</p> : null}
-      </div>
-    </div>
-  );
+  return <main className="min-h-full bg-[#FFFDF8] p-4 sm:p-6 md:p-8">
+    <div className="mb-6 flex flex-col gap-4 md:mb-8 md:flex-row md:items-end md:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112] sm:text-xs">Community inbox</p><h1 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl md:text-4xl">Subscribers & enquiries</h1><p className="mt-2 max-w-2xl text-sm text-[#765F55]">Review contact requests and keep opted-in subscribers ready for your next update.</p></div><button type="button" onClick={() => navigate("/campaigns")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#2D2E30]/15 transition hover:-translate-y-0.5 hover:bg-[#E58C1A]"><Send size={16} /> Send update <span className="rounded-full bg-white/15 px-1.5 py-0.5 text-xs">{subscribedCount}</span></button></div>
+    <ContactSummary total={leads.length} subscribed={subscribedCount} enquiries={enquiryCount} />
+    <section className="overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]">
+      <div className="flex flex-col gap-3 border-b border-[#2D2E30]/10 bg-[#FFF9EA] p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between"><div className="inline-flex w-full rounded-xl bg-[#2D2E30]/5 p-1 sm:w-fit"><FilterButton id="all" label="All" count={leads.length} /><FilterButton id="subscribed" label="Subscribed" count={subscribedCount} /><FilterButton id="enquiries" label="Enquiries" count={enquiryCount} /></div><label className="flex w-full items-center gap-2 rounded-xl border border-[#2D2E30]/12 bg-white px-3 py-2.5 text-[#765F55] transition focus-within:border-[#E58C1A] focus-within:ring-4 focus-within:ring-[#E58C1A]/10 lg:max-w-md"><Search size={17} className="shrink-0 text-[#C97112]" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, email, or message" className="min-w-0 flex-1 bg-transparent text-sm text-[#2D2E30] outline-none placeholder:text-[#9B867C]" aria-label="Search subscribers and enquiries" />{search ? <button type="button" onClick={() => setSearch("")} className="rounded p-0.5 hover:bg-[#FFF4D8]" aria-label="Clear search"><X size={15} /></button> : null}</label></div>
+      {error ? <div className="m-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+      {loading ? <div className="px-6 py-14 text-center text-sm text-[#765F55]">Loading contacts…</div> : !filteredLeads.length ? <EmptyState /> : <><div className="divide-y divide-[#2D2E30]/8 md:hidden">{filteredLeads.map((lead) => <MobileLead key={lead._id} lead={lead} copiedEmail={copiedEmail} copyEmail={copyEmail} onOpen={setSelectedLead} />)}</div><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[860px]"><thead><tr className="border-b border-[#2D2E30]/10 text-left"><th className="px-5 py-4 text-xs font-bold uppercase tracking-wide text-[#765F55]">Contact</th><th className="px-5 py-4 text-xs font-bold uppercase tracking-wide text-[#765F55]">Subscription</th><th className="px-5 py-4 text-xs font-bold uppercase tracking-wide text-[#765F55]">Message</th><th className="px-5 py-4 text-xs font-bold uppercase tracking-wide text-[#765F55]">Submitted</th></tr></thead><tbody>{filteredLeads.map((lead) => <DesktopLead key={lead._id} lead={lead} copiedEmail={copiedEmail} copyEmail={copyEmail} onOpen={setSelectedLead} />)}</tbody></table></div></>}
+    </section><LeadMessageModal lead={selectedLead} onClose={() => setSelectedLead(null)} />
+  </main>;
 }
+
+function ContactSummary({ total, subscribed, enquiries }) { return <section className="mb-5 overflow-hidden rounded-2xl bg-[#2D2E30] shadow-[0_16px_34px_-22px_rgba(45,46,48,0.65)]"><div className="flex items-stretch"><div className="hidden w-44 shrink-0 flex-col justify-center border-r border-white/10 bg-[#E58C1A] px-5 text-white sm:flex"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/75">Contact overview</p><p className="mt-1 text-sm font-semibold leading-5">Your community inbox</p></div><div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-white/10"><SummaryMetric label="All contacts" count={total} icon={<UsersRound size={16} />} /><SummaryMetric label="Subscribers" count={subscribed} icon={<Mail size={16} />} accent="text-[#F8C56A]" /><SummaryMetric label="Enquiries" count={enquiries} icon={<MessageSquare size={16} />} accent="text-[#F8C56A]" /></div></div></section>; }
+function SummaryMetric({ label, count, icon, accent = "text-white" }) { return <div className="min-w-0 px-2 py-4 text-center sm:px-5 sm:py-5"><div className={`flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wide ${accent}`}><span className="hidden sm:inline">{icon}</span><span className="truncate">{label}</span></div><p className="mt-1 text-2xl font-bold text-white sm:mt-2 sm:text-3xl">{count}</p></div>; }
+function EmptyState() { return <div className="px-6 py-14 text-center"><UsersRound size={30} className="mx-auto mb-3 text-[#C97112]" /><p className="font-bold text-[#2D2E30]">No matching contacts</p><p className="mt-1 text-sm text-[#765F55]">Try a different search or filter.</p></div>; }
+function CopyEmailButton({ email, copiedEmail, copyEmail }) { return <button type="button" onClick={() => copyEmail(email)} className="shrink-0 rounded p-1 transition hover:bg-[#FFF4D8]" title="Copy email" aria-label={`Copy ${email}`}>{copiedEmail === email ? <Check size={14} className="text-[#246B35]" /> : <Copy size={14} />}</button>; }
+function MessagePreview({ lead, onOpen }) { return <button type="button" onClick={() => onOpen(lead)} className="group w-full rounded-xl border border-transparent p-2 text-left transition hover:border-[#E58C1A]/25 hover:bg-[#FFF9EA] focus:outline-none focus:ring-2 focus:ring-[#E58C1A]/30"><p className="line-clamp-2 text-sm leading-6 text-[#765F55]">{lead.message || "No message submitted."}</p><span className="mt-1.5 inline-flex items-center gap-1 text-xs font-bold text-[#C97112] opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">Read full message <MessageSquare size={13} /></span></button>; }
+function DesktopLead({ lead, copiedEmail, copyEmail, onOpen }) { return <tr className="align-top transition hover:bg-[#FFF4D8]/35"><td className="px-5 py-4"><p className="font-semibold text-[#2D2E30]">{lead.name || "Visitor"}</p><div className="mt-1 flex max-w-[230px] items-center gap-1.5 text-sm text-[#765F55]"><Mail size={14} className="shrink-0 text-[#C97112]" /><span className="truncate">{lead.email}</span><CopyEmailButton email={lead.email} copiedEmail={copiedEmail} copyEmail={copyEmail} /></div></td><td className="px-5 py-4"><LeadStatus subscribed={lead.marketingOptIn} /></td><td className="w-[42%] px-5 py-4"><MessagePreview lead={lead} onOpen={onOpen} /></td><td className="whitespace-nowrap px-5 py-4 text-sm text-[#765F55]">{formatDate(lead.createdAt)}</td></tr>; }
+function MobileLead({ lead, copiedEmail, copyEmail, onOpen }) { return <article className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-bold text-[#2D2E30]">{lead.name || "Visitor"}</p><div className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-[#765F55]"><Mail size={14} className="shrink-0 text-[#C97112]" /><span className="truncate">{lead.email}</span><CopyEmailButton email={lead.email} copiedEmail={copiedEmail} copyEmail={copyEmail} /></div></div><LeadStatus subscribed={lead.marketingOptIn} /></div><MessagePreview lead={lead} onOpen={onOpen} /><p className="text-xs text-[#9B867C]">Submitted {formatDate(lead.createdAt)}</p></article>; }
 
 export default ContactLeads;

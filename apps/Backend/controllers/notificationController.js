@@ -1,5 +1,7 @@
 const Notification = require("../models/notificationModel");
 const User = require("../models/userModel");
+const Announcement = require("../models/announcementModel");
+const { writeAuditLog } = require("../services/auditLogger");
 
 const getUserNotifications = async (req, res) => {
   try {
@@ -90,10 +92,20 @@ const broadcastNotificationToAllUsers = async (req, res) => {
       return res.status(400).json({ message: "Message is required" });
     }
 
-    const users = await User.find({ role: "user" }).select("_id");
+    const users = await User.find({ role: "user", isVerified: true, isActive: true }).select("_id");
+
+    const announcement = await Announcement.create({
+      title: title.trim(),
+      message: message.trim(),
+      type,
+      link: link?.trim() || "",
+      createdBy: req.user.id,
+      recipientCount: users.length,
+    });
 
     const payload = users.map((user) => ({
       userId: user._id,
+      announcementId: announcement._id,
       type,
       title: title.trim(),
       message: message.trim(),
@@ -101,19 +113,55 @@ const broadcastNotificationToAllUsers = async (req, res) => {
       isRead: false,
     }));
 
-    if (payload.length === 0) {
-      return res.status(200).json({
-        message: "No users found to notify",
-        sentCount: 0,
-      });
+    let result = [];
+    try {
+      if (payload.length) result = await Notification.insertMany(payload);
+    } catch (error) {
+      await Announcement.deleteOne({ _id: announcement._id });
+      throw error;
     }
-
-    const result = await Notification.insertMany(payload);
 
     return res.status(200).json({
       message: "Announcement sent to all users",
       sentCount: result.length,
+      announcement,
     });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const getAnnouncements = async (_req, res) => {
+  try {
+    const announcements = await Announcement.find()
+      .populate("createdBy", "name email")
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+    return res.status(200).json(announcements);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const deleteAnnouncement = async (req, res) => {
+  try {
+    const announcement = await Announcement.findById(req.params.id);
+    if (!announcement) return res.status(404).json({ message: "Announcement not found" });
+    if (String(announcement.createdBy) !== String(req.user.id)) {
+      return res.status(403).json({ message: "You can only delete announcements you created" });
+    }
+
+    await Notification.deleteMany({ announcementId: announcement._id });
+    await announcement.deleteOne();
+    await writeAuditLog({
+      actorId: req.user.id,
+      action: "announcement.deleted",
+      targetType: "announcement",
+      targetId: announcement._id,
+      metadata: { title: announcement.title, recipientCount: announcement.recipientCount },
+    });
+    return res.status(200).json({ message: "Announcement deleted for all recipients" });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -125,4 +173,6 @@ module.exports = {
   markAllNotificationsRead,
   createNotification,
   broadcastNotificationToAllUsers,
+  getAnnouncements,
+  deleteAnnouncement,
 };

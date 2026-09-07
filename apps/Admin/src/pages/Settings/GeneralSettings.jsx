@@ -1,6 +1,5 @@
 import { Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getToken } from '../../api/tokenStorage'
 import { validateFileSize } from '../../utils/fileValidation'
 import { fetchPaymentSettings, updatePaymentSettings } from '../../services/paymentSettingsService'
 
@@ -9,12 +8,6 @@ function GeneralSettings() {
   const [paymentQrFile, setPaymentQrFile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [announcementTitle, setAnnouncementTitle] = useState('')
-  const [announcementMessage, setAnnouncementMessage] = useState('')
-  const [announcementLink, setAnnouncementLink] = useState('')
-  const [announcementType, setAnnouncementType] = useState('system')
-  const [sendingAnnouncement, setSendingAnnouncement] = useState(false)
-  const [announcementStatus, setAnnouncementStatus] = useState('')
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   // modal states for admin password confirmation
@@ -114,48 +107,6 @@ function GeneralSettings() {
     }
   }
 
-  const handleSendAnnouncement = async () => {
-    if (!announcementTitle.trim() || !announcementMessage.trim()) {
-      setAnnouncementStatus('Please provide both a title and message before sending.')
-      return
-    }
-
-    try {
-      setSendingAnnouncement(true)
-      setAnnouncementStatus('')
-      const token = getToken();
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/notifications/broadcast`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token || ''}`,
-        },
-        body: JSON.stringify({
-          title: announcementTitle.trim(),
-          message: announcementMessage.trim(),
-          link: announcementLink.trim(),
-          type: announcementType,
-        }),
-      }).then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data.message || 'Failed to send announcement');
-        }
-        return data;
-      });
-
-      setAnnouncementTitle('')
-      setAnnouncementMessage('')
-      setAnnouncementLink('')
-      setAnnouncementType('system')
-      setAnnouncementStatus(`Announcement sent to ${response.sentCount || 0} users.`)
-    } catch (announcementError) {
-      setAnnouncementStatus(announcementError.message)
-    } finally {
-      setSendingAnnouncement(false)
-    }
-  }
-
   return (
     <div className="p-4 sm:p-6 md:p-8">
       <h1 className="mb-6 text-2xl font-bold text-gray-900 sm:text-3xl">Settings</h1>
@@ -221,80 +172,6 @@ function GeneralSettings() {
             </div>
           </>
         )}
-      </div>
-
-      <div className="mt-8 max-w-3xl rounded-2xl bg-white p-6 shadow-md sm:p-8">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">Send User Announcement</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Create a system notification that will be delivered to all student users.
-          </p>
-        </div>
-
-        {announcementStatus ? (
-          <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${announcementStatus.includes('sent') ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
-            {announcementStatus}
-          </div>
-        ) : null}
-
-        <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">Title</label>
-            <input
-              type="text"
-              value={announcementTitle}
-              onChange={(e) => setAnnouncementTitle(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-pink-400 focus:outline-none"
-              placeholder="New course available"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">Message</label>
-            <textarea
-              value={announcementMessage}
-              onChange={(e) => setAnnouncementMessage(e.target.value)}
-              rows={4}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-pink-400 focus:outline-none"
-              placeholder="Share an update with your students..."
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">Link (optional)</label>
-            <input
-              type="text"
-              value={announcementLink}
-              onChange={(e) => setAnnouncementLink(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-pink-400 focus:outline-none"
-              placeholder="/my-courses"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">Type</label>
-            <select
-              value={announcementType}
-              onChange={(e) => setAnnouncementType(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-pink-400 focus:outline-none"
-            >
-              <option value="system">System</option>
-              <option value="info">Info</option>
-              <option value="course">Course</option>
-            </select>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={handleSendAnnouncement}
-              disabled={sendingAnnouncement}
-              className="rounded-lg bg-pink-300 px-5 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-pink-400 disabled:opacity-60"
-            >
-              {sendingAnnouncement ? 'Sending...' : 'Send to all users'}
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Confirmation modal for admin password */}

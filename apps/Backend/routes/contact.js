@@ -2,7 +2,7 @@ const express = require("express");
 const rateLimit = require("express-rate-limit");
 const validateToken = require("../middleware/authMiddleware");
 const requireAdmin = require("../middleware/adminMiddleware");
-const { createContactLead, unsubscribeContactLead, listContactLeads } = require("../controllers/contactController");
+const { createContactLead, unsubscribeContactLead, listContactLeads, getUnreadContactLeadCount } = require("../controllers/contactController");
 
 const router = express.Router();
 const contactSubmissionLimiter = rateLimit({
@@ -15,6 +15,7 @@ const contactSubmissionLimiter = rateLimit({
 
 router.post("/", contactSubmissionLimiter, createContactLead);
 router.get("/unsubscribe", unsubscribeContactLead);
+router.get("/unread-count", validateToken, requireAdmin, getUnreadContactLeadCount);
 router.get("/", validateToken, requireAdmin, listContactLeads);
 
 module.exports = router;

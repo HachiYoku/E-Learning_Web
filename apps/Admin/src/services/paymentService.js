@@ -35,6 +35,10 @@ export async function fetchAllPayments() {
   return payments.map(normalizePayment);
 }
 
+export function fetchPendingPaymentCount() {
+  return apiClient.get("/payments/pending-count");
+}
+
 export async function approvePayment(paymentId, adminPassword) {
   return apiClient.patch(`/payments/${paymentId}/approve`, { adminPassword });
 }

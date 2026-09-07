@@ -1,11 +1,31 @@
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, MailCheck, Send, BarChart3 } from 'lucide-react'
+import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, MailCheck, Send, BellRing, BarChart3 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { fetchUnreadContactLeadCount } from '../services/contactLeadService'
+import { fetchPendingPaymentCount } from '../services/paymentService'
 
 function Sidebar({ isOpen = true, onNavigate }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { logout } = useAuth()
+  const [badges, setBadges] = useState({ contacts: 0, payments: 0 })
+
+  useEffect(() => {
+    let active = true
+    const loadBadges = async () => {
+      try {
+        const [contacts, payments] = await Promise.all([fetchUnreadContactLeadCount(), fetchPendingPaymentCount()])
+        if (active) setBadges({ contacts: contacts.count || 0, payments: payments.count || 0 })
+      } catch {
+        // A badge must never interfere with navigation when the dashboard API is unavailable.
+      }
+    }
+    loadBadges()
+    const intervalId = window.setInterval(loadBadges, 60000)
+    window.addEventListener('admin-badges-refresh', loadBadges)
+    return () => { active = false; window.clearInterval(intervalId); window.removeEventListener('admin-badges-refresh', loadBadges) }
+  }, [])
 
   const isActive = (path) => {
     if (path === '/') {
@@ -31,9 +51,10 @@ function Sidebar({ isOpen = true, onNavigate }) {
     { label: 'Manage blog', path: '/blog', icon: FileText },
     { label: 'Manage users', path: '/users', icon: Users },
     { label: 'Pending verification', path: '/pending-verifications', icon: MailCheck },
-    { label: 'Subscribers & enquiries', path: '/contacts', icon: Mail },
-    { label: 'Updates & campaigns', path: '/campaigns', icon: Send },
-    { label: 'Review payment', path: '/review-payment', icon: CreditCard },
+    { label: 'Subscribers & enquiries', path: '/contacts', icon: Mail, badge: badges.contacts },
+    { label: 'Email updates', path: '/campaigns', icon: Send },
+    { label: 'User announcements', path: '/announcements', icon: BellRing },
+    { label: 'Review payment', path: '/review-payment', icon: CreditCard, badge: badges.payments },
     { label: 'Reports & insights', path: '/analytics', icon: BarChart3 },
     { label: 'Settings', path: '/settings', icon: Settings },
   ]
@@ -61,7 +82,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
       </div>
 
       {/* Menu Items */}
-      <nav className={`flex-1 space-y-1 overflow-y-auto py-5 ${isOpen ? 'px-3' : 'px-3 md:px-2'}`}>
+      <nav className={`admin-sidebar-scroll flex-1 space-y-1 overflow-y-auto py-5 ${isOpen ? 'px-3' : 'px-3 md:px-2'}`}>
         {isOpen && <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">Workspace</p>}
         {menuItems.map((item) => {
           const Icon = item.icon
@@ -79,6 +100,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
             >
               <Icon size={19} className={`shrink-0 ${active ? 'text-white' : 'text-[#F8C56A] group-hover:text-[#F8C56A]'}`} />
               {isOpen && <span className="truncate">{item.label}</span>}
+              {isOpen && item.badge > 0 ? <span className={`ml-auto inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? 'bg-white text-[#C97112]' : 'bg-[#F8C56A] text-[#2D2E30]'}`}>{item.badge > 99 ? '99+' : item.badge}</span> : null}
             </button>
           )
         })}

@@ -17,6 +17,18 @@ export function sendCampaign(id) {
   return apiClient.post(`/campaigns/${id}/send`, {});
 }
 
+export function sendUserAnnouncement({ title, message, link, type }) {
+  return apiClient.post("/notifications/broadcast", { title, message, link, type });
+}
+
+export function fetchAnnouncements() {
+  return apiClient.get("/notifications/announcements");
+}
+
+export function deleteAnnouncement(id) {
+  return apiClient.delete(`/notifications/announcements/${id}`);
+}
+
 export function deleteDraftCampaign(id) {
   return apiClient.delete(`/campaigns/${id}`);
 }

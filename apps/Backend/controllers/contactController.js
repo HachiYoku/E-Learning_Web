@@ -61,6 +61,7 @@ const createContactLead = async (req, res) => {
         name: normalizedName,
         message: typeof message === "string" ? message.trim() : "",
         marketingOptIn: Boolean(marketingOptIn),
+        isRead: false,
       },
       { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true }
     );
@@ -121,10 +122,19 @@ const unsubscribeContactLead = async (req, res) => {
 const listContactLeads = async (_req, res) => {
   try {
     const leads = await ContactLead.find({}).sort({ createdAt: -1 });
+    await ContactLead.updateMany({ isRead: false }, { $set: { isRead: true } });
     return res.status(200).json(leads);
   } catch (_error) {
     return res.status(500).json({ message: "Unable to load contact leads." });
   }
 };
 
-module.exports = { createContactLead, unsubscribeContactLead, listContactLeads };
+const getUnreadContactLeadCount = async (_req, res) => {
+  try {
+    return res.status(200).json({ count: await ContactLead.countDocuments({ isRead: false }) });
+  } catch (_error) {
+    return res.status(500).json({ message: "Unable to load contact notification count." });
+  }
+};
+
+module.exports = { createContactLead, unsubscribeContactLead, listContactLeads, getUnreadContactLeadCount };

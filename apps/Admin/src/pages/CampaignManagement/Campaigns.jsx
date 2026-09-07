@@ -1,199 +1,93 @@
-import { CheckCircle2, Clock3, ImagePlus, Pencil, Search, Send, Trash2, UsersRound, X } from "lucide-react";
+import { BellRing, Check, CheckCircle2, ChevronDown, Clock3, ImagePlus, Mail, Pencil, Search, Send, Trash2, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import ConfirmationModal from "../../components/ConfirmationModal";
+import { useAuth } from "../../contexts/AuthContext";
 import { fetchContactLeads } from "../../services/contactLeadService";
 import { fetchUsers } from "../../services/userService";
-import { createCampaign, deleteDraftCampaign, fetchCampaigns, sendCampaign, updateDraftCampaign } from "../../services/campaignService";
+import { createCampaign, deleteAnnouncement, deleteDraftCampaign, fetchAnnouncements, fetchCampaigns, sendCampaign, sendUserAnnouncement, updateDraftCampaign } from "../../services/campaignService";
 
 function Campaigns() {
-  const [campaigns, setCampaigns] = useState([]);
-  const [leads, setLeads] = useState([]);
-  const [systemUsers, setSystemUsers] = useState([]);
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState("");
-  const [editingCampaignId, setEditingCampaignId] = useState("");
-  const [draftToDelete, setDraftToDelete] = useState("");
-  const [status, setStatus] = useState({ type: "", message: "" });
-  const [isSaving, setIsSaving] = useState(false);
-  const [sendingId, setSendingId] = useState("");
-  const [deletingId, setDeletingId] = useState("");
-  const [expandedCampaignId, setExpandedCampaignId] = useState("");
-  const [recipientTab, setRecipientTab] = useState("system");
-  const [recipientSearch, setRecipientSearch] = useState("");
+  const { user: currentAdmin } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isAnnouncementPage = location.pathname === "/announcements";
+  const [campaigns, setCampaigns] = useState([]); const [announcements, setAnnouncements] = useState([]); const [leads, setLeads] = useState([]); const [systemUsers, setSystemUsers] = useState([]);
+  const [subject, setSubject] = useState(""); const [message, setMessage] = useState(""); const [link, setLink] = useState(""); const [notificationType, setNotificationType] = useState("system");
+  const [selectedIds, setSelectedIds] = useState([]); const [recipientTab, setRecipientTab] = useState("students"); const [recipientSearch, setRecipientSearch] = useState("");
+  const [imageFile, setImageFile] = useState(null); const [imagePreview, setImagePreview] = useState(""); const [editingId, setEditingId] = useState("");
+  const [status, setStatus] = useState({ type: "", message: "" }); const [saving, setSaving] = useState(false); const [sendingId, setSendingId] = useState(""); const [draftToDelete, setDraftToDelete] = useState(null); const [announcementToDelete, setAnnouncementToDelete] = useState(null); const [expandedId, setExpandedId] = useState("");
 
-  const systemRecipients = useMemo(() => systemUsers.map((user) => ({ id: `system:${user.id}`, name: user.name, email: user.email, type: "System user" })), [systemUsers]);
-  const subscribers = useMemo(() => leads.filter((lead) => lead.marketingOptIn).map((lead) => ({ id: `contact:${lead._id}`, name: lead.name, email: lead.email, type: "Subscriber" })), [leads]);
-  const recipientOptions = useMemo(() => [...systemRecipients, ...subscribers], [systemRecipients, subscribers]);
-  const selectedRecipients = useMemo(() => recipientOptions.filter((recipient) => selectedIds.includes(recipient.id)), [recipientOptions, selectedIds]);
-  const visibleRecipients = useMemo(() => {
-    const recipients = recipientTab === "system" ? systemRecipients : subscribers;
-    const query = recipientSearch.trim().toLowerCase();
-    if (!query) return recipients;
-    return recipients.filter((recipient) => `${recipient.name} ${recipient.email}`.toLowerCase().includes(query));
-  }, [recipientSearch, recipientTab, subscribers, systemRecipients]);
-  const allVisibleSelected = visibleRecipients.length > 0 && visibleRecipients.every((recipient) => selectedIds.includes(recipient.id));
-  const selectedSystemCount = selectedRecipients.filter((recipient) => recipient.id.startsWith("system:")).length;
-  const selectedSubscriberCount = selectedRecipients.length - selectedSystemCount;
-  const deletingDraft = campaigns.find((campaign) => campaign._id === draftToDelete);
-  const getEmailKey = (email) => String(email || "").trim().toLowerCase();
+  const students = useMemo(() => systemUsers.map((item) => ({ id: `system:${item.id}`, name: item.name, email: item.email, group: "Student" })), [systemUsers]);
+  const subscribers = useMemo(() => leads.filter((lead) => lead.marketingOptIn).map((item) => ({ id: `contact:${item._id}`, name: item.name, email: item.email, group: "Subscriber" })), [leads]);
+  const recipients = useMemo(() => [...students, ...subscribers], [students, subscribers]);
+  const selectedRecipients = useMemo(() => recipients.filter((item) => selectedIds.includes(item.id)), [recipients, selectedIds]);
+  const activeRecipients = recipientTab === "students" ? students : subscribers;
+  const visibleRecipients = useMemo(() => { const query = recipientSearch.trim().toLowerCase(); return !query ? activeRecipients : activeRecipients.filter((item) => `${item.name} ${item.email}`.toLowerCase().includes(query)); }, [activeRecipients, recipientSearch]);
+  const allVisibleSelected = Boolean(visibleRecipients.length) && visibleRecipients.every((item) => selectedIds.includes(item.id));
+  const selectedStudentCount = selectedRecipients.filter((item) => item.id.startsWith("system:")).length;
+  const draft = campaigns.find((item) => item._id === draftToDelete);
 
-  const loadCampaigns = async () => {
-    try { setCampaigns(await fetchCampaigns()); } catch (error) { setStatus({ type: "error", message: error.message }); }
-  };
+  const loadCampaigns = async () => { try { setCampaigns(await fetchCampaigns()); } catch (error) { setStatus({ type: "error", message: error.message }); } };
+  const loadAnnouncements = async () => { try { setAnnouncements(await fetchAnnouncements()); } catch (error) { setStatus({ type: "error", message: error.message }); } };
+  useEffect(() => { loadCampaigns(); loadAnnouncements(); fetchContactLeads().then(setLeads).catch((error) => setStatus({ type: "error", message: error.message })); fetchUsers().then(setSystemUsers).catch((error) => setStatus({ type: "error", message: error.message })); }, []);
 
-  useEffect(() => {
-    loadCampaigns();
-    fetchContactLeads().then(setLeads).catch((error) => setStatus({ type: "error", message: error.message }));
-    fetchUsers().then(setSystemUsers).catch((error) => setStatus({ type: "error", message: error.message }));
-  }, []);
-
-  const clearImage = () => { setImageFile(null); setImagePreview(""); };
-  const resetComposer = () => { setSubject(""); setMessage(""); setSelectedIds([]); clearImage(); setEditingCampaignId(""); setRecipientSearch(""); setRecipientTab("system"); };
+  const resetComposer = () => { setSubject(""); setMessage(""); setLink(""); setNotificationType("system"); setSelectedIds([]); setImageFile(null); setImagePreview(""); setEditingId(""); setRecipientSearch(""); setRecipientTab("students"); };
+  const updateImage = (event) => { const file = event.target.files?.[0] || null; setImageFile(file); setImagePreview(file ? URL.createObjectURL(file) : ""); };
   const toggleRecipient = (id) => setSelectedIds((current) => {
     if (current.includes(id)) return current.filter((item) => item !== id);
-    const recipient = recipientOptions.find((item) => item.id === id);
-    if (!recipient) return current;
-    const emailKey = getEmailKey(recipient.email);
-    return [...current.filter((selectedId) => {
-      const selectedRecipient = recipientOptions.find((item) => item.id === selectedId);
-      return getEmailKey(selectedRecipient?.email) !== emailKey;
-    }), id];
+    const target = recipients.find((item) => item.id === id);
+    if (!target) return current;
+    const targetEmail = String(target.email || "").trim().toLowerCase();
+    return [...current.filter((selectedId) => String(recipients.find((item) => item.id === selectedId)?.email || "").trim().toLowerCase() !== targetEmail), id];
   });
-  const selectVisibleRecipients = () => setSelectedIds((current) => {
-    if (allVisibleSelected) return current.filter((id) => !visibleRecipients.some((recipient) => recipient.id === id));
-
+  const toggleVisible = () => setSelectedIds((current) => {
+    if (allVisibleSelected) return current.filter((id) => !visibleRecipients.some((item) => item.id === id));
     return visibleRecipients.reduce((next, recipient) => {
-      const emailKey = getEmailKey(recipient.email);
-      return [...next.filter((selectedId) => {
-        const selectedRecipient = recipientOptions.find((item) => item.id === selectedId);
-        return getEmailKey(selectedRecipient?.email) !== emailKey;
-      }), recipient.id];
+      const email = String(recipient.email || "").trim().toLowerCase();
+      return [...next.filter((id) => String(recipients.find((item) => item.id === id)?.email || "").trim().toLowerCase() !== email), recipient.id];
     }, current);
   });
-  const updateImage = (event) => {
-    const file = event.target.files?.[0] || null;
-    setImageFile(file);
-    setImagePreview(file ? URL.createObjectURL(file) : "");
+  const editDraft = (campaign) => { navigate("/campaigns"); setSubject(campaign.subject); setMessage(campaign.message); setSelectedIds((campaign.selectedRecipients || []).map((item) => `${item.recordType}:${item.recipientId}`)); setImagePreview(campaign.image || ""); setImageFile(null); setEditingId(campaign._id); setStatus({ type: "", message: "" }); window.scrollTo({ top: 0, behavior: "smooth" }); };
+
+  const saveEmailUpdate = async (sendNow) => {
+    if (!subject.trim() || !message.trim() || !selectedIds.length) return setStatus({ type: "error", message: "Add a subject, message, and at least one recipient." });
+    setSaving(true); setStatus({ type: "", message: "" });
+    try { const payload = { subject, message, recipientIds: selectedIds, imageFile }; const campaign = editingId ? await updateDraftCampaign(editingId, payload) : await createCampaign(payload); if (sendNow) { setSendingId(campaign._id); const sent = await sendCampaign(campaign._id); setStatus({ type: "success", message: `Email update sent to ${sent.sentCount} recipients.` }); } else setStatus({ type: "success", message: editingId ? "Draft updated." : "Draft saved." }); resetComposer(); await loadCampaigns(); } catch (error) { setStatus({ type: "error", message: error.message || "Unable to save the email update." }); } finally { setSaving(false); setSendingId(""); }
   };
-
-  const startEditingDraft = (campaign) => {
-    setSubject(campaign.subject);
-    setMessage(campaign.message);
-    setSelectedIds((campaign.selectedRecipients || []).map((recipient) => `${recipient.recordType}:${recipient.recipientId}`));
-    setImageFile(null);
-    setImagePreview(campaign.image || "");
-    setEditingCampaignId(campaign._id);
-    setRecipientSearch("");
-    setRecipientTab("system");
-    setStatus({ type: "", message: "" });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const sendAnnouncement = async () => {
+    if (!subject.trim() || !message.trim()) return setStatus({ type: "error", message: "Add a title and message before sending." });
+    setSaving(true); setStatus({ type: "", message: "" });
+    try { const response = await sendUserAnnouncement({ title: subject.trim(), message: message.trim(), link: link.trim(), type: notificationType }); setStatus({ type: "success", message: `Announcement sent to ${response.sentCount || 0} active students.` }); resetComposer(); await loadAnnouncements(); } catch (error) { setStatus({ type: "error", message: error.message || "Unable to send the announcement." }); } finally { setSaving(false); }
   };
+  const sendDraft = async (id) => { setSendingId(id); try { const sent = await sendCampaign(id); setStatus({ type: "success", message: `Email update sent to ${sent.sentCount} recipients.` }); await loadCampaigns(); } catch (error) { setStatus({ type: "error", message: error.message }); } finally { setSendingId(""); } };
+  const deleteDraft = async () => { if (!draftToDelete) return; try { await deleteDraftCampaign(draftToDelete); setStatus({ type: "success", message: "Draft deleted." }); await loadCampaigns(); } catch (error) { setStatus({ type: "error", message: error.message }); } finally { setDraftToDelete(null); } };
+  const deleteAnnouncementForEveryone = async () => { if (!announcementToDelete) return; try { const response = await deleteAnnouncement(announcementToDelete._id); setAnnouncements((current) => current.filter((item) => item._id !== announcementToDelete._id)); setStatus({ type: "success", message: response.message }); } catch (error) { setStatus({ type: "error", message: error.message }); } finally { setAnnouncementToDelete(null); } };
 
-  const saveCampaign = async (sendNow) => {
-    if (!subject.trim() || !message.trim() || !selectedIds.length) {
-      setStatus({ type: "error", message: "Add a subject, message, and at least one recipient." });
-      return;
-    }
-    setIsSaving(true); setStatus({ type: "", message: "" });
-    try {
-      const payload = { subject, message, recipientIds: selectedIds, imageFile };
-      const campaign = editingCampaignId ? await updateDraftCampaign(editingCampaignId, payload) : await createCampaign(payload);
-      if (sendNow) {
-        setSendingId(campaign._id);
-        const sentCampaign = await sendCampaign(campaign._id);
-        setStatus({ type: "success", message: `Campaign ${sentCampaign.status === "sent" ? "sent" : "completed with delivery issues"}.` });
-      } else {
-        setStatus({ type: "success", message: editingCampaignId ? "Draft updated successfully." : "Draft saved successfully." });
-      }
-      resetComposer();
-      await loadCampaigns();
-    } catch (error) { setStatus({ type: "error", message: error.message || "Unable to save the campaign." }); }
-    finally { setIsSaving(false); setSendingId(""); }
-  };
-
-  const handleSendDraft = async (id) => {
-    setSendingId(id); setStatus({ type: "", message: "" });
-    try { const campaign = await sendCampaign(id); setStatus({ type: "success", message: `Campaign sent to ${campaign.sentCount} recipients.` }); await loadCampaigns(); }
-    catch (error) { setStatus({ type: "error", message: error.message || "Unable to send the campaign." }); }
-    finally { setSendingId(""); }
-  };
-
-  const confirmDeleteDraft = async () => {
-    if (!draftToDelete) return;
-    setDeletingId(draftToDelete);
-    try { const response = await deleteDraftCampaign(draftToDelete); setStatus({ type: "success", message: response.message }); await loadCampaigns(); }
-    catch (error) { setStatus({ type: "error", message: error.message || "Unable to delete the draft." }); }
-    finally { setDeletingId(""); setDraftToDelete(""); }
-  };
-
-  const RecipientList = ({ recipients }) => recipients.length ? (
-    <>
-      {recipients.map((recipient) => (
-        <label key={recipient.id} className="flex cursor-pointer items-center gap-3 rounded p-2 hover:bg-gray-50">
-          <input type="checkbox" checked={selectedIds.includes(recipient.id)} onChange={() => toggleRecipient(recipient.id)} className="h-4 w-4 rounded text-pink-600 focus:ring-pink-500" />
-          <span className="min-w-0"><span className="block text-sm font-medium text-gray-800">{recipient.name}</span><span className="block truncate text-xs text-gray-500">{recipient.email}</span></span>
-        </label>
-      ))}
-    </>
-  ) : null;
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
-      <div className="mb-6 md:mb-8"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Email marketing</p><h1 className="mt-2 text-2xl font-bold text-gray-900 sm:text-3xl md:text-4xl">Updates & Campaigns</h1><p className="mt-2 text-sm text-gray-600">Choose recipients, attach an image, edit saved drafts, and retain your campaign history.</p></div>
-      <div className="grid gap-6 xl:grid-cols-[minmax(380px,0.9fr)_minmax(0,1.1fr)]">
-        <form onSubmit={(event) => { event.preventDefault(); saveCampaign(false); }} className="rounded-xl bg-white p-5 shadow sm:p-6">
-          <div className="flex items-center justify-between"><h2 className="text-lg font-bold text-gray-900">{editingCampaignId ? "Edit draft" : "Compose an update"}</h2>{editingCampaignId ? <button type="button" onClick={resetComposer} className="text-sm font-semibold text-pink-600 hover:text-pink-700">Cancel editing</button> : null}</div>
-          <label className="mt-5 block text-sm font-semibold text-gray-800">Subject<input required value={subject} onChange={(event) => setSubject(event.target.value)} className="mt-1.5 w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-100" /></label>
-          <label className="mt-4 block text-sm font-semibold text-gray-800">Message<textarea required rows="6" value={message} onChange={(event) => setMessage(event.target.value)} className="mt-1.5 w-full resize-y rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-100" /></label>
-          <div className="mt-5">
-            <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-gray-800">Recipients</p><p className="mt-0.5 text-xs text-gray-500">{selectedRecipients.length} selected · {selectedSystemCount} system users · {selectedSubscriberCount} subscribers</p></div><button type="button" onClick={() => setSelectedIds([])} disabled={!selectedRecipients.length} className="text-xs font-semibold text-pink-600 disabled:text-gray-400">Clear selection</button></div>
-            {selectedRecipients.length ? <div className="mt-2 flex flex-wrap gap-2 rounded-lg border border-pink-100 bg-pink-50 p-2">{selectedRecipients.slice(0, 3).map((recipient) => <button type="button" key={recipient.id} onClick={() => toggleRecipient(recipient.id)} className="inline-flex max-w-full items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm"><span className="truncate">{recipient.name}</span><X className="shrink-0" size={12} /></button>)}{selectedRecipients.length > 3 ? <span className="px-2 py-1 text-xs font-semibold text-pink-700">+{selectedRecipients.length - 3} more selected</span> : null}</div> : <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">Search and choose the people who should receive this update.</p>}
-            <div className="mt-3 overflow-hidden rounded-lg border border-gray-200">
-              <div className="flex border-b border-gray-200 bg-gray-50 p-1"><button type="button" onClick={() => setRecipientTab("system")} className={`flex-1 rounded-md px-3 py-2 text-xs font-bold ${recipientTab === "system" ? "bg-white text-pink-600 shadow-sm" : "text-gray-500"}`}>System users ({systemRecipients.length})</button><button type="button" onClick={() => setRecipientTab("subscribers")} className={`flex-1 rounded-md px-3 py-2 text-xs font-bold ${recipientTab === "subscribers" ? "bg-white text-pink-600 shadow-sm" : "text-gray-500"}`}>Subscribers ({subscribers.length})</button></div>
-              <div className="m-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 transition focus-within:border-pink-500 focus-within:ring-2 focus-within:ring-pink-100"><Search size={17} className="shrink-0 text-gray-400" aria-hidden="true" /><input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder={`Search ${recipientTab === "system" ? "system users" : "subscribers"}`} aria-label={`Search ${recipientTab === "system" ? "system users" : "subscribers"} by name or email`} className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400" />{recipientSearch ? <button type="button" onClick={() => setRecipientSearch("")} className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700" aria-label="Clear recipient search"><X size={15} /></button> : null}</div>
-              <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2"><span className="text-xs text-gray-500">{visibleRecipients.length} matching</span><button type="button" onClick={selectVisibleRecipients} disabled={!visibleRecipients.length} className="text-xs font-bold text-pink-600 disabled:text-gray-400">{allVisibleSelected ? "Clear filtered" : "Select filtered"}</button></div>
-              <div className="max-h-52 overflow-y-auto p-2"><RecipientList recipients={visibleRecipients} />{!visibleRecipients.length ? <p className="p-4 text-center text-sm text-gray-500">No matching {recipientTab === "system" ? "system users" : "subscribers"}.</p> : null}</div>
-            </div>
-          </div>
-          <div className="mt-5"><p className="text-sm font-semibold text-gray-800">Campaign image <span className="font-normal text-gray-500">(optional, max 5 MB)</span></p><label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-600"><ImagePlus size={18} />Upload image<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={updateImage} className="hidden" /></label>{imagePreview ? <div className="relative mt-3 max-w-full overflow-hidden rounded-lg border border-gray-200" style={{ width: 300 }}><img src={imagePreview} alt="Campaign preview" className="h-36 w-full object-cover" /><button type="button" onClick={clearImage} className="absolute right-2 top-2 rounded-full bg-white p-1 text-gray-600 shadow"><X size={16} /></button></div> : null}</div>
-          {status.message ? <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${status.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>{status.message}</p> : null}
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row"><button disabled={isSaving} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 disabled:opacity-60">{editingCampaignId ? "Save changes" : "Save draft"}</button><button type="button" disabled={isSaving} onClick={() => saveCampaign(true)} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-pink-600 disabled:opacity-60"><Send size={16} />Send now</button></div>
-        </form>
-        <section className="rounded-xl bg-white p-5 shadow sm:p-6">
-          <div className="flex items-center justify-between border-b border-gray-200 pb-5">
-            <div><h2 className="text-lg font-bold text-gray-900">Campaign history</h2><p className="mt-1 text-sm text-gray-600">Drafts and sent-message records.</p></div>
-            <Clock3 size={20} className="text-gray-400" />
-          </div>
-          <div className="mt-5 space-y-3">
-            {campaigns.map((campaign) => {
-              const expanded = expandedCampaignId === campaign._id;
-              const recipientCount = campaign.recipientCount || campaign.selectedRecipients?.length || 0;
-              return (
-                <article key={campaign._id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-bold text-gray-900">{campaign.subject}</h3><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${campaign.status === "sent" ? "bg-green-100 text-green-700" : campaign.status === "draft" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>{campaign.status}</span></div>
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500"><span className="inline-flex items-center gap-1"><UsersRound size={14} />{recipientCount} recipients</span><span className="inline-flex items-center gap-1"><CheckCircle2 size={14} />{campaign.sentCount || 0} sent</span><span>{campaign.sentAt ? `Sent ${new Date(campaign.sentAt).toLocaleString()}` : `Saved ${new Date(campaign.createdAt).toLocaleString()}`}</span></div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => setExpandedCampaignId(expanded ? "" : campaign._id)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">{expanded ? "Hide details" : "View details"}</button>
-                      {campaign.status === "draft" ? <><button onClick={() => startEditingDraft(campaign)} className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"><Pencil size={15} />Edit</button><button onClick={() => handleSendDraft(campaign._id)} disabled={sendingId === campaign._id} className="inline-flex items-center gap-1 rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"><Send size={15} />{sendingId === campaign._id ? "Sending..." : "Send"}</button><button onClick={() => setDraftToDelete(campaign._id)} className="rounded-lg border border-red-200 p-2 text-red-600"><Trash2 size={16} /></button></> : null}
-                    </div>
-                  </div>
-                  {expanded ? <div className="border-t border-gray-100 bg-gray-50 p-4"><div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">{campaign.image ? <img src={campaign.image} alt="Campaign" className="h-28 max-w-full rounded-lg object-cover" style={{ width: 300 }} /> : null}<p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">{campaign.message}</p></div>{campaign.selectedRecipients?.length ? <details className="mt-4 rounded-lg bg-white px-3 py-2 text-xs text-gray-600"><summary className="cursor-pointer font-semibold text-gray-700">View selected recipients ({campaign.selectedRecipients.length})</summary><div className="mt-2 space-y-1">{campaign.selectedRecipients.map((recipient) => <p key={`${recipient.recordType}-${recipient.recipientId}`}><span className="font-medium">{recipient.name || "Recipient"}</span> · {recipient.email || "email unavailable"} <span className="text-gray-400">({recipient.recordType === "system" ? "System user" : "Subscriber"})</span></p>)}</div></details> : null}</div> : null}
-                </article>
-              );
-            })}
-            {!campaigns.length ? <p className="p-8 text-center text-sm text-gray-500">No campaigns yet. Create your first update.</p> : null}
-          </div>
-        </section>
-      </div>
-      <ConfirmationModal isOpen={Boolean(draftToDelete)} title="Delete draft" message={`Delete “${deletingDraft?.subject || "this draft"}”? This cannot be undone.`} confirmText={deletingId ? "Deleting..." : "Delete draft"} onConfirm={confirmDeleteDraft} onCancel={() => setDraftToDelete("")} isDangerous />
+  return <main className="min-h-full bg-[#FFFDF8] p-4 sm:p-6 md:p-8">
+    <header className="mb-6 flex flex-col gap-4 lg:mb-8 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112] sm:text-xs">Community communications</p><h1 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl md:text-4xl">{isAnnouncementPage ? "User announcements" : "Email updates"}</h1><p className="mt-2 max-w-2xl text-sm text-[#765F55]">{isAnnouncementPage ? "Publish and manage in-app messages for your active students." : "Create targeted email updates and manage your draft and delivery history."}</p></div><div className="inline-flex w-full rounded-xl border border-[#2D2E30]/10 bg-white p-1 shadow-sm sm:w-auto"><ModeButton active={!isAnnouncementPage} onClick={() => { setStatus({ type: "", message: "" }); navigate("/campaigns"); }} icon={<Mail size={16} />} label="Email updates" /><ModeButton active={isAnnouncementPage} dark onClick={() => { setStatus({ type: "", message: "" }); navigate("/announcements"); }} icon={<BellRing size={16} />} label="Announcements" /></div></header>
+    <div className="grid gap-6 xl:grid-cols-[minmax(420px,0.9fr)_minmax(0,1.1fr)]">
+      {!isAnnouncementPage ? <EmailComposer subject={subject} setSubject={setSubject} message={message} setMessage={setMessage} recipients={recipients} selectedRecipients={selectedRecipients} selectedIds={selectedIds} selectedStudentCount={selectedStudentCount} recipientTab={recipientTab} setRecipientTab={setRecipientTab} recipientSearch={recipientSearch} setRecipientSearch={setRecipientSearch} visibleRecipients={visibleRecipients} allVisibleSelected={allVisibleSelected} toggleRecipient={toggleRecipient} toggleVisible={toggleVisible} imagePreview={imagePreview} updateImage={updateImage} clearImage={() => { setImageFile(null); setImagePreview(""); }} editing={Boolean(editingId)} cancelEdit={resetComposer} status={status} saving={saving} onSave={() => saveEmailUpdate(false)} onSend={() => saveEmailUpdate(true)} /> : <AnnouncementComposer subject={subject} setSubject={setSubject} message={message} setMessage={setMessage} link={link} setLink={setLink} type={notificationType} setType={setNotificationType} recipientCount={students.length} status={status} saving={saving} onSend={sendAnnouncement} />}
+      <HistoryPanel kind={isAnnouncementPage ? "announcement" : "email"} campaigns={campaigns} announcements={announcements} currentAdmin={currentAdmin} expandedId={expandedId} setExpandedId={setExpandedId} editDraft={editDraft} sendDraft={sendDraft} sendingId={sendingId} setDraftToDelete={setDraftToDelete} setAnnouncementToDelete={setAnnouncementToDelete} />
     </div>
-  );
+    <ConfirmationModal isOpen={Boolean(draftToDelete)} title="Delete draft" message={`Delete “${draft?.subject || "this draft"}”? This cannot be undone.`} confirmText="Delete draft" onConfirm={deleteDraft} onCancel={() => setDraftToDelete(null)} isDangerous />
+    <ConfirmationModal isOpen={Boolean(announcementToDelete)} title="Delete announcement" message={`Delete “${announcementToDelete?.title || "this announcement"}” for all recipients? It will disappear from student notification centres and cannot be undone.`} confirmText="Delete for everyone" onConfirm={deleteAnnouncementForEveryone} onCancel={() => setAnnouncementToDelete(null)} isDangerous />
+  </main>;
 }
+
+function ModeButton({ active, dark, onClick, icon, label }) { return <button type="button" onClick={onClick} className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition sm:flex-none ${active ? (dark ? "bg-[#2D2E30] text-white shadow-sm" : "bg-[#FFF1CE] text-[#A86710]") : "text-[#765F55] hover:bg-[#FFF9EA] hover:text-[#2D2E30]"}`}>{icon}{label}</button>; }
+function Field({ label, children, hint }) { return <label className="block text-sm font-bold text-[#2D2E30]"><span>{label} {hint ? <span className="font-normal text-[#9B867C]">{hint}</span> : null}</span>{children}</label>; }
+function Notice({ status }) { return status.message ? <p className={`rounded-xl px-3.5 py-3 text-sm ${status.type === "success" ? "border border-[#7AB589]/30 bg-[#EDF8EE] text-[#246B35]" : "border border-red-200 bg-red-50 text-red-700"}`}>{status.message}</p> : null; }
+const inputClass = "mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-3.5 py-3 text-sm text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10";
+
+function EmailComposer(props) { const { subject, setSubject, message, setMessage, selectedRecipients, selectedIds, selectedStudentCount, recipientTab, setRecipientTab, recipientSearch, setRecipientSearch, visibleRecipients, allVisibleSelected, toggleRecipient, toggleVisible, imagePreview, updateImage, clearImage, editing, cancelEdit, status, saving, onSave, onSend } = props; return <form onSubmit={(event) => { event.preventDefault(); onSave(); }} className="rounded-2xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_16px_35px_-28px_rgba(45,46,48,0.48)] sm:p-6"><div className="flex items-start justify-between gap-3 border-b border-[#E58C1A]/15 pb-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#FFF1CE] text-[#C97112]"><Mail size={20} /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C97112]">Email delivery</p><h2 className="mt-1 text-lg font-bold text-[#2D2E30]">{editing ? "Edit email draft" : "Compose an email update"}</h2></div></div>{editing ? <button type="button" onClick={cancelEdit} className="text-xs font-bold text-[#C97112] hover:underline">Cancel edit</button> : null}</div><div className="mt-5 space-y-4"><Field label="Subject"><input required value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="A fresh update from Arun Thai" className={inputClass} /></Field><Field label="Message"><textarea required rows="6" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write your update for learners..." className={`${inputClass} resize-y`} /></Field></div><AudiencePicker selectedRecipients={selectedRecipients} selectedIds={selectedIds} selectedStudentCount={selectedStudentCount} recipientTab={recipientTab} setRecipientTab={setRecipientTab} recipientSearch={recipientSearch} setRecipientSearch={setRecipientSearch} visibleRecipients={visibleRecipients} allVisibleSelected={allVisibleSelected} toggleRecipient={toggleRecipient} toggleVisible={toggleVisible} /><div className="mt-5"><Field label="Campaign image" hint="(optional)"><label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-[#E58C1A]/35 bg-[#FFF9EA] px-4 py-4 text-sm font-bold text-[#A86710] transition hover:bg-[#FFF1CE]"><ImagePlus size={18} /> Add image<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={updateImage} className="hidden" /></label></Field>{imagePreview ? <div className="relative mt-3 overflow-hidden rounded-xl border border-[#2D2E30]/10"><img src={imagePreview} alt="Campaign preview" className="h-40 w-full object-cover" /><button type="button" onClick={clearImage} className="absolute right-2 top-2 rounded-full bg-white p-1.5 text-[#765F55] shadow"><X size={15} /></button></div> : null}</div><div className="mt-5"><Notice status={status} /></div><div className="mt-5 flex flex-col-reverse gap-2 border-t border-[#2D2E30]/10 pt-5 sm:flex-row"><button disabled={saving} className="flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#FFF4D8] disabled:opacity-60">{editing ? "Save changes" : "Save draft"}</button><button type="button" disabled={saving} onClick={onSend} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A] disabled:opacity-60"><Send size={16} />{saving ? "Working..." : "Send email"}</button></div></form>; }
+function AudiencePicker({ selectedRecipients, selectedIds, selectedStudentCount, recipientTab, setRecipientTab, recipientSearch, setRecipientSearch, visibleRecipients, allVisibleSelected, toggleRecipient, toggleVisible }) { return <div className="mt-5"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-bold text-[#2D2E30]">Audience</p><p className="mt-0.5 text-xs text-[#765F55]">{selectedRecipients.length} selected · {selectedStudentCount} students · {selectedRecipients.length - selectedStudentCount} subscribers</p></div><button type="button" onClick={() => selectedRecipients.forEach((item) => toggleRecipient(item.id))} disabled={!selectedRecipients.length} className="text-xs font-bold text-[#C97112] disabled:text-[#9B867C]">Clear</button></div>{selectedRecipients.length ? <div className="mt-3 flex flex-wrap gap-2">{selectedRecipients.slice(0, 4).map((item) => <button type="button" key={item.id} onClick={() => toggleRecipient(item.id)} className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#E58C1A]/25 bg-[#FFF9EA] px-2.5 py-1 text-xs font-semibold text-[#765F55]"><span className="max-w-32 truncate">{item.name}</span><X size={12} /></button>)}{selectedRecipients.length > 4 ? <span className="px-2 py-1 text-xs font-bold text-[#A86710]">+{selectedRecipients.length - 4} more</span> : null}</div> : <p className="mt-3 rounded-xl bg-[#FFF9EA] px-3 py-2.5 text-xs leading-5 text-[#765F55]">Select one or more students or subscribers below.</p>}<div className="mt-3 overflow-hidden rounded-xl border border-[#2D2E30]/10"><div className="flex border-b border-[#2D2E30]/10 bg-[#FFFDF8] p-1"><button type="button" onClick={() => setRecipientTab("students")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold ${recipientTab === "students" ? "bg-white text-[#C97112] shadow-sm" : "text-[#765F55]"}`}>Students</button><button type="button" onClick={() => setRecipientTab("subscribers")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold ${recipientTab === "subscribers" ? "bg-white text-[#C97112] shadow-sm" : "text-[#765F55]"}`}>Subscribers</button></div><label className="m-3 flex items-center gap-2 rounded-lg border border-[#2D2E30]/12 bg-white px-3 py-2.5"><Search size={16} className="text-[#C97112]" /><input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Search audience" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />{recipientSearch ? <button type="button" onClick={() => setRecipientSearch("")}><X size={15} /></button> : null}</label><div className="flex items-center justify-between border-b border-[#2D2E30]/8 px-3 py-2"><span className="text-xs text-[#765F55]">{visibleRecipients.length} matches</span><button type="button" onClick={toggleVisible} className="text-xs font-bold text-[#C97112]">{allVisibleSelected ? "Clear visible" : "Select visible"}</button></div><div className="max-h-56 overflow-y-auto p-2">{visibleRecipients.map((item) => <label key={item.id} className={`flex cursor-pointer items-center gap-3 rounded-lg p-2.5 transition ${selectedIds.includes(item.id) ? "bg-[#FFF9EA]" : "hover:bg-[#FFFDF8]"}`}><input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleRecipient(item.id)} className="h-4 w-4 rounded border-[#2D2E30]/20 text-[#E58C1A] focus:ring-[#E58C1A]" /><span className="min-w-0"><span className="block truncate text-sm font-semibold text-[#2D2E30]">{item.name}</span><span className="block truncate text-xs text-[#765F55]">{item.email}</span></span>{selectedIds.includes(item.id) ? <Check size={15} className="ml-auto text-[#C97112]" /> : null}</label>)}{!visibleRecipients.length ? <p className="p-5 text-center text-sm text-[#765F55]">No matching recipients.</p> : null}</div></div></div>; }
+function AnnouncementComposer({ subject, setSubject, message, setMessage, link, setLink, type, setType, recipientCount, status, saving, onSend }) { return <form onSubmit={(event) => { event.preventDefault(); onSend(); }} className="rounded-2xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_16px_35px_-28px_rgba(45,46,48,0.48)] sm:p-6"><div className="flex items-start gap-3 border-b border-[#E58C1A]/15 pb-5"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#2D2E30] text-[#F8C56A]"><BellRing size={20} /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C97112]">In-app delivery</p><h2 className="mt-1 text-lg font-bold text-[#2D2E30]">Send user announcement</h2><p className="mt-1 text-sm text-[#765F55]">A notification for each active, verified student.</p></div></div><div className="mt-5 rounded-xl border border-[#7AB589]/25 bg-[#EDF8EE] p-4"><p className="text-xs font-bold uppercase tracking-wide text-[#397445]">Audience</p><p className="mt-1 flex items-center gap-2 font-bold text-[#246B35]"><UsersRound size={16} />All active students · {recipientCount} recipients</p><p className="mt-1 text-xs leading-5 text-[#397445]">Pending-verification and deactivated accounts are excluded.</p></div><div className="mt-5 space-y-4"><Field label="Announcement title"><input required value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="New course available" className={inputClass} /></Field><Field label="Message"><textarea required rows="6" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Share an update with your students..." className={`${inputClass} resize-y`} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Destination link" hint="(optional)"><input value={link} onChange={(event) => setLink(event.target.value)} placeholder="/my-courses" className={inputClass} /></Field><Field label="Notification type"><AnnouncementTypeSelect value={type} onChange={setType} /></Field></div></div><div className="mt-5"><Notice status={status} /></div><button disabled={saving} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A] disabled:opacity-60"><BellRing size={17} />{saving ? "Sending..." : `Send to ${recipientCount} students`}</button></form>; }
+function AnnouncementTypeSelect({ value, onChange }) { const [open, setOpen] = useState(false); const options = [{ value: "system", label: "System update", detail: "Important platform news" }, { value: "info", label: "Information", detail: "General learner update" }, { value: "course", label: "Course update", detail: "Learning-related news" }]; const selected = options.find((item) => item.value === value) || options[0]; return <div className="relative mt-2"><button type="button" onClick={() => setOpen((current) => !current)} className={`flex w-full items-center justify-between rounded-xl border bg-white px-3.5 py-3 text-left text-sm outline-none transition ${open ? "border-[#E58C1A] ring-4 ring-[#E58C1A]/10" : "border-[#2D2E30]/15 hover:border-[#E58C1A]/45"}`} aria-haspopup="listbox" aria-expanded={open}><span><span className="block font-semibold text-[#2D2E30]">{selected.label}</span><span className="mt-0.5 block text-xs text-[#9B867C]">{selected.detail}</span></span><ChevronDown size={18} className={`shrink-0 text-[#C97112] transition-transform ${open ? "rotate-180" : ""}`} /></button>{open ? <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-[#E58C1A]/20 bg-white p-1.5 shadow-xl shadow-[#2D2E30]/15" role="listbox">{options.map((option) => <button type="button" key={option.value} onClick={() => { onChange(option.value); setOpen(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition ${option.value === value ? "bg-[#FFF1CE] text-[#A86710]" : "text-[#2D2E30] hover:bg-[#FFF9EA]"}`} role="option" aria-selected={option.value === value}><span><span className="block text-sm font-bold">{option.label}</span><span className="mt-0.5 block text-xs text-[#765F55]">{option.detail}</span></span>{option.value === value ? <Check size={16} /> : null}</button>)}</div> : null}</div>; }
+function HistoryPanel({ kind, campaigns, announcements, currentAdmin, expandedId, setExpandedId, editDraft, sendDraft, sendingId, setDraftToDelete, setAnnouncementToDelete }) { const isAnnouncement = kind === "announcement"; return <section className="rounded-2xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_16px_35px_-28px_rgba(45,46,48,0.48)] sm:p-6"><div className="flex items-start justify-between border-b border-[#E58C1A]/15 pb-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C97112]">Communication record</p><h2 className="mt-1 text-lg font-bold text-[#2D2E30]">{isAnnouncement ? "Announcement history" : "Email update history"}</h2><p className="mt-1 text-sm text-[#765F55]">{isAnnouncement ? "View and manage in-app messages sent to students." : "View drafts and sent email updates."}</p></div><Clock3 size={20} className="text-[#C97112]" /></div>{isAnnouncement ? <HistoryGroup title="Announcements" empty="No announcements have been sent." icon={<BellRing size={16} />}>{announcements.map((item) => <AnnouncementHistoryItem key={item._id} item={item} isOwner={String(item.createdBy?._id || item.createdBy) === String(currentAdmin?.id || currentAdmin?._id)} remove={() => setAnnouncementToDelete(item)} />)}</HistoryGroup> : <HistoryGroup title="Email updates" empty="No email updates yet." icon={<Mail size={16} />}>{campaigns.map((item) => <CampaignHistoryItem key={item._id} item={item} expanded={expandedId === item._id} toggle={() => setExpandedId(expandedId === item._id ? "" : item._id)} edit={() => editDraft(item)} send={() => sendDraft(item._id)} sending={sendingId === item._id} remove={() => setDraftToDelete(item._id)} />)}</HistoryGroup>}</section>; }
+function HistoryGroup({ title, empty, icon, children }) { const items = Array.isArray(children) ? children : [children]; return <div className="mt-6"><div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#2D2E30]"><span className="text-[#C97112]">{icon}</span>{title}<span className="rounded-full bg-[#FFF1CE] px-2 py-0.5 text-[10px] text-[#A86710]">{items.length}</span></div><div className="space-y-3">{items.length ? items : <p className="rounded-xl border border-dashed border-[#E58C1A]/25 bg-[#FFF9EA] px-4 py-5 text-center text-sm text-[#765F55]">{empty}</p>}</div></div>; }
+function CampaignHistoryItem({ item, expanded, toggle, edit, send, sending, remove }) { const recipientCount = item.recipientCount || item.selectedRecipients?.length || 0; return <article className="overflow-hidden rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8]"><div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-bold text-[#2D2E30]">{item.subject}</h3><StatusPill status={item.status} /></div><div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#765F55]"><span className="inline-flex items-center gap-1"><UsersRound size={13} />{recipientCount}</span><span>{item.sentAt ? `Sent ${new Date(item.sentAt).toLocaleDateString()}` : `Saved ${new Date(item.createdAt).toLocaleDateString()}`}</span></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={toggle} className="rounded-lg border border-[#2D2E30]/15 bg-white px-2.5 py-2 text-xs font-bold text-[#765F55]">{expanded ? "Hide" : "View"}</button>{item.status === "draft" ? <><button type="button" onClick={edit} className="rounded-lg border border-[#2D2E30]/15 bg-white p-2 text-[#765F55]" aria-label="Edit draft"><Pencil size={14} /></button><button type="button" onClick={send} disabled={sending} className="rounded-lg bg-[#2D2E30] px-2.5 py-2 text-xs font-bold text-white hover:bg-[#E58C1A]">{sending ? "Sending" : "Send"}</button><button type="button" onClick={remove} className="rounded-lg border border-[#A34D45]/25 bg-white p-2 text-[#A34D45]" aria-label="Delete draft"><Trash2 size={14} /></button></> : null}</div></div>{expanded ? <div className="border-t border-[#2D2E30]/10 bg-white p-4"><p className="whitespace-pre-line text-sm leading-6 text-[#765F55]">{item.message}</p>{item.image ? <img src={item.image} alt="Campaign" className="mt-3 h-32 max-w-full rounded-xl object-cover" /> : null}</div> : null}</article>; }
+function AnnouncementHistoryItem({ item, isOwner, remove }) { return <article className="rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-bold text-[#2D2E30]">{item.title}</h3><span className="rounded-full bg-[#FFF1CE] px-2 py-0.5 text-[10px] font-bold uppercase text-[#A86710]">{item.type}</span></div><p className="mt-2 line-clamp-2 whitespace-pre-line text-sm leading-6 text-[#765F55]">{item.message}</p><div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#9B867C]"><span>{item.recipientCount} recipients</span><span>{new Date(item.createdAt).toLocaleString()}</span><span>By {item.createdBy?.name || "Admin"}</span></div></div>{isOwner ? <button type="button" onClick={remove} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#A34D45]/25 bg-white px-2.5 py-2 text-xs font-bold text-[#A34D45] hover:bg-[#FFF0EE]"><Trash2 size={14} />Delete</button> : null}</div></article>; }
+function StatusPill({ status }) { const style = status === "sent" ? "bg-[#EDF8EE] text-[#246B35]" : status === "draft" ? "bg-[#FFF1CE] text-[#A86710]" : "bg-[#FFF0EE] text-[#A34D45]"; return <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${style}`}>{status}</span>; }
 
 export default Campaigns;

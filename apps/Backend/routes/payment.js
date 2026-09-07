@@ -6,6 +6,7 @@ const {
   createPayment,
   getMyPayments,
   getAllPayments,
+  getPendingPaymentCount,
   approvePayment,
   rejectPayment,
 } = require("../controllers/paymentController");
@@ -14,6 +15,7 @@ const router = express.Router();
 const upload = createImageUpload();
 
 router.get("/my", validateToken, getMyPayments);
+router.get("/pending-count", validateToken, requireAdmin, getPendingPaymentCount);
 router.get("/", validateToken, requireAdmin, getAllPayments);
 router.post("/course/:courseId", validateToken, upload.single("paymentProof"), validateImageFileContent, createPayment);
 router.patch("/:paymentId/approve", validateToken, requireAdmin, approvePayment);
