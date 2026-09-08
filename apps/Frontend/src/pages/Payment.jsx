@@ -19,6 +19,7 @@ import { fetchCourseById } from "../services/courseService";
 import { createPayment } from "../services/paymentService";
 import { fetchPaymentSettings } from "../services/paymentSettingsService";
 import { validateFileSize } from "../utils/fileValidation";
+import { validatePromoCode } from "../services/promoCodeService";
 
 const paymentSteps = ["Payment", "Upload Receipt", "Verification"];
 
@@ -35,6 +36,10 @@ function Payment() {
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptName, setReceiptName] = useState("");
   const [receiptPreview, setReceiptPreview] = useState("");
+  const [promoInput, setPromoInput] = useState("");
+  const [promo, setPromo] = useState(null);
+  const [promoMessage, setPromoMessage] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -83,6 +88,12 @@ function Payment() {
     setError("");
   };
 
+  const applyPromo = async () => {
+    if (!promoInput.trim()) return setPromoMessage("Enter a promo code first.");
+    try { setPromoLoading(true); setPromoMessage(""); const result = await validatePromoCode(promoInput, courseId); setPromo(result); setPromoInput(result.code); }
+    catch (err) { setPromo(null); setPromoMessage(err.message); } finally { setPromoLoading(false); }
+  };
+
   const handleUploadReceipt = async () => {
     if (!receiptFile) {
       setError("Please upload your payment receipt first.");
@@ -92,7 +103,7 @@ function Payment() {
     try {
       setSubmitting(true);
       setError("");
-      await createPayment(courseId, receiptFile);
+      await createPayment(courseId, receiptFile, promo?.code);
       showToast({
         title: "Payment submitted",
         message: "Your receipt has been uploaded and is pending review.",
@@ -199,7 +210,7 @@ function Payment() {
                     </div>
                 </div>
                 <div className="mt-5 flex items-end justify-between gap-4">
-                  <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Total</p><p className="mt-1 text-2xl font-bold text-[#B96128]">{course.price}</p></div>
+                  <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">{promo ? "Amount to transfer" : "Total"}</p>{promo && <p className="mt-1 text-sm text-[#765F55] line-through">{course.price}</p>}<p className="mt-1 text-2xl font-bold text-[#B96128]">{promo ? `${promo.finalAmount.toLocaleString()} ฿` : course.price}</p></div>
                   <CreditCard className="h-6 w-6 text-[#E58C1A]" aria-hidden="true" />
                 </div>
               </div>
@@ -254,6 +265,7 @@ function Payment() {
               </div>
 
               <div className="px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6 md:px-8 md:pb-8">
+              <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setPromoMessage(""); }} placeholder="WELCOME20" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promo ? <p className="mt-2 text-sm font-semibold text-[#246B35]">Applied: save ฿{promo.discountAmount.toLocaleString()} — pay ฿{promo.finalAmount.toLocaleString()}</p> : promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div>
               {/* Step 1 — QR Code */}
               {currentStep === 1 ? (
                 <div className="space-y-4 sm:space-y-5 md:space-y-6">

@@ -19,6 +19,10 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    originalAmount: { type: Number, min: 0 },
+    discountAmount: { type: Number, default: 0, min: 0 },
+    promoCode: { type: String, trim: true, uppercase: true },
+    promoRedemptionId: { type: mongoose.Schema.Types.ObjectId, ref: "PromoRedemption", default: null },
     fee: {
       type: Number,
       default: 0,
@@ -57,5 +61,7 @@ const paymentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+paymentSchema.index({ userId: 1, courseId: 1 }, { unique: true, partialFilterExpression: { status: "pending" } });
 
 module.exports = mongoose.model("Payment", paymentSchema);

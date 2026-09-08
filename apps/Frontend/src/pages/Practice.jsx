@@ -9,6 +9,7 @@ const practiceSections = [
   { id: "tone-combinations", label: "Thai Vowels", description: "Short, long & special vowels", path: "/practice/tone-combinations" },
   { id: "level-test", label: "Level test", description: "Coming soon", path: null },
   { id: "quiz", label: "Quiz", description: "Coming soon", path: null },
+  { id: "flashcards", label: "Flashcards", description: "Image-based recall practice", path: "/flashcards" },
 ]
 
 function Practice() {
