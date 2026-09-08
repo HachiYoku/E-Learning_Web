@@ -250,38 +250,22 @@ function ThaiAlphabetPractice() {
     });
   };
 
-  const speakWithBrowserVoice = () => {
-    if (!("speechSynthesis" in window)) {
-      setIsSpeaking(false);
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(`${selectedLetter.name} ${selectedLetter.word}`);
-    utterance.lang = "th-TH";
-    utterance.rate = 0.72;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
-  };
-
   const speakSelectedLetter = () => {
     stopPlayback();
     const letterNumber = String(thaiConsonants.findIndex((letter) => letter.letter === selectedLetter.letter) + 1).padStart(2, "0");
     const audio = new Audio(`/audio/thai-alphabet/${letterNumber}.mp3`);
-    let usedBrowserFallback = false;
-    const useBrowserFallback = () => {
-      if (usedBrowserFallback) return;
-      usedBrowserFallback = true;
-      if (audioRef.current === audio) audioRef.current = null;
-      speakWithBrowserVoice();
-    };
 
     audioRef.current = audio;
-    audio.onended = () => setIsSpeaking(false);
-    audio.onerror = useBrowserFallback;
+    audio.onended = () => {
+      if (audioRef.current === audio) audioRef.current = null;
+      setIsSpeaking(false);
+    };
+    audio.onerror = () => {
+      if (audioRef.current === audio) audioRef.current = null;
+      setIsSpeaking(false);
+    };
     setIsSpeaking(true);
-    audio.play().catch(useBrowserFallback);
+    audio.play().catch(() => setIsSpeaking(false));
   };
 
   const speakLeadingHaWithBrowserVoice = () => {
