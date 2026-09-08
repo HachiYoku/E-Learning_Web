@@ -135,7 +135,7 @@ function Navbar() {
   const { setIsOpen: setNotificationOpen } = useNotification();
 
   const isActive = (path) => location.pathname === path
-  const isPracticeActive = location.pathname === "/practice" || location.pathname.startsWith("/practice/")
+  const isPracticeActive = location.pathname === "/practice" || location.pathname.startsWith("/practice/") || location.pathname === "/flashcards"
 
   useEffect(() => {
     setShowMobileMenu(false)
@@ -156,6 +156,7 @@ function Navbar() {
     { label: "Thai Vowels", path: "/practice/tone-combinations" },
     { label: "Level test", path: null },
     { label: "Quiz", path: null },
+    { label: "Flashcards", path: "/flashcards" },
   ]
 
   const goTo = (path) => {

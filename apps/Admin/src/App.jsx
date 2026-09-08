@@ -27,6 +27,7 @@ import RequireAdmin from './routes/RequireAdmin'
 import Quizzes from './pages/QuizManagement/Quizzes'
 import QuizEditor from './pages/QuizManagement/QuizEditor'
 import QuizAttempts from './pages/QuizManagement/QuizAttempts'
+import Flashcards from './pages/FlashcardManagement/Flashcards'
 
 function ProtectedLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768)
@@ -64,6 +65,7 @@ function App() {
             <Route path="/quizzes/new" element={<QuizEditor />} />
             <Route path="/quizzes/:id/edit" element={<QuizEditor />} />
             <Route path="/quizzes/:id/attempts" element={<QuizAttempts />} />
+            <Route path="/flashcards" element={<Flashcards />} />
             <Route path="/users" element={<Users />} />
             <Route path="/pending-verifications" element={<PendingVerifications />} />
             <Route path="/contacts" element={<ContactLeads />} />

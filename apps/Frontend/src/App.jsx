@@ -20,6 +20,7 @@ import Practice from "./pages/Practice"
 import About from "./pages/About"
 import NotFound from "./pages/NotFound"
 import Quiz from "./pages/Quiz"
+import Flashcards from "./pages/Flashcards"
 import RequireAuth from "./routes/RequireAuth"
 import ScrollToTop from "./components/ScrollToTop"
 
@@ -38,6 +39,7 @@ function App() {
         <Route path="/courses/:courseId" element={<CourseDetail />} />
         <Route path="/practice" element={<Practice />} />
         <Route path="/practice/:section" element={<Practice />} />
+        <Route path="/flashcards" element={<Flashcards />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/about" element={<About />} />
         <Route element={<RequireAuth />}>
