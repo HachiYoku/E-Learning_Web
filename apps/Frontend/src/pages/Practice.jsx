@@ -1,12 +1,12 @@
 import Navbar from "../components/Navbar"
 import Footer from "../components/Footer"
 import ThaiAlphabetPractice from "../components/ThaiAlphabetPractice"
-import ThaiToneCombinationPractice from "../components/ThaiToneCombinationPractice"
+import ThaiVowelPractice from "../components/ThaiVowelPractice"
 import { useParams } from "react-router-dom"
 
 const practiceSections = [
   { id: "foundations", label: "Thai Consonants", description: "Alphabet & consonant classes", path: "/practice/foundations" },
-  { id: "tone-combinations", label: "Tone combinations", description: "Vowels & tone marks", path: "/practice/tone-combinations" },
+  { id: "tone-combinations", label: "Thai Vowels", description: "Short, long & special vowels", path: "/practice/tone-combinations" },
   { id: "level-test", label: "Level test", description: "Coming soon", path: null },
   { id: "quiz", label: "Quiz", description: "Coming soon", path: null },
 ]
@@ -22,7 +22,7 @@ function Practice() {
         <div className="absolute -left-28 top-0 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/25 blur-3xl" aria-hidden="true" />
         <div className="absolute -right-28 bottom-0 -z-10 h-80 w-80 rounded-full bg-[#E9A9A0]/25 blur-3xl" aria-hidden="true" />
         <div className="mx-auto w-full max-w-6xl">
-          <div>{activeSection === "tone-combinations" ? <ThaiToneCombinationPractice /> : <ThaiAlphabetPractice />}</div>
+          <div>{activeSection === "tone-combinations" ? <ThaiVowelPractice /> : <ThaiAlphabetPractice />}</div>
         </div>
       </main>
       <Footer />
