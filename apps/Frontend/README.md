@@ -57,3 +57,4 @@ VITE_API_URL=http://localhost:3000
 - The frontend uses native `fetch` for API calls.
 - Be sure the backend is running and accessible from the frontend.
 - Keep `package.json` and `package-lock.json` in sync when updating dependencies.
+- Thai vowel recordings belong in `public/audio/thai-vowels/`. See its README for the required `01.mp3` through `32.mp3` filename-to-vowel mapping; missing files use Thai text-to-speech as a fallback.

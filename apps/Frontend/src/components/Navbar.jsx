@@ -152,8 +152,8 @@ function Navbar() {
     { label: "About", path: "/about" },
   ]
   const practiceItems = [
-    { label: "Thai foundations", path: "/practice/foundations" },
-    { label: "Tone combinations", path: "/practice/tone-combinations" },
+    { label: "Thai Consonants", path: "/practice/foundations" },
+    { label: "Thai Vowels", path: "/practice/tone-combinations" },
     { label: "Level test", path: null },
     { label: "Quiz", path: null },
   ]

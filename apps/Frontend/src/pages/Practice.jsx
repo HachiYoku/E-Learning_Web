@@ -1,12 +1,12 @@
 import Navbar from "../components/Navbar"
 import Footer from "../components/Footer"
 import ThaiAlphabetPractice from "../components/ThaiAlphabetPractice"
-import ThaiToneCombinationPractice from "../components/ThaiToneCombinationPractice"
+import ThaiVowelPractice from "../components/ThaiVowelPractice"
 import { useParams } from "react-router-dom"
 
 const practiceSections = [
-  { id: "foundations", label: "Thai foundations", description: "Alphabet & consonant classes", path: "/practice/foundations" },
-  { id: "tone-combinations", label: "Tone combinations", description: "Vowels & tone marks", path: "/practice/tone-combinations" },
+  { id: "foundations", label: "Thai Consonants", description: "Alphabet & consonant classes", path: "/practice/foundations" },
+  { id: "tone-combinations", label: "Thai Vowels", description: "Short, long & special vowels", path: "/practice/tone-combinations" },
   { id: "level-test", label: "Level test", description: "Coming soon", path: null },
   { id: "quiz", label: "Quiz", description: "Coming soon", path: null },
 ]
@@ -22,12 +22,7 @@ function Practice() {
         <div className="absolute -left-28 top-0 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/25 blur-3xl" aria-hidden="true" />
         <div className="absolute -right-28 bottom-0 -z-10 h-80 w-80 rounded-full bg-[#E9A9A0]/25 blur-3xl" aria-hidden="true" />
         <div className="mx-auto w-full max-w-6xl">
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C97112]">Practice Thai</p>
-            <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">Build your Thai, <span className="text-[#E58C1A]">one step at a time.</span></h1>
-            <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-[#765F55] sm:text-lg">Work through Thai foundations and tone combinations now. Level testing and quizzes will be added next.</p>
-          </div>
-          <div className="mt-10">{activeSection === "tone-combinations" ? <ThaiToneCombinationPractice /> : <ThaiAlphabetPractice />}</div>
+          <div>{activeSection === "tone-combinations" ? <ThaiVowelPractice /> : <ThaiAlphabetPractice />}</div>
         </div>
       </main>
       <Footer />
