@@ -56,6 +56,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
     { label: 'Email updates', path: '/campaigns', icon: Send },
     { label: 'User announcements', path: '/announcements', icon: BellRing },
     { label: 'Review payment', path: '/review-payment', icon: CreditCard, badge: badges.payments },
+    { label: 'Promo codes', path: '/promo-codes', icon: CreditCard },
     { label: 'Reports & insights', path: '/analytics', icon: BarChart3 },
     { label: 'Settings', path: '/settings', icon: Settings },
   ]

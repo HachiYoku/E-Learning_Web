@@ -28,6 +28,7 @@ import Quizzes from './pages/QuizManagement/Quizzes'
 import QuizEditor from './pages/QuizManagement/QuizEditor'
 import QuizAttempts from './pages/QuizManagement/QuizAttempts'
 import Flashcards from './pages/FlashcardManagement/Flashcards'
+import PromoCodes from './pages/PromoManagement/PromoCodes'
 
 function ProtectedLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768)
@@ -66,6 +67,7 @@ function App() {
             <Route path="/quizzes/:id/edit" element={<QuizEditor />} />
             <Route path="/quizzes/:id/attempts" element={<QuizAttempts />} />
             <Route path="/flashcards" element={<Flashcards />} />
+            <Route path="/promo-codes" element={<PromoCodes />} />
             <Route path="/users" element={<Users />} />
             <Route path="/pending-verifications" element={<PendingVerifications />} />
             <Route path="/contacts" element={<ContactLeads />} />
