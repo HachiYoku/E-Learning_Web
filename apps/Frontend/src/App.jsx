@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Navigate, Routes, Route } from 'react-router-dom'
 import Home from "./pages/Home"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
@@ -38,6 +38,8 @@ function App() {
         <Route path="/courses" element={<Courses />} />
         <Route path="/courses/:courseId" element={<CourseDetail />} />
         <Route path="/practice" element={<Practice />} />
+        <Route path="/practice/foundations" element={<Navigate to="/practice/thai-consonants" replace />} />
+        <Route path="/practice/tone-combinations" element={<Navigate to="/practice/thai-vowels" replace />} />
         <Route path="/practice/:section" element={<Practice />} />
         <Route path="/flashcards" element={<Flashcards />} />
         <Route path="/blog" element={<Blog />} />
