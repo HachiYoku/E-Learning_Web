@@ -104,13 +104,6 @@ const consonantClusterGroups = [
 
 const consonantClusters = consonantClusterGroups.flatMap((group) => group.clusters);
 
-const leadingOExamples = [
-  { word: "อย่า", pronunciation: "yàa", meaning: "do not / don't" },
-  { word: "อยาก", pronunciation: "yàak", meaning: "to want" },
-  { word: "อย่าง", pronunciation: "yàang", meaning: "kind / type" },
-  { word: "อยู่", pronunciation: "yùu", meaning: "to stay / be located" },
-];
-
 const specialRaCombinations = [
   { combination: "สร", sound: "ส", word: "สร้าง", pronunciation: "sâang", meaning: "to build" },
   { combination: "ศร", sound: "ส", word: "ศรี", pronunciation: "sǐi", meaning: "glory / honour" },
@@ -123,22 +116,18 @@ function ThaiAlphabetPractice() {
   const [selectedLetter, setSelectedLetter] = useState(thaiConsonants[0]);
   const [selectedLeadingHa, setSelectedLeadingHa] = useState(leadingHaCombinations[0]);
   const [selectedCluster, setSelectedCluster] = useState(consonantClusters[0]);
-  const [selectedLeadingO, setSelectedLeadingO] = useState(leadingOExamples[0]);
   const [selectedSpecialRa, setSelectedSpecialRa] = useState(specialRaCombinations[0]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLeadingHaSpeaking, setIsLeadingHaSpeaking] = useState(false);
   const [isClusterSpeaking, setIsClusterSpeaking] = useState(false);
-  const [isLeadingOSpeaking, setIsLeadingOSpeaking] = useState(false);
   const [isSpecialRaSpeaking, setIsSpecialRaSpeaking] = useState(false);
   const audioRef = useRef(null);
   const leadingHaAudioRef = useRef(null);
   const clusterAudioRef = useRef(null);
-  const leadingOAudioRef = useRef(null);
   const specialRaAudioRef = useRef(null);
   const selectedCardRef = useRef(null);
   const leadingHaCardRef = useRef(null);
   const clusterCardRef = useRef(null);
-  const leadingOCardRef = useRef(null);
   const specialRaCardRef = useRef(null);
 
   useEffect(() => () => {
@@ -146,7 +135,6 @@ function ThaiAlphabetPractice() {
     if (audioRef.current) audioRef.current.pause();
     if (leadingHaAudioRef.current) leadingHaAudioRef.current.pause();
     if (clusterAudioRef.current) clusterAudioRef.current.pause();
-    if (leadingOAudioRef.current) leadingOAudioRef.current.pause();
     if (specialRaAudioRef.current) specialRaAudioRef.current.pause();
   }, []);
 
@@ -164,10 +152,6 @@ function ThaiAlphabetPractice() {
       clusterAudioRef.current.pause();
       clusterAudioRef.current = null;
     }
-    if (leadingOAudioRef.current) {
-      leadingOAudioRef.current.pause();
-      leadingOAudioRef.current = null;
-    }
     if (specialRaAudioRef.current) {
       specialRaAudioRef.current.pause();
       specialRaAudioRef.current = null;
@@ -175,7 +159,6 @@ function ThaiAlphabetPractice() {
     setIsSpeaking(false);
     setIsLeadingHaSpeaking(false);
     setIsClusterSpeaking(false);
-    setIsLeadingOSpeaking(false);
     setIsSpecialRaSpeaking(false);
   };
 
@@ -218,19 +201,6 @@ function ThaiAlphabetPractice() {
 
     window.requestAnimationFrame(() => {
       clusterCardRef.current?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-        block: "start",
-      });
-    });
-  };
-
-  const selectLeadingO = (example) => {
-    stopPlayback();
-    setSelectedLeadingO(example);
-    if (!window.matchMedia("(max-width: 1023px)").matches) return;
-
-    window.requestAnimationFrame(() => {
-      leadingOCardRef.current?.scrollIntoView({
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
         block: "start",
       });
@@ -333,40 +303,6 @@ function ThaiAlphabetPractice() {
     audio.onended = () => setIsClusterSpeaking(false);
     audio.onerror = useBrowserFallback;
     setIsClusterSpeaking(true);
-    audio.play().catch(useBrowserFallback);
-  };
-
-  const speakLeadingOWithBrowserVoice = () => {
-    if (!("speechSynthesis" in window)) {
-      setIsLeadingOSpeaking(false);
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(selectedLeadingO.word);
-    utterance.lang = "th-TH";
-    utterance.rate = 0.72;
-    utterance.onend = () => setIsLeadingOSpeaking(false);
-    utterance.onerror = () => setIsLeadingOSpeaking(false);
-    setIsLeadingOSpeaking(true);
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const speakSelectedLeadingO = () => {
-    stopPlayback();
-    const exampleNumber = String(leadingOExamples.findIndex((item) => item.word === selectedLeadingO.word) + 1).padStart(2, "0");
-    const audio = new Audio(`/audio/leading-o/${exampleNumber}.mp3`);
-    let usedBrowserFallback = false;
-    const useBrowserFallback = () => {
-      if (usedBrowserFallback) return;
-      usedBrowserFallback = true;
-      if (leadingOAudioRef.current === audio) leadingOAudioRef.current = null;
-      speakLeadingOWithBrowserVoice();
-    };
-
-    leadingOAudioRef.current = audio;
-    audio.onended = () => setIsLeadingOSpeaking(false);
-    audio.onerror = useBrowserFallback;
-    setIsLeadingOSpeaking(true);
     audio.play().catch(useBrowserFallback);
   };
 
@@ -536,33 +472,24 @@ function ThaiAlphabetPractice() {
       </div>
 
       <div className="mt-10 border-t border-[#2D2E30]/10 pt-9">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Leading consonants</p>
-            <h3 className="mt-2 text-xl font-bold text-[#2D2E30] sm:text-2xl">Leading อ (อ นำ) with ย</h3>
-          </div>
-          <p className="text-sm text-[#765F55]">Select a word to explore it.</p>
-        </div>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Leading consonants</p>
+        <h3 className="mt-2 text-xl font-bold text-[#2D2E30] sm:text-2xl">Leading อ (อ นำ) with ย</h3>
 
-        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(270px,0.62fr)] lg:items-start">
-          <div className="order-2 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:order-1">
-            {leadingOExamples.map((example) => {
-              const isSelected = example.word === selectedLeadingO.word;
-              return <button key={example.word} type="button" onClick={() => selectLeadingO(example)} aria-pressed={isSelected} aria-label={`${example.word}: ${example.meaning}`} className={`rounded-xl border px-3 py-3 text-2xl font-bold transition focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20 sm:py-4 ${isSelected ? "border-[#E58C1A] bg-[#F8C56A] text-[#2D2E30] shadow-[0_8px_18px_-12px_rgba(80,48,19,0.8)]" : "border-[#2D2E30]/10 bg-[#FFFDF8] text-[#2D2E30] hover:border-[#E58C1A]/50 hover:bg-[#FFF1D0]"}`}>{example.word}</button>;
-            })}
-          </div>
-
-          <div ref={leadingOCardRef} className="order-1 scroll-mt-24 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-5 sm:p-7 lg:order-2">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Selected word</p>
-            <div className="mt-5 flex items-center gap-3 sm:gap-5">
-              <div className="flex h-16 min-w-20 items-center justify-center rounded-2xl bg-[#2D2E30] px-3 text-3xl font-bold text-[#F8C56A] sm:h-20 sm:min-w-24 sm:text-4xl">{selectedLeadingO.word}</div>
-              <div className="min-w-0 flex-1">
-                <h4 className="text-xl font-bold text-[#2D2E30] sm:text-2xl">อ นำ ย</h4>
-                <p className="mt-1 text-sm font-semibold text-[#C97112]">{selectedLeadingO.pronunciation} · {selectedLeadingO.meaning}</p>
-              </div>
-              <button type="button" onClick={speakSelectedLeadingO} aria-label={`Hear ${selectedLeadingO.word}`} title="Hear pronunciation" className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20 ${isLeadingOSpeaking ? "bg-[#E58C1A] text-white" : "bg-[#FFF1D0] text-[#C97112] hover:bg-[#F8C56A] hover:text-[#2D2E30]"}`}><Volume2 className="h-5 w-5" aria-hidden="true" /></button>
+        <div className="mt-5 overflow-hidden rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] shadow-[0_12px_28px_-24px_rgba(80,48,19,0.7)]">
+          <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:gap-7 sm:p-7">
+            <div className="flex shrink-0 items-center justify-center gap-2 self-start rounded-2xl bg-[#2D2E30] px-4 py-3 text-3xl font-bold sm:self-auto sm:px-5 sm:py-4 sm:text-4xl" aria-label="อ นำ ย">
+              <span className="text-[#F8C56A]">อ</span>
+              <span className="text-[#FFF9EA]/50">+</span>
+              <span className="text-white">ย</span>
             </div>
-            <p className="mt-6 border-t border-[#E58C1A]/15 pt-5 text-sm leading-relaxed text-[#765F55]">In these four words, อ is silent and makes ย follow mid-class tone rules.</p>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Tone rule</p>
+              <h4 className="mt-1 text-xl font-bold text-[#2D2E30] sm:text-2xl">อ นำ ย</h4>
+              <p className="mt-2 text-sm leading-relaxed text-[#765F55]">อ is silent and makes ย follow mid-class tone rules.</p>
+            </div>
+          </div>
+          <div className="border-t border-[#E58C1A]/15 bg-white/50 px-5 py-3 sm:px-7">
+            <p className="text-xs font-semibold leading-relaxed text-[#765F55]"><span className="mr-1 font-bold text-[#C97112]">Note:</span> Only four vocabulary words use the อ นำ ย pattern.</p>
           </div>
         </div>
       </div>
