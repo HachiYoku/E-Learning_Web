@@ -9,6 +9,7 @@ const Watermark = "/benefit/teacher&stduents.jpg";
 import { fetchCourseById, fetchCourses } from "../services/courseService";
 import { fetchMyEnrollments } from "../services/enrollmentService";
 import { useAuth } from "../contexts/AuthContext";
+import Seo from "../components/Seo";
 
 const RELATED_COURSES_PER_PAGE = 4;
 
@@ -114,6 +115,7 @@ function CourseDetail() {
   if (error || !course) {
     return (
       <div className="min-h-screen bg-white">
+        <Seo title="Course not found" description="The requested course is unavailable." path={`/courses/${courseId}`} noIndex />
         <Navbar />
         <div className="flex h-screen items-center justify-center bg-[#FFF9EA] px-4 text-center">
           <p className="text-2xl text-[#765F55]">
@@ -129,8 +131,11 @@ function CourseDetail() {
       ? course.features
       : ["No specific features listed for this course."];
 
+  const courseSchema = { "@context": "https://schema.org", "@type": "Course", name: course.title, description: course.fullDescription || course.description, provider: { "@type": "EducationalOrganization", name: "Arun Thai Language Center", url: "https://arunthaiedu.com" } };
+
   return (
     <div className="min-h-screen bg-white">
+      <Seo title={course.title} description={course.fullDescription || course.description} path={`/courses/${course.id}`} image={course.image} structuredData={courseSchema} />
       <Navbar />
 
       <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-12 sm:px-6 sm:py-16 md:px-10 md:py-20">
@@ -190,9 +195,9 @@ function CourseDetail() {
                 </p>
 
                 <div>
-                  <h3 className="text-lg sm:text-xl font-bold text-[#2D2E30] mb-3 sm:mb-4">
+                  <h2 className="text-lg sm:text-xl font-bold text-[#2D2E30] mb-3 sm:mb-4">
                     What you’ll learn
-                  </h3>
+                  </h2>
                   <ul className="space-y-2 sm:space-y-3">
                     {courseFeatures.map((feature, index) => (
                       <li

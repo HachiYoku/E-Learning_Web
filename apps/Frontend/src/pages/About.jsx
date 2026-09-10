@@ -3,6 +3,8 @@ import Navbar from "../components/Navbar"
 import StudentReview from "../components/StudentReview"
 import ContactSection from "../components/ContactSection"
 import Footer from "../components/Footer"
+import Seo from "../components/Seo"
+import { organizationSchema } from "../components/seoData"
 
 const aboutImage = "/benefit/teacher&stduents.jpg"
 
@@ -27,6 +29,7 @@ const values = [
 function About() {
   return (
     <div className="min-h-screen bg-[#FFF9EA] text-[#2D2E30]">
+      <Seo title="About Arun Thai" description="Meet Arun Thai Language Center and our practical, supportive approach to learning Thai for real life." path="/about" structuredData={organizationSchema} />
       <Navbar />
 
       <main>

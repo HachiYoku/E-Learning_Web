@@ -1,4 +1,4 @@
-import { Navigate, Routes, Route } from 'react-router-dom'
+import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import Home from "./pages/Home"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
@@ -23,11 +23,35 @@ import Quiz from "./pages/Quiz"
 import Flashcards from "./pages/Flashcards"
 import RequireAuth from "./routes/RequireAuth"
 import ScrollToTop from "./components/ScrollToTop"
+import Seo from "./components/Seo"
+
+const privateRoutePrefixes = ["/login", "/register", "/forgot-password", "/verification-help", "/reset-password", "/enroll", "/payment", "/my-courses", "/my-course-order", "/my-profile", "/notifications", "/order-status", "/course-lessons", "/course-quiz"]
+
+function RouteMetadata() {
+  const { pathname } = useLocation()
+  const isPrivate = privateRoutePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  if (isPrivate) return <Seo title="Account" path={pathname} noIndex />
+
+  const publicPages = {
+    "/": ["Learn Thai Online", "Practical online Thai courses and free learning resources from Arun Thai."],
+    "/courses": ["Thai Language Courses", "Explore self-paced Thai courses for speaking, grammar, and everyday communication."],
+    "/blog": ["Thai Learning Blog", "Practical Thai learning tips, useful vocabulary, and encouragement from the Arun Thai Journal."],
+    "/practice": ["Thai Language Practice", "Practice Thai consonants and vowels with free interactive learning resources."],
+    "/about": ["About Arun Thai", "Learn about Arun Thai Language Center and our supportive approach to learning Thai."],
+    "/flashcards": ["Thai Flashcards", "Practice Thai vocabulary with free interactive flashcards from Arun Thai Language Center."],
+  }
+  const page = publicPages[pathname]
+  if (page) return <Seo title={page[0]} description={page[1]} path={pathname} />
+  if (pathname.startsWith("/practice/")) return <Seo title="Thai Language Practice" description="Practice Thai consonants and vowels with free interactive learning resources." path={pathname} />
+  if (pathname.startsWith("/courses/")) return <Seo title="Thai Course" description="Learn practical Thai online with Arun Thai Language Center." path={pathname} />
+  return <Seo title="Page not found" path={pathname} noIndex />
+}
 
 function App() {
   return (
     <>
       <ScrollToTop />
+      <RouteMetadata />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />

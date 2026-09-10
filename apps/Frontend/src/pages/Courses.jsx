@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext'
 import image1 from '../assets/courses/IELTS speaking.jpg'
 import image2 from '../assets/courses/daily english.jpg'
 import LoadingSpinner from '../components/LoadingSpinner'
+import Seo from '../components/Seo'
 
 const COURSES_PER_PAGE = 6
 
@@ -91,6 +92,7 @@ function Courses() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Seo title="Thai Language Courses" description="Explore self-paced online Thai courses for practical speaking, grammar, and everyday communication." path="/courses" />
       <Navbar />
       
       <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-12 sm:px-6 sm:py-16 md:px-10 md:py-18">
