@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /verification-help
+Disallow: /reset-password/
+Disallow: /enroll/
+Disallow: /payment/
+Disallow: /my-courses
+Disallow: /my-course-order
+Disallow: /my-profile
+Disallow: /notifications
+Disallow: /order-status/
+Disallow: /course-lessons/
+Disallow: /course-quiz/
+Disallow: /admin/
+
+Sitemap: https://arunthaiedu.com/sitemap.xml
