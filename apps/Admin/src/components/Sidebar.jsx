@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, MailCheck, Send, BellRing, BarChart3 } from 'lucide-react'
+import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, MailCheck, Send, BellRing, BarChart3, GalleryVerticalEnd } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchUnreadContactLeadCount } from '../services/contactLeadService'
 import { fetchPendingPaymentCount } from '../services/paymentService'
@@ -48,6 +48,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
     { label: 'Dashboard', path: '/', icon: LayoutGrid },
     { label: 'Manage course', path: '/courses', icon: BookOpen },
     { label: 'Quiz management', path: '/quizzes', icon: ListChecks },
+    { label: 'Flashcards', path: '/flashcards', icon: GalleryVerticalEnd },
     { label: 'Manage blog', path: '/blog', icon: FileText },
     { label: 'Manage users', path: '/users', icon: Users },
     { label: 'Pending verification', path: '/pending-verifications', icon: MailCheck },
@@ -55,6 +56,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
     { label: 'Email updates', path: '/campaigns', icon: Send },
     { label: 'User announcements', path: '/announcements', icon: BellRing },
     { label: 'Review payment', path: '/review-payment', icon: CreditCard, badge: badges.payments },
+    { label: 'Promo codes', path: '/promo-codes', icon: CreditCard },
     { label: 'Reports & insights', path: '/analytics', icon: BarChart3 },
     { label: 'Settings', path: '/settings', icon: Settings },
   ]

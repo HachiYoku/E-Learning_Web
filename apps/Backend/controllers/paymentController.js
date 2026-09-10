@@ -1,6 +1,8 @@
 const Course = require("../models/courseModel");
 const Enrollment = require("../models/enrollmentModel");
 const Payment = require("../models/paymentModel");
+const PromoCode = require("../models/promoCodeModel");
+const PromoRedemption = require("../models/promoRedemptionModel");
 const User = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
@@ -121,6 +123,7 @@ const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason 
 const createPayment = async (req, res) => {
   try {
     const { courseId } = req.params;
+    const promoCode = String(req.body.promoCode || "").trim().toUpperCase();
 
     const course = await Course.findById(courseId);
     if (!course) {
@@ -155,14 +158,24 @@ const createPayment = async (req, res) => {
       "english_kafe/payment_proofs"
     );
 
-    const payment = await Payment.create({
-      userId: req.user.id,
-      courseId,
-      amount: Number(course.price || 0),
-      paymentImage: uploadedProof.secure_url,
-      paymentImagePublicId: uploadedProof.public_id,
-      status: "pending",
-    });
+    const originalAmount = Number(course.price || 0); let discountAmount = 0; let promo; let redemption;
+    if (promoCode) {
+      promo = await PromoCode.findOne({ code: promoCode }); const now = new Date();
+      if (!promo || (promo.applicableCourses.length && !promo.applicableCourses.some((id) => String(id) === String(course._id)))) return res.status(400).json({ message: "This promo code is not available for this course." });
+      try { redemption = await PromoRedemption.create({ promoCode: promo._id, userId: req.user.id }); }
+      catch (error) { if (error.code === 11000) return res.status(400).json({ message: "You have already used this promo code." }); throw error; }
+      promo = await PromoCode.findOneAndUpdate({ _id: promo._id, isActive: true, $and: [{ $or: [{ startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ expiresAt: null }, { expiresAt: { $gte: now } }] }, { $or: [{ usageLimit: null }, { $expr: { $lt: ["$usageCount", "$usageLimit"] } }] }] }, { $inc: { usageCount: 1 } }, { new: true });
+      if (!promo) { await PromoRedemption.deleteOne({ _id: redemption._id }); return res.status(400).json({ message: "This promo code is no longer available." }); }
+      discountAmount = Math.min(originalAmount, promo.discountType === "percent" ? originalAmount * promo.discountValue / 100 : promo.discountValue);
+    }
+    let payment;
+    try {
+      payment = await Payment.create({ userId: req.user.id, courseId, amount: originalAmount - discountAmount, originalAmount, discountAmount, promoCode: promo?.code, promoRedemptionId: redemption?._id, paymentImage: uploadedProof.secure_url, paymentImagePublicId: uploadedProof.public_id, status: "pending" });
+      if (redemption) await PromoRedemption.updateOne({ _id: redemption._id }, { paymentId: payment._id });
+    } catch (error) {
+      if (redemption) { await PromoRedemption.deleteOne({ _id: redemption._id }); await PromoCode.updateOne({ _id: promo._id, usageCount: { $gt: 0 } }, { $inc: { usageCount: -1 } }); }
+      if (error.code === 11000) return res.status(400).json({ message: "You already have a pending payment for this course." }); throw error;
+    }
 
     return res.status(201).json(payment);
   } catch (error) {
@@ -354,6 +367,11 @@ const rejectPayment = async (req, res) => {
     payment.reviewedAt = new Date();
     payment.rejectReason = rejectReason.trim();
     await payment.save();
+
+    if (payment.promoRedemptionId) {
+      const redemption = await PromoRedemption.findByIdAndDelete(payment.promoRedemptionId);
+      if (redemption) await PromoCode.updateOne({ _id: redemption.promoCode, usageCount: { $gt: 0 } }, { $inc: { usageCount: -1 } });
+    }
 
     await writeAuditLog({
       actorId: req.user.id,

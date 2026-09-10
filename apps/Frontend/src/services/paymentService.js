@@ -27,9 +27,10 @@ function normalizePayment(payment) {
   };
 }
 
-export async function createPayment(courseId, file) {
+export async function createPayment(courseId, file, promoCode = "") {
   const formData = new FormData();
   formData.append("paymentProof", file);
+  if (promoCode) formData.append("promoCode", promoCode);
 
   const payment = await apiClient.post(`/payments/course/${courseId}`, formData);
   return normalizePayment(payment);

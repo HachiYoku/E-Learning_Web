@@ -85,6 +85,12 @@ app.use('/lessons', lessonRoutes)
 const quizRoutes = require('./routes/quiz')
 app.use('/quizzes', quizRoutes)
 
+const flashcardRoutes = require('./routes/flashcard')
+app.use('/flashcards', flashcardRoutes)
+
+const promoCodeRoutes = require('./routes/promoCode')
+app.use('/promo-codes', promoCodeRoutes)
+
 const paymentRoutes = require('./routes/payment')
 app.use('/payments', paymentRoutes)
 
