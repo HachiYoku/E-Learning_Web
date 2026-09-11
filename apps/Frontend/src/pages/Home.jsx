@@ -8,10 +8,13 @@ import Article from "../components/Article"
 import StudentReview from "../components/StudentReview"
 import ContactSection from "../components/ContactSection"
 import Footer from "../components/Footer"
+import Seo from "../components/Seo"
+import { organizationSchema } from "../components/seoData"
 
 function Home() {
   return (
     <div>
+      <Seo title="Learn Thai Online" description="Build confidence in everyday Thai with practical online courses, free learning resources, and supportive guidance from Arun Thai." structuredData={organizationSchema} />
       <Navbar />
       <Hero />
       <Courses />

@@ -8,6 +8,7 @@ import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { fetchBlogs } from "../services/blogService";
 import { sanitizeHtmlContent } from "../utils/sanitizeHtmlContent";
+import Seo from "../components/Seo";
 
 const logo = "/Nav/favicon-arunthai.png"; // Default author logo if none is provided
 const fallbackImage =
@@ -110,6 +111,7 @@ function Blog() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Seo title="Thai Learning Blog" description="Read practical Thai learning tips, useful vocabulary, and encouragement from the Arun Thai Journal." path="/blog" />
       <Navbar />
 
       
@@ -118,7 +120,7 @@ function Blog() {
       <section className="bg-white px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 flex items-end justify-between border-b-2 border-[#2D2E30] pb-4 sm:mb-10">
-            <div><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Editor’s pick</p><h2 className="mt-2 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">Featured story</h2></div>
+            <div><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Arun Thai Journal</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">Thai learning stories and tips</h1></div>
             {!isLoading && blogs.length > 0 ? <p className="hidden text-sm font-medium text-[#765F55] sm:block">Issue 01 · {blogs.length} stories</p> : null}
           </div>
 
@@ -134,9 +136,9 @@ function Blog() {
               {/* Featured Article */}
               <div className="order-2 min-w-0 overflow-hidden lg:order-1">
                 <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Featured story · {featuredBlog.date}</p>
-                <h3 className="mb-4 text-3xl font-bold leading-[1.05] tracking-tight text-[#2D2E30] sm:mb-5 sm:text-4xl md:text-5xl break-words overflow-wrap-break-word">
+                <h2 className="mb-4 text-3xl font-bold leading-[1.05] tracking-tight text-[#2D2E30] sm:mb-5 sm:text-4xl md:text-5xl break-words overflow-wrap-break-word">
                   {featuredBlog.title}
-                </h3>
+                </h2>
 
                 {!isExpanded ? (
                   <p className="mb-6 text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg break-words">

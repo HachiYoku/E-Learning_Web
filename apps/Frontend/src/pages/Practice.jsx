@@ -3,6 +3,7 @@ import Footer from "../components/Footer"
 import ThaiAlphabetPractice from "../components/ThaiAlphabetPractice"
 import ThaiVowelPractice from "../components/ThaiVowelPractice"
 import { useParams } from "react-router-dom"
+import Seo from "../components/Seo"
 
 const practiceSections = [
   { id: "thai-consonants", label: "Thai Consonants", description: "Alphabet & consonant classes", path: "/practice/thai-consonants" },
@@ -15,14 +16,18 @@ const practiceSections = [
 function Practice() {
   const { section } = useParams()
   const activeSection = practiceSections.some((item) => item.id === section) ? section : "thai-consonants"
+  const isVowels = activeSection === "thai-vowels"
+  const canonicalPath = section ? `/practice/${activeSection}` : "/practice"
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FFF9EA] text-[#2D2E30]">
+      <Seo title={isVowels ? "Thai Vowel Practice" : "Thai Consonant Practice"} description={isVowels ? "Practice Thai vowels, including short, long, and special vowel sounds." : "Learn and practice all 44 Thai consonants, their classes, sounds, and common combinations."} path={canonicalPath} />
       <Navbar />
       <main className="relative isolate flex-1 overflow-hidden px-4 py-16 sm:px-6 md:px-10 md:py-24 lg:px-16">
         <div className="absolute -left-28 top-0 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/25 blur-3xl" aria-hidden="true" />
         <div className="absolute -right-28 bottom-0 -z-10 h-80 w-80 rounded-full bg-[#E9A9A0]/25 blur-3xl" aria-hidden="true" />
         <div className="mx-auto w-full max-w-6xl">
+          <h1 className="sr-only">{isVowels ? "Thai vowel practice" : "Thai consonant practice"}</h1>
           <div>{activeSection === "thai-vowels" ? <ThaiVowelPractice /> : <ThaiAlphabetPractice />}</div>
         </div>
       </main>

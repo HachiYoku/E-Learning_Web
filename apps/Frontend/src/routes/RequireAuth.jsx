@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import Seo from "../components/Seo";
 
 function RequireAuth() {
   const { isAuthenticated, isBootstrapping, user } = useAuth();
@@ -21,7 +22,7 @@ function RequireAuth() {
     return <Navigate to="/login" replace />;
   }
 
-  return <Outlet />;
+  return <><Seo title="Your learning account" noIndex /><Outlet /></>;
 }
 
 export default RequireAuth;
