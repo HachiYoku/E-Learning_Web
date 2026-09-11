@@ -7,6 +7,7 @@ const flashcardSchema = new mongoose.Schema(
     translation: { type: String, trim: true, maxlength: 280, default: "" },
     image: { type: String, trim: true, default: "" },
     imagePublicId: { type: String, trim: true, default: "" },
+    category: { type: mongoose.Schema.Types.ObjectId, ref: "FlashcardCategory", required: true, index: true },
     isPublished: { type: Boolean, default: true, index: true },
   },
   { timestamps: true }
