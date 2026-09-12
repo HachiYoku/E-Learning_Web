@@ -411,7 +411,7 @@ function Payment() {
                   </div>
 
                   <button
-                    onClick={() => navigate("/my-course-order")}
+                    onClick={() => navigate("/app/orders")}
                     className="w-full rounded-xl bg-[#F8C56A] px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] sm:text-base"
                   >
                     View My Course Orders

@@ -109,6 +109,9 @@ app.use('/notifications', notificationRoutes)
 const contactRoutes = require('./routes/contact')
 app.use('/contacts', contactRoutes)
 
+const supportTicketRoutes = require('./routes/supportTicket')
+app.use('/support-tickets', supportTicketRoutes)
+
 const campaignRoutes = require('./routes/campaign')
 app.use('/campaigns', campaignRoutes)
 

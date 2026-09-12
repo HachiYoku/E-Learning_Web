@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, MailCheck, Send, BellRing, BarChart3, GalleryVerticalEnd } from 'lucide-react'
+import { LayoutGrid, BookOpen, FileText, Users, CreditCard, Settings, LogOut, ListChecks, Mail, MailCheck, Send, BellRing, BarChart3, GalleryVerticalEnd, Headphones } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchUnreadContactLeadCount } from '../services/contactLeadService'
 import { fetchPendingPaymentCount } from '../services/paymentService'
@@ -53,6 +53,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
     { label: 'Manage users', path: '/users', icon: Users },
     { label: 'Pending verification', path: '/pending-verifications', icon: MailCheck },
     { label: 'Subscribers & enquiries', path: '/contacts', icon: Mail, badge: badges.contacts },
+    { label: 'Student support', path: '/support', icon: Headphones },
     { label: 'Email updates', path: '/campaigns', icon: Send },
     { label: 'User announcements', path: '/announcements', icon: BellRing },
     { label: 'Review payment', path: '/review-payment', icon: CreditCard, badge: badges.payments },

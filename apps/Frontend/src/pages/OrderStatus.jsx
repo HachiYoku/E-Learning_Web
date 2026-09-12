@@ -45,10 +45,10 @@ function OrderStatus() {
   const isApproved = payment.status === 'approved'
   const isRejected = payment.status === 'rejected'
   const status = isApproved
-    ? { eyebrow: 'Verified payment', title: 'Enrollment confirmed', description: 'Your payment has been verified and your course is ready to explore.', Icon: CircleCheck, iconClasses: 'bg-[#E9F4EA] text-[#4D7C57]', buttonLabel: 'Start learning', onClick: () => navigate(`/course-lessons/${course.id}`), buttonClasses: 'bg-[#F8C56A] text-[#2D2E30] hover:bg-[#E58C1A]' }
+    ? { eyebrow: 'Verified payment', title: 'Enrollment confirmed', description: 'Your payment has been verified and your course is ready to explore.', Icon: CircleCheck, iconClasses: 'bg-[#E9F4EA] text-[#4D7C57]', buttonLabel: 'Start learning', onClick: () => navigate(`/app/learn/${course.id}`), buttonClasses: 'bg-[#F8C56A] text-[#2D2E30] hover:bg-[#E58C1A]' }
     : isRejected
       ? { eyebrow: 'Action needed', title: 'Payment needs attention', description: payment.rejectReason || 'We could not verify this receipt. Please upload a new one to continue.', Icon: XCircle, iconClasses: 'bg-[#FFF0EE] text-[#A34D45]', buttonLabel: 'Resubmit receipt', onClick: () => navigate(`/payment/${course.id}`), buttonClasses: 'bg-[#2D2E30] text-white hover:bg-[#E58C1A]' }
-      : { eyebrow: 'Verification in progress', title: 'Payment under review', description: 'Your receipt was submitted successfully. Our team is reviewing it now.', Icon: Clock3, iconClasses: 'bg-[#FFF4D8] text-[#C97112]', buttonLabel: 'Back to orders', onClick: () => navigate('/my-course-order'), buttonClasses: 'bg-[#2D2E30] text-white hover:bg-[#E58C1A]' }
+      : { eyebrow: 'Verification in progress', title: 'Payment under review', description: 'Your receipt was submitted successfully. Our team is reviewing it now.', Icon: Clock3, iconClasses: 'bg-[#FFF4D8] text-[#C97112]', buttonLabel: 'Back to orders', onClick: () => navigate('/app/orders'), buttonClasses: 'bg-[#2D2E30] text-white hover:bg-[#E58C1A]' }
   const StatusIcon = status.Icon
 
   const stepState = (index) => {
@@ -63,7 +63,7 @@ function OrderStatus() {
       <Navbar />
 
       <div className="bg-[#FFF9EA] px-4 pt-6 sm:px-6 sm:pt-8 md:px-10">
-        <div className="mx-auto max-w-7xl"><button onClick={() => navigate('/my-course-order')} className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to orders</button></div>
+        <div className="mx-auto max-w-7xl"><button onClick={() => navigate('/app/orders')} className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to orders</button></div>
       </div>
 
       <main className="flex-1 bg-[#FFF9EA] px-4 pb-14 pt-8 sm:px-6 sm:pb-16 md:px-10 md:pb-20">
