@@ -1,6 +1,7 @@
 const Flashcard = require("../models/flashcardModel");
 const FlashcardCategory = require("../models/flashcardCategoryModel");
 const { uploadStream } = require("../services/uploadStream");
+const cloudinary = require("../config/cloudinary");
 
 function cardFields(body) {
   return {
@@ -32,6 +33,12 @@ async function applyImage(card, file) {
   const upload = await uploadStream(file.buffer, "english_kafe/flashcards");
   card.image = upload.secure_url;
   card.imagePublicId = upload.public_id;
+}
+
+async function removeImage(card) {
+  if (card.imagePublicId) await cloudinary.uploader.destroy(card.imagePublicId).catch(() => undefined);
+  card.image = "";
+  card.imagePublicId = "";
 }
 
 exports.getPublicFlashcards = async (_req, res) => {
@@ -67,9 +74,10 @@ exports.updateFlashcard = async (req, res) => {
     if (!card) return res.status(404).json({ message: "Flashcard not found" });
     const fields = cardFields(req.body);
     if (!fields.prompt || !fields.answer) return res.status(400).json({ message: "Front prompt and back answer are required." });
-    const category = await findCategory(req.body.category);
-    if (!category) return res.status(400).json({ message: "Choose a valid flashcard category." });
-    Object.assign(card, { ...fields, category: category._id });
+    // Cards are managed inside a category. Editing a card must not move it to
+    // another practice set, even if a client submits a category field.
+    Object.assign(card, fields);
+    if (req.body.removeImage === "true") await removeImage(card);
     await applyImage(card, req.file);
     await card.save();
     await card.populate("category", "name");
