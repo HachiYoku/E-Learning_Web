@@ -181,6 +181,9 @@ function Navbar() {
 
   const profileImage = user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || 'user'}`
   const userName = user?.name || 'User'
+  const isStudentApp = location.pathname === '/app' || location.pathname.startsWith('/app/')
+
+  if (isStudentApp) return null
 
   return (
     <nav className="sticky top-0 z-50 bg-white shadow-sm">

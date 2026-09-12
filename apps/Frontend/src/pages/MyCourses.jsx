@@ -51,9 +51,9 @@ function MyCourses() {
               <h2 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl">Your enrolled courses</h2>
             </div>
             {!loading && !error ? (
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[#E58C1A]/20 bg-[#FFF4D8] px-3 py-2 text-xs font-bold text-[#9A5816]">
-                <BookOpenCheck className="h-4 w-4" aria-hidden="true" />
-                {enrollments.length} {enrollments.length === 1 ? 'course' : 'courses'} unlocked
+              <div className="flex items-center gap-2 text-xs font-bold text-[#765F55]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FFF1D0] text-[#C97112]"><BookOpenCheck className="h-4 w-4" aria-hidden="true" /></span>
+                <span>{enrollments.length} {enrollments.length === 1 ? 'course' : 'courses'} unlocked</span>
               </div>
             ) : null}
           </div>

@@ -5,7 +5,7 @@ function MyCourseCard({ id, image, title, description, progress, buttonText = "L
   const navigate = useNavigate()
 
   const handleLearnNow = () => {
-    navigate(`/course-lessons/${id}`)
+    navigate(`/app/learn/${id}`)
   }
 
   const completedLessons = progress?.completedLessons || 0
