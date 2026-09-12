@@ -12,6 +12,18 @@ body {
   font-family: var(--font-body);
 }
 
+/* Flashcard practice starts with the title; the decorative sparkle is omitted. */
+main > .mx-auto.max-w-3xl > header.text-center > div:first-child {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  /* Stack flashcard rating choices so each option has a comfortable tap target. */
+  button[aria-pressed] + div {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
 h1,
 h2,
 h3,
