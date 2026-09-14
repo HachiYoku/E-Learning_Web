@@ -28,4 +28,14 @@ exports.createPromo = async (req, res) => {
   } catch (error) { return res.status(400).json({ message: error.code === 11000 ? "This promo code already exists." : error.message }); }
 };
 exports.updatePromo = async (req, res) => { try { const promo = await PromoCode.findByIdAndUpdate(req.params.id, validateFields(req.body), { new: true, runValidators: true }); if (!promo) return res.status(404).json({ message: 'Promo code not found' }); res.json(promo); } catch (error) { res.status(400).json({ message: error.message }); } };
-exports.deletePromo = async (req, res) => { try { const promo = await PromoCode.findByIdAndDelete(req.params.id); if (!promo) return res.status(404).json({ message: 'Promo code not found' }); res.json({ message: 'Promo code deleted' }); } catch (error) { res.status(500).json({ message: error.message }); } };
+exports.deletePromo = async (req, res) => {
+  try {
+    const { adminPassword } = req.body || {};
+    if (typeof adminPassword !== "string" || !adminPassword.trim()) return res.status(400).json({ message: "Admin password is required to delete a promo code." });
+    const adminUser = await User.findById(req.user?.id);
+    if (!adminUser || !bcrypt.compareSync(adminPassword, adminUser.password)) return res.status(403).json({ message: "Invalid admin password" });
+    const promo = await PromoCode.findByIdAndDelete(req.params.id);
+    if (!promo) return res.status(404).json({ message: 'Promo code not found' });
+    return res.json({ message: 'Promo code deleted' });
+  } catch (error) { return res.status(500).json({ message: error.message }); }
+};
