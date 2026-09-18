@@ -147,9 +147,7 @@ function CourseDetail() {
                 <p className="text-xs text-gray-600 mb-2 line-clamp-2 lg:line-clamp-none">
                   {course.description}
                 </p>
-                <p className="text-sm sm:text-base lg:text-lg font-bold text-gray-900 mb-1">
-                  {course.price}
-                </p>
+                <div className="mb-1"><p className="text-sm sm:text-base lg:text-lg font-bold text-gray-900">{course.price}</p>{course.hasDiscount ? <p className="text-xs text-gray-500 line-through">{course.originalPrice}</p> : null}</div>
                 <p
                   className={`mb-0 text-xs font-semibold uppercase tracking-wide lg:mb-4 ${
                     course.isPublished ? "text-pink-400" : "text-gray-500"

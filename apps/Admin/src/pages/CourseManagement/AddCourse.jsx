@@ -12,6 +12,7 @@ function AddCourse() {
     title: '',
     description: '',
     price: '',
+    discountPrice: '',
     rating: 4,
     learnings: [''],
     image: '',
@@ -143,9 +144,17 @@ function AddCourse() {
       setLoading(true)
       setError('')
 
+      const originalPrice = Number(formData.price)
+      const discountedPrice = formData.discountPrice === '' ? originalPrice : Number(formData.discountPrice)
+      if (!Number.isFinite(discountedPrice) || discountedPrice < 0 || discountedPrice > originalPrice) {
+        setError('Discounted price must be lower than or equal to the original price.')
+        return
+      }
+
       await createCourse({
         ...formData,
-        price: Number(formData.price),
+        price: discountedPrice,
+        originalPrice,
       })
 
       initialFormRef.current = getFormSnapshot(formData)
@@ -272,10 +281,10 @@ function AddCourse() {
             </section>
 
             <section className="rounded-2xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)] sm:p-6">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <label className="mb-2 block text-sm font-bold text-[#2D2E30]">
-                  Price <span className="text-[#C97112]">*</span>
+                  Original price <span className="text-[#C97112]">*</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -289,6 +298,25 @@ function AddCourse() {
                   />
                   <span className="font-bold text-[#C97112]">฿</span>
                 </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-bold text-[#2D2E30]">
+                  Discounted price <span className="font-medium text-[#765F55]">(optional)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    name="discountPrice"
+                    value={formData.discountPrice}
+                    onChange={handleInputChange}
+                    placeholder="e.g. 3500"
+                    min="0"
+                    className="flex-1 rounded-xl border border-[#2D2E30]/15 px-3 py-2.5 text-sm text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 sm:px-4"
+                  />
+                  <span className="font-bold text-[#C97112]">฿</span>
+                </div>
+                <p className="mt-2 text-xs text-[#765F55]">Leave blank when there is no course discount.</p>
               </div>
 
               <div>

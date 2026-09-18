@@ -58,4 +58,19 @@ const replyToSupportTicket = async (req, res) => {
   }
 };
 
-module.exports = { createSupportTicket, getMySupportTickets, getSupportTickets, updateTicketStatus, replyToSupportTicket };
+const replyToOwnSupportTicket = async (req, res) => {
+  try {
+    const message = req.body?.message?.trim();
+    if (!message) return res.status(400).json({ message: "A reply message is required." });
+    const ticket = await SupportTicket.findOne({ _id: req.params.id, studentId: req.user.id });
+    if (!ticket) return res.status(404).json({ message: "Support request not found." });
+    ticket.replies.push({ authorId: req.user.id, authorRole: "user", message });
+    if (ticket.status === "resolved") ticket.status = "open";
+    await ticket.save();
+    return res.status(200).json(await populateTicket(SupportTicket.findById(ticket._id)));
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { createSupportTicket, getMySupportTickets, getSupportTickets, updateTicketStatus, replyToSupportTicket, replyToOwnSupportTicket };
