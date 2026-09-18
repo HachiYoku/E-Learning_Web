@@ -60,11 +60,13 @@ const getUploadedFile = (req, fieldName) => {
 
 const createCourse = async (req, res) => {
   try {
-    const { title, description, price, rating, thumbnail, paymentQr, isPublished } = req.body;
+    const { title, description, price, originalPrice, rating, thumbnail, paymentQr, isPublished } = req.body;
     const features = parseFeatures(req.body.features);
 
-    if (!title || price === undefined) {
-      return res.status(400).json({ message: "Title and price are required" });
+    const sellingPrice = Number(price);
+    const basePrice = originalPrice === undefined || originalPrice === "" ? sellingPrice : Number(originalPrice);
+    if (!title || !Number.isFinite(sellingPrice) || sellingPrice < 0 || !Number.isFinite(basePrice) || basePrice < sellingPrice) {
+      return res.status(400).json({ message: "Enter a valid original price and a discounted price that is not higher than it." });
     }
 
     let thumbnailUrl = thumbnail;
@@ -96,7 +98,8 @@ const createCourse = async (req, res) => {
     const course = await Course.create({
       title,
       description,
-      price,
+      price: sellingPrice,
+      originalPrice: basePrice,
       features: features || [],
       rating: rating || 0,
       thumbnail: thumbnailUrl,
@@ -147,7 +150,7 @@ const getCourseById = async (req, res) => {
 
 const updateCourse = async (req, res) => {
   try {
-    const { title, description, price, rating, thumbnail, paymentQr, isPublished } = req.body;
+    const { title, description, price, originalPrice, rating, thumbnail, paymentQr, isPublished } = req.body;
     const features = parseFeatures(req.body.features);
     const course = await Course.findById(req.params.id);
 
@@ -155,10 +158,17 @@ const updateCourse = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    const nextPrice = price === undefined ? Number(course.price) : Number(price);
+    const nextOriginalPrice = originalPrice === undefined || originalPrice === "" ? Number(course.originalPrice ?? nextPrice) : Number(originalPrice);
+    if (!Number.isFinite(nextPrice) || nextPrice < 0 || !Number.isFinite(nextOriginalPrice) || nextOriginalPrice < nextPrice) {
+      return res.status(400).json({ message: "Enter a valid original price and a discounted price that is not higher than it." });
+    }
+
     if (title !== undefined) course.title = title;
     if (description !== undefined) course.description = description;
     if (features !== undefined) course.features = features;
-    if (price !== undefined) course.price = price;
+    if (price !== undefined) course.price = nextPrice;
+    if (originalPrice !== undefined) course.originalPrice = nextOriginalPrice;
     if (rating !== undefined) course.rating = rating;
     if (thumbnail !== undefined) course.thumbnail = thumbnail;
     if (paymentQr !== undefined) course.paymentQr = paymentQr;

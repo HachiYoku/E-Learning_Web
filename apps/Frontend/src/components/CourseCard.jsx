@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 
-function CourseCard({ id, image, title, description, price, rating, isEnrolled = false }) {
+function CourseCard({ id, image, title, description, price, originalPrice, hasDiscount = false, rating, isEnrolled = false }) {
   const navigate = useNavigate()
 
   const handleViewDetails = () => {
@@ -42,9 +42,7 @@ function CourseCard({ id, image, title, description, price, rating, isEnrolled =
         </p>
 
         {/* Price */}
-        <div className="mb-3 text-lg font-bold text-[#C97112] md:text-xl">
-          {price}
-        </div>
+        <div className="mb-3"><p className="text-lg font-bold text-[#C97112] md:text-xl">{price}</p>{hasDiscount ? <p className="mt-0.5 text-xs font-medium text-[#9B867C] line-through">{originalPrice}</p> : null}</div>
 
         {/* Rating */}
         <div className="mb-4 flex items-center gap-1.5">

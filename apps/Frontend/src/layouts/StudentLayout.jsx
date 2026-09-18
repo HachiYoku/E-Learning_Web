@@ -98,7 +98,7 @@ function StudentLayout() {
       <nav className="fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto border-t border-[#2D2E30]/10 bg-[#FFFDF8]/95 px-2 py-2 backdrop-blur lg:hidden" aria-label="Student navigation">
         {mobileNavigation.map(({ label, to, icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => `relative flex min-w-16 flex-1 flex-col items-center gap-1 rounded-xl py-1.5 text-[10px] font-bold ${isActive ? "text-[#C97112]" : "text-[#765F55]"}`}>
-            <span className="relative">{createElement(icon, { className: "h-5 w-5" })}{label === "Notifications" && unreadCount > 0 ? <span className="absolute -right-2 -top-2 h-2 w-2 rounded-full bg-red-500" /> : null}</span>{label}
+            <span className="relative">{createElement(icon, { className: "h-5 w-5" })}{label === "More" && unreadCount > 0 ? <span className="absolute -right-2.5 -top-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E58C1A] px-1 text-[8px] font-bold text-white ring-2 ring-[#FFFDF8]">{unreadCount > 9 ? "9+" : unreadCount}</span> : null}</span>{label}
           </NavLink>
         ))}
       </nav>

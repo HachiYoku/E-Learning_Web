@@ -156,13 +156,10 @@ function Enroll() {
                       </span>
                     </div>
                     <div className="flex justify-between items-center pb-3 border-b border-white/15">
-                      <span className="text-white/65 font-semibold text-xs sm:text-sm">
-                        Price:
-                      </span>
-                      <span className="text-white font-semibold text-xs sm:text-sm">
-                        {course.price}
-                      </span>
+                      <span className="text-white/65 font-semibold text-xs sm:text-sm">{course.hasDiscount ? 'Original price:' : 'Price:'}</span>
+                      <span className={`text-white font-semibold text-xs sm:text-sm ${course.hasDiscount ? 'line-through text-white/55' : ''}`}>{course.hasDiscount ? course.originalPrice : course.price}</span>
                     </div>
+                    {course.hasDiscount ? <div className="flex justify-between items-center"><span className="text-white/65 font-semibold text-xs sm:text-sm">Course discount</span><span className="text-sm font-bold text-[#F8C56A]">{course.price}</span></div> : null}
                     <div className="flex justify-between items-center pt-1">
                       <span className="text-sm font-bold text-white">
                         Total

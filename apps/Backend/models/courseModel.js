@@ -22,6 +22,10 @@ const courseSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    originalPrice: {
+      type: Number,
+      min: 0,
+    },
     rating: {
       type: Number,
       default: 0,

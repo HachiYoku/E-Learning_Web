@@ -213,7 +213,7 @@ function CourseDetail() {
 
                 
                 <div className="flex flex-col gap-3 border-t border-[#2D2E30]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Course access</p><p className="mt-1 text-2xl font-bold text-[#C97112]">{course.price}</p></div>
+                  <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Course access</p><p className="mt-1 text-2xl font-bold text-[#C97112]">{course.price}</p>{course.hasDiscount ? <p className="mt-1 text-sm font-medium text-[#9B867C] line-through">{course.originalPrice}</p> : null}</div>
                   <button onClick={() => navigate(`/enroll/${course.id}`)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#2D2E30]/20 transition hover:bg-[#E58C1A]">Enroll now <PlayCircle className="h-4 w-4" aria-hidden="true" /></button>
                 </div>
                 
@@ -242,6 +242,8 @@ function CourseDetail() {
                     title={relatedCourse.title}
                     description={relatedCourse.description}
                     price={relatedCourse.price}
+                    originalPrice={relatedCourse.originalPrice}
+                    hasDiscount={relatedCourse.hasDiscount}
                     rating={relatedCourse.rating}
                     reviews={relatedCourse.reviews}
                     isEnrolled={enrolledCourseIds.has(relatedCourse.id)}
