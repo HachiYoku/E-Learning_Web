@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, ArrowRight, PenLine, RefreshCw } from "lucide-react";
 import Navbar from "../components/Navbar";
 import ArticleCard from "../components/ArticleCard";
@@ -36,6 +36,8 @@ function BlogState({ type, onRetry }) {
 }
 
 function Blog() {
+  const { pathname } = useLocation();
+  const isStudentApp = pathname === "/app/blog";
   const [blogs, setBlogs] = useState([]);
   const [selectedBlogId, setSelectedBlogId] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
@@ -270,7 +272,7 @@ function Blog() {
         </div>
       </section> : null}
 
-      <ContactSection />
+      {!isStudentApp ? <ContactSection /> : null}
       <Footer />
 
       <style>{`

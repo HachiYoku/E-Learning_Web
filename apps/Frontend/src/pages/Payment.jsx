@@ -89,6 +89,7 @@ function Payment() {
   };
 
   const applyPromo = async () => {
+    if (course?.hasDiscount) return setPromoMessage("This course is already discounted, so a promo code cannot be applied.");
     if (!promoInput.trim()) return setPromoMessage("Enter a promo code first.");
     try { setPromoLoading(true); setPromoMessage(""); const result = await validatePromoCode(promoInput, courseId); setPromo(result); setPromoInput(result.code); }
     catch (err) { setPromo(null); setPromoMessage(err.message); } finally { setPromoLoading(false); }
@@ -210,7 +211,7 @@ function Payment() {
                     </div>
                 </div>
                 <div className="mt-5 flex items-end justify-between gap-4">
-                  <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">{promo ? "Amount to transfer" : "Total"}</p>{promo && <p className="mt-1 text-sm text-[#765F55] line-through">{course.price}</p>}<p className="mt-1 text-2xl font-bold text-[#B96128]">{promo ? `${promo.finalAmount.toLocaleString()} ฿` : course.price}</p></div>
+                  <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">{promo ? "Amount to transfer" : "Total"}</p>{course.hasDiscount ? <p className="mt-1 text-sm text-[#9B867C] line-through">{course.originalPrice}</p> : null}{promo ? <p className="mt-1 text-sm text-[#765F55] line-through">{course.price}</p> : null}<p className="mt-1 text-2xl font-bold text-[#B96128]">{promo ? `${promo.finalAmount.toLocaleString()} ฿` : course.price}</p></div>
                   <CreditCard className="h-6 w-6 text-[#E58C1A]" aria-hidden="true" />
                 </div>
               </div>
@@ -265,7 +266,7 @@ function Payment() {
               </div>
 
               <div className="px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6 md:px-8 md:pb-8">
-              <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setPromoMessage(""); }} placeholder="WELCOME20" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promo ? <p className="mt-2 text-sm font-semibold text-[#246B35]">Applied: save ฿{promo.discountAmount.toLocaleString()} — pay ฿{promo.finalAmount.toLocaleString()}</p> : promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div>
+              {course.hasDiscount ? <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Course discount applied</p><p className="mt-1 text-sm leading-5 text-[#765F55]">Promo codes cannot be combined with this course discount.</p></div> : <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setPromoMessage(""); }} placeholder="WELCOME20" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promo ? <p className="mt-2 text-sm font-semibold text-[#246B35]">Applied: save ฿{promo.discountAmount.toLocaleString()} — pay ฿{promo.finalAmount.toLocaleString()}</p> : promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div>}
               {/* Step 1 — QR Code */}
               {currentStep === 1 ? (
                 <div className="space-y-4 sm:space-y-5 md:space-y-6">
@@ -411,7 +412,7 @@ function Payment() {
                   </div>
 
                   <button
-                    onClick={() => navigate("/my-course-order")}
+                    onClick={() => navigate("/app/orders")}
                     className="w-full rounded-xl bg-[#F8C56A] px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] sm:text-base"
                   >
                     View My Course Orders

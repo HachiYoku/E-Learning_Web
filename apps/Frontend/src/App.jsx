@@ -1,4 +1,4 @@
-import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
+import { Navigate, Routes, Route, useLocation, useParams } from 'react-router-dom'
 import Home from "./pages/Home"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
@@ -24,8 +24,26 @@ import Flashcards from "./pages/Flashcards"
 import RequireAuth from "./routes/RequireAuth"
 import ScrollToTop from "./components/ScrollToTop"
 import Seo from "./components/Seo"
+import StudentLayout from "./layouts/StudentLayout"
+import StudentDashboard from "./pages/StudentDashboard"
+import StudentMore from "./pages/StudentMore"
+import StudentPractice from "./pages/StudentPractice"
+import StudentExplore from "./pages/StudentExplore"
+import StudentSupport from "./pages/StudentSupport"
 
-const privateRoutePrefixes = ["/login", "/register", "/forgot-password", "/verification-help", "/reset-password", "/enroll", "/payment", "/my-courses", "/my-course-order", "/my-profile", "/notifications", "/order-status", "/course-lessons", "/course-quiz"]
+const privateRoutePrefixes = ["/app", "/login", "/register", "/forgot-password", "/verification-help", "/reset-password", "/enroll", "/payment", "/my-courses", "/my-course-order", "/my-profile", "/notifications", "/order-status", "/course-lessons", "/course-quiz"]
+
+function LegacyCourseRedirect({ type = "learn" }) {
+  const { courseId, lessonId, quizId } = useParams()
+  if (type === "lessonQuiz") return <Navigate to={`/app/learn/${courseId}/quiz/${lessonId}`} replace />
+  if (type === "courseQuiz") return <Navigate to={`/app/course-quiz/${courseId}/${quizId}`} replace />
+  return <Navigate to={`/app/learn/${courseId}`} replace />
+}
+
+function LegacyOrderRedirect() {
+  const { orderId } = useParams()
+  return <Navigate to={`/app/orders/${orderId}`} replace />
+}
 
 function RouteMetadata() {
   const { pathname } = useLocation()
@@ -69,16 +87,34 @@ function App() {
         <Route path="/blog" element={<Blog />} />
         <Route path="/about" element={<About />} />
         <Route element={<RequireAuth />}>
+          <Route path="/app" element={<StudentLayout />}>
+            <Route index element={<StudentDashboard />} />
+            <Route path="courses" element={<MyCourses />} />
+            <Route path="explore" element={<StudentExplore />} />
+            <Route path="learn/:courseId" element={<CourseLessons />} />
+            <Route path="learn/:courseId/quiz/:lessonId" element={<Quiz />} />
+            <Route path="course-quiz/:courseId/:quizId" element={<Quiz />} />
+            <Route path="practice" element={<StudentPractice />} />
+            <Route path="practice/flashcards" element={<Flashcards />} />
+            <Route path="practice/:section" element={<Practice />} />
+            <Route path="blog" element={<Blog />} />
+            <Route path="profile" element={<MyProfile />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="orders" element={<MyCourseOrder />} />
+            <Route path="orders/:orderId" element={<OrderStatus />} />
+            <Route path="more" element={<StudentMore />} />
+            <Route path="support" element={<StudentSupport />} />
+          </Route>
           <Route path="/enroll/:courseId" element={<Enroll />} />
           <Route path="/payment/:courseId" element={<Payment />} />
-          <Route path="/my-courses" element={<MyCourses />} />
-          <Route path="/my-course-order" element={<MyCourseOrder />} />
-          <Route path="/my-profile" element={<MyProfile />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/order-status/:orderId" element={<OrderStatus />} />
-          <Route path="/course-lessons/:courseId" element={<CourseLessons />} />
-          <Route path="/course-lessons/:courseId/quiz/:lessonId" element={<Quiz />} />
-          <Route path="/course-quiz/:courseId/:quizId" element={<Quiz />} />
+          <Route path="/my-courses" element={<Navigate to="/app/courses" replace />} />
+          <Route path="/my-course-order" element={<Navigate to="/app/orders" replace />} />
+          <Route path="/my-profile" element={<Navigate to="/app/profile" replace />} />
+          <Route path="/notifications" element={<Navigate to="/app/notifications" replace />} />
+          <Route path="/order-status/:orderId" element={<LegacyOrderRedirect />} />
+          <Route path="/course-lessons/:courseId" element={<LegacyCourseRedirect />} />
+          <Route path="/course-lessons/:courseId/quiz/:lessonId" element={<LegacyCourseRedirect type="lessonQuiz" />} />
+          <Route path="/course-quiz/:courseId/:quizId" element={<LegacyCourseRedirect type="courseQuiz" />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

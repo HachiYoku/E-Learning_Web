@@ -1,212 +1,78 @@
-import { useEffect, useState } from "react";
-import Navbar from "../components/Navbar";
-import Footer from "../components/Footer";
-import { useAuth } from "../contexts/AuthContext";
-import { updateProfile } from "../services/authService";
+import { useEffect, useState } from "react"
+import { Camera, CheckCircle2, Mail, Pencil, ShieldCheck, UserRound, X } from "lucide-react"
+import { useAuth } from "../contexts/AuthContext"
+import { updateProfile } from "../services/authService"
+
+const inputClass = "w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] px-4 py-3 text-sm font-semibold text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10"
 
 function MyProfile() {
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("info");
-  const { user, setUser } = useAuth();
-
-  const userEmail = user?.email || "user@example.com";
-  const userName = user?.name || "John Doe";
-
-  const [formData, setFormData] = useState({
-    userName: userName,
-    email: userEmail,
-    avatarFile: null,
-    avatarPreview: "",
-  });
-
-  const profileImage =
-    formData.avatarPreview ||
-    user?.avatar ||
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEmail}`;
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [message, setMessage] = useState("")
+  const [messageType, setMessageType] = useState("info")
+  const { user, setUser } = useAuth()
+  const userEmail = user?.email || "user@example.com"
+  const userName = user?.name || "Student"
+  const [formData, setFormData] = useState({ userName, avatarFile: null, avatarPreview: "" })
 
   useEffect(() => {
-    setFormData({
-      userName,
-      email: userEmail,
-      avatarFile: null,
-      avatarPreview: "",
-    });
-  }, [userEmail, userName]);
+    setFormData({ userName, avatarFile: null, avatarPreview: "" })
+  }, [userEmail, userName])
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleAvatarChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const previewUrl = URL.createObjectURL(file);
-    setFormData((prev) => ({ ...prev, avatarFile: file, avatarPreview: previewUrl }));
-    setMessage("");
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    setMessage("");
-    setMessageType("info");
-    try {
-      const updatedUser = await updateProfile({
-        name: formData.userName,
-        avatarFile: formData.avatarFile,
-      });
-      setUser(updatedUser);
-      setIsEditing(false);
-      setFormData((prev) => ({ ...prev, avatarFile: null, avatarPreview: "" }));
-      setMessage("Profile updated successfully.");
-      setMessageType("success");
-    } catch (error) {
-      setMessage(error.message);
-      setMessageType("error");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
+  const profileImage = formData.avatarPreview || user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEmail}`
+  const handleChange = (event) => setFormData((current) => ({ ...current, userName: event.target.value }))
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setFormData((current) => ({ ...current, avatarFile: file, avatarPreview: URL.createObjectURL(file) }))
+    setMessage("")
+  }
   const handleCancel = () => {
-    setFormData({ userName, email: userEmail, avatarFile: null, avatarPreview: "" });
-    setIsEditing(false);
-    setMessage("");
-  };
+    setFormData({ userName, avatarFile: null, avatarPreview: "" })
+    setIsEditing(false)
+    setMessage("")
+  }
+  const handleSave = async () => {
+    setIsSaving(true)
+    setMessage("")
+    try {
+      const updatedUser = await updateProfile({ name: formData.userName, avatarFile: formData.avatarFile })
+      setUser(updatedUser)
+      setIsEditing(false)
+      setFormData((current) => ({ ...current, avatarFile: null, avatarPreview: "" }))
+      setMessage("Your profile has been updated.")
+      setMessageType("success")
+    } catch (error) {
+      setMessage(error.message)
+      setMessageType("error")
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-white">
-      <Navbar />
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-10">
+      <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Account settings</p>
+      <div className="mt-3"><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Your profile</h1><p className="mt-2 text-sm leading-relaxed text-[#765F55] sm:text-base">Keep your learning account details up to date.</p></div>
 
-      {/* Header */}
-      <div className="px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-12 text-center bg-blue-50">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900">
-          My Profile
-        </h1>
+      {message ? <div className={`mt-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm font-medium ${messageType === "success" ? "border-[#7EAF85]/30 bg-[#EDF8EE] text-[#246B35]" : "border-red-200 bg-red-50 text-red-700"}`}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{message}</div> : null}
+
+      <div className="mt-8 grid items-start gap-6 lg:grid-cols-5">
+        <section className="rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-5 shadow-[0_18px_45px_-35px_rgba(80,48,19,0.35)] sm:p-6 lg:col-span-2">
+          <div className="flex items-center gap-4"><div className="flex shrink-0 flex-col items-center gap-2"><div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FFF1D0]"><img src={profileImage} alt={userName} className="size-10 rounded-xl object-cover shadow-sm" /></div><label className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-bold text-[#C97112] transition hover:bg-[#FFF1D0]"><Camera className="h-3.5 w-3.5" />Change photo<input type="file" accept="image/*" onClick={() => setIsEditing(true)} onChange={handleAvatarChange} className="hidden" /></label></div><div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Student account</p><h2 className="mt-1 truncate text-xl font-bold">{formData.userName || "Student"}</h2><p className="mt-1 truncate text-sm text-[#765F55]">{userEmail}</p></div></div>
+          <div className="mt-6 rounded-2xl bg-[#FFF9EA] p-4"><div className="flex items-center gap-2 text-sm font-bold text-[#2D2E30]"><ShieldCheck className="h-4 w-4 text-[#4D7C57]" />Your student account</div><p className="mt-2 text-sm leading-relaxed text-[#765F55]">Your profile details are used to personalize your Arun Thai learning space.</p></div>
+          <div className="mt-5 flex items-center justify-between border-t border-[#2D2E30]/10 pt-4"><span className="text-xs font-bold uppercase tracking-[0.14em] text-[#765F55]">Account status</span><span className="inline-flex items-center gap-1.5 rounded-full bg-[#E9F4EA] px-2.5 py-1 text-xs font-bold text-[#4D7C57]"><span className="h-1.5 w-1.5 rounded-full bg-[#4D7C57]" />Active</span></div>
+        </section>
+
+        <section className="rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-5 shadow-[0_18px_45px_-35px_rgba(80,48,19,0.35)] sm:p-7 lg:col-span-3">
+          <div className="flex items-center justify-between gap-3 border-b border-[#2D2E30]/10 pb-5"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FFF1D0] text-[#C97112]"><UserRound className="h-5 w-5" /></span><div><h2 className="font-bold">Personal details</h2><p className="mt-0.5 text-sm text-[#765F55]">Your name and contact details.</p></div></div>{!isEditing ? <button type="button" onClick={() => setIsEditing(true)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#2D2E30] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#E58C1A]"><Pencil className="h-3.5 w-3.5" />Edit</button> : <span className="shrink-0 rounded-full bg-[#FFF1D0] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9A5816]">Editing</span>}</div>
+          <div className="mt-6 space-y-5"><label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-[#765F55]">Display name</span>{isEditing ? <input type="text" value={formData.userName} onChange={handleChange} placeholder="Enter your name" className={inputClass} /> : <div className="rounded-xl border border-[#2D2E30]/10 bg-[#FFF9EA] px-4 py-3 text-sm font-semibold">{formData.userName}</div>}</label><div><span className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-[#765F55]">Email address</span><div className="flex items-center gap-3 rounded-xl border border-[#2D2E30]/10 bg-[#FFF9EA] px-4 py-3 text-sm font-semibold"><Mail className="h-4 w-4 shrink-0 text-[#C97112]" /><span className="min-w-0 break-all">{userEmail}</span></div></div></div>
+          <div className="mt-6 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF4D8]/55 p-4"><p className="text-sm font-bold text-[#2D2E30]">Need to update your email?</p><p className="mt-1 text-sm leading-relaxed text-[#765F55]">Contact Arun Thai support and we will help update your account.</p><a href="mailto:arunthaiedu@gmail.com" className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-[#C97112] hover:underline"><Mail className="h-4 w-4" />arunthaiedu@gmail.com</a></div>
+          {isEditing ? <div className="mt-6 flex flex-wrap gap-3 border-t border-[#2D2E30]/10 pt-5"><button type="button" onClick={handleSave} disabled={isSaving} className="inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A] disabled:opacity-60"><CheckCircle2 className="h-4 w-4" />{isSaving ? "Saving…" : "Save changes"}</button><button type="button" onClick={handleCancel} className="inline-flex items-center gap-2 rounded-xl border border-[#2D2E30]/15 px-5 py-3 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF9EA]"><X className="h-4 w-4" />Cancel</button></div> : null}
+        </section>
       </div>
-
-      {/* Profile Content */}
-      <div className="px-4 sm:px-6 md:px-10 py-8 sm:py-10 md:py-16">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-md p-5 sm:p-8 md:p-12">
-            <div className="flex flex-col md:grid md:grid-cols-2 gap-8 items-center">
-
-              {/* Profile Image */}
-              <div className="flex justify-center w-full">
-                <div className="flex flex-col items-center gap-4">
-                  <img
-                    src={profileImage}
-                    alt="Profile"
-                    className="w-36 h-36 sm:w-48 sm:h-48 md:w-56 md:h-56 rounded-full object-cover border-4 border-gray-300 shadow-lg"
-                  />
-                  {isEditing && (
-                    <label className="cursor-pointer rounded-lg bg-[#F8B2C0] px-5 py-2 text-sm font-semibold text-gray-900 transition hover:bg-[#F8C2C0]">
-                      Change Photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleAvatarChange}
-                        className="hidden"
-                      />
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              {/* Personal Information */}
-              <div className="w-full border-2 border-blue-300 rounded-lg p-5 sm:p-6 md:p-8">
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">
-                  Personal Information
-                </h2>
-
-                <div className="space-y-5">
-                  {message && (
-                    <div
-                      className={`rounded-lg px-4 py-3 text-sm ${
-                        messageType === "success"
-                          ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : messageType === "error"
-                            ? "border border-red-200 bg-red-50 text-red-700"
-                            : "border border-gray-200 bg-gray-50 text-gray-700"
-                      }`}
-                    >
-                      {message}
-                    </div>
-                  )}
-
-                  {/* User Name */}
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-gray-500 font-medium">User Name</label>
-                    {!isEditing ? (
-                      <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-200 text-gray-900 font-medium">
-                        {formData.userName}
-                      </div>
-                    ) : (
-                      <input
-                        type="text"
-                        name="userName"
-                        value={formData.userName}
-                        onChange={handleChange}
-                        placeholder="Enter your name"
-                        className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      />
-                    )}
-                  </div>
-
-                  {/* Email */}
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-gray-500 font-medium">Email Address</label>
-                    <div className="px-4 py-3 bg-gray-100 rounded-lg border border-gray-200 text-gray-700 break-all text-sm sm:text-base">
-                      {formData.email}
-                    </div>
-                    <p className="text-xs sm:text-sm text-gray-500">
-                      Want to update your email? Contact support via{" "}
-                      <a href="#" className="text-blue-600 font-semibold hover:underline">
-                        LINE (mindployenglish)
-                      </a>
-                    </p>
-                  </div>
-
-                  {/* Buttons */}
-                  <div className="flex flex-wrap gap-3 pt-2">
-                    {!isEditing ? (
-                      <button
-                        onClick={() => setIsEditing(true)}
-                        className="px-6 py-2 bg-[#F8B2C0] text-gray-900 font-semibold rounded-lg hover:bg-[#F8C2C0] transition"
-                      >
-                        Edit Profile
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          onClick={handleSave}
-                          disabled={isSaving}
-                          className="px-6 py-2 bg-[#F8B2C0] text-gray-900 font-semibold rounded-lg hover:bg-[#F8C2C0] transition disabled:opacity-60"
-                        >
-                          {isSaving ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          onClick={handleCancel}
-                          className="px-6 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition"
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <Footer />
     </div>
-  );
+  )
 }
 
-export default MyProfile;
+export default MyProfile

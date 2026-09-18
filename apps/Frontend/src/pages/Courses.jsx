@@ -149,6 +149,8 @@ function Courses() {
                     title={course.title}
                     description={course.description}
                     price={course.price}
+                    originalPrice={course.originalPrice}
+                    hasDiscount={course.hasDiscount}
                     rating={course.rating}
                     reviews={course.reviews}
                     isEnrolled={enrolledCourseIds.has(course.id)}

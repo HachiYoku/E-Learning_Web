@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 
-function CourseCard({ id, image, title, description, price, rating, isEnrolled = false }) {
+function CourseCard({ id, image, title, description, price, originalPrice, hasDiscount = false, rating, isEnrolled = false }) {
   const navigate = useNavigate()
 
   const handleViewDetails = () => {
@@ -42,9 +42,7 @@ function CourseCard({ id, image, title, description, price, rating, isEnrolled =
         </p>
 
         {/* Price */}
-        <div className="mb-3 text-lg font-bold text-[#C97112] md:text-xl">
-          {price}
-        </div>
+        <div className="mb-3"><p className="text-lg font-bold text-[#C97112] md:text-xl">{price}</p>{hasDiscount ? <p className="mt-0.5 text-xs font-medium text-[#9B867C] line-through">{originalPrice}</p> : null}</div>
 
         {/* Rating */}
         <div className="mb-4 flex items-center gap-1.5">
@@ -69,7 +67,7 @@ function CourseCard({ id, image, title, description, price, rating, isEnrolled =
             </button>
           )}
           <button 
-            onClick={() => navigate(isEnrolled ? `/course-lessons/${id}` : `/enroll/${id}`)}
+            onClick={() => navigate(isEnrolled ? `/app/learn/${id}` : `/enroll/${id}`)}
             className="flex-1 rounded-xl bg-[#2D2E30] px-3 py-2.5 text-xs font-semibold text-white shadow-md shadow-[#2D2E30]/15 transition-colors hover:bg-[#E58C1A] md:text-sm"
           >
             {isEnrolled ? 'Learn Now' : 'Enroll Now'}

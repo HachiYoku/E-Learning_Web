@@ -130,6 +130,10 @@ const createPayment = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    if (promoCode && Number(course.originalPrice ?? course.price) > Number(course.price)) {
+      return res.status(400).json({ message: "This course is already discounted, so a promo code cannot be applied." });
+    }
+
     if (!req.file?.buffer) {
       return res.status(400).json({ message: "Payment proof is required" });
     }

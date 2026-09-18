@@ -11,6 +11,9 @@ export function normalizeCourse(course) {
     description: course.description || "",
     price: `${Number(course.price || 0).toLocaleString()} บาท`,
     priceValue: Number(course.price || 0),
+    originalPrice: `${Number(course.originalPrice ?? course.price ?? 0).toLocaleString()} บาท`,
+    originalPriceValue: Number(course.originalPrice ?? course.price ?? 0),
+    hasDiscount: Number(course.originalPrice ?? course.price ?? 0) > Number(course.price || 0),
     rating: Number(course.rating || 0),
     reviews: Number(course.reviews || 0),
     image: course.thumbnail || "",
@@ -29,6 +32,7 @@ function buildCourseFormData(payload) {
   formData.append("title", payload.title);
   formData.append("description", payload.description || "");
   formData.append("price", String(payload.price));
+  if (payload.originalPrice !== undefined && payload.originalPrice !== null) formData.append("originalPrice", String(payload.originalPrice));
   formData.append("rating", String(payload.rating ?? 0));
   formData.append("isPublished", String(Boolean(payload.isPublished)));
 

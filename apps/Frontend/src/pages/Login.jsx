@@ -21,7 +21,7 @@ function Login() {
   const [infoMessage, setInfoMessage] = useState(location.state?.registrationMessage || "");
   const { login, logout, isAuthenticated } = useAuth();
   const { showToast } = useToast();
-  const redirectTo = location.state?.from?.pathname || "/";
+  const redirectTo = location.state?.from?.pathname || "/app";
   const canResendVerification = location.state?.emailSent === false || loginErrorCode === "EMAIL_UNVERIFIED";
   const accountIsDeactivated = loginErrorCode === "ACCOUNT_DEACTIVATED";
 

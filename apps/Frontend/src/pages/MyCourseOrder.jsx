@@ -88,7 +88,7 @@ function MyCourseOrder() {
                       </div>
 
                       <button
-                        onClick={() => navigate(payment.status === 'approved' ? `/course-lessons/${course?.id}` : `/order-status/${payment.id}`)}
+                        onClick={() => navigate(payment.status === 'approved' ? `/app/learn/${course?.id}` : `/app/orders/${payment.id}`)}
                         className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-[#FFF9EA] px-4 py-3 text-sm font-bold text-[#2D2E30] transition-colors hover:border-[#E58C1A] hover:bg-[#FFF4D8]"
                       >
                         {payment.status === 'approved' ? <CircleCheck className="h-4 w-4 text-[#4D7C57]" aria-hidden="true" /> : <FileSearch className="h-4 w-4 text-[#C97112]" aria-hidden="true" />}

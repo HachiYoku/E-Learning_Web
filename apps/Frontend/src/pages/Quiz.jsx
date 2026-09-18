@@ -223,7 +223,7 @@ function Quiz() {
     );
   }
 
-  const backPath = `/course-lessons/${courseId}`;
+  const backPath = `/app/learn/${courseId}`;
   const noQuizMessage = isCourseQuiz ? "This course quiz is not available." : "Your teacher has not added a quiz for this lesson.";
   const attemptsRemaining = quiz ? Math.max((quiz.maxAttempts ?? Infinity) - (quiz.attemptsUsed ?? 0), 0) : 0;
   const isQuizLocked = Boolean(quiz?.maxAttempts) && (quiz?.attemptsUsed ?? 0) >= quiz.maxAttempts && !result;

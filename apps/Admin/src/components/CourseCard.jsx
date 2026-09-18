@@ -40,7 +40,7 @@ function CourseCard({ course, onEdit, onDelete }) {
         </p>
 
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-[#765F55]">
-          <span className="text-lg font-bold text-[#C97112]">{course.price}</span>
+          <span className="flex flex-col"><span className="text-lg font-bold text-[#C97112]">{course.price}</span>{course.hasDiscount ? <span className="text-xs font-medium text-[#9B867C] line-through">{course.originalPrice}</span> : null}</span>
           <span className="rounded-full bg-[#FFF9EA] px-3 py-1 font-semibold">
             {course.lessons} lessons
           </span>

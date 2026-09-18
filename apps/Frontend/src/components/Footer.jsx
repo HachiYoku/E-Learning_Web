@@ -1,5 +1,10 @@
+import { useLocation } from "react-router-dom"
+
 function Footer() {
   const currentYear = new Date().getFullYear()
+  const { pathname } = useLocation()
+
+  if (pathname === "/app" || pathname.startsWith("/app/")) return null
 
   return (
     <footer className="bg-white border-t border-gray-200 py-8">
