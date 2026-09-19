@@ -4,7 +4,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:auth-security": "node --test tests/auth-security.test.js"
   },
   "author": "",
   "license": "ISC",

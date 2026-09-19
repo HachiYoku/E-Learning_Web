@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/userModel");
 
 const extractUserFromHeader = (authHeader) => {
   if (!authHeader) {
@@ -16,7 +17,7 @@ const extractUserFromHeader = (authHeader) => {
   return jwt.verify(token, process.env.JWT_SECRET);
 };
 
-const validateToken = (req, res, next) => {
+const validateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
@@ -26,8 +27,14 @@ const validateToken = (req, res, next) => {
         .json({ message: "Authorization header is missing" });
     }
 
-    req.user = extractUserFromHeader(authHeader);
-    next();
+    const payload = extractUserFromHeader(authHeader);
+    const user = await User.findById(payload.id).select("role isActive isVerified sessionVersion");
+    if (!user || !user.isActive || !user.isVerified || Number(user.sessionVersion || 0) !== Number(payload.sessionVersion || 0)) {
+      return res.status(401).json({ message: "Session is no longer valid" });
+    }
+    // Authoritative database role prevents a stale token retaining admin access.
+    req.user = { id: user._id.toString(), role: user.role, sessionVersion: user.sessionVersion };
+    return next();
   } catch (err) {
     if (err.message === "Authorization header must be in the format: Bearer <token>") {
       return res.status(401).json({ message: err.message });
@@ -45,12 +52,16 @@ const validateToken = (req, res, next) => {
   }
 };
 
-const attachUserIfPresent = (req, _res, next) => {
+const attachUserIfPresent = async (req, _res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
     if (authHeader) {
-      req.user = extractUserFromHeader(authHeader);
+      const payload = extractUserFromHeader(authHeader);
+      const user = await User.findById(payload.id).select("role isActive isVerified sessionVersion");
+      if (user && user.isActive && user.isVerified && Number(user.sessionVersion || 0) === Number(payload.sessionVersion || 0)) {
+        req.user = { id: user._id.toString(), role: user.role, sessionVersion: user.sessionVersion };
+      }
     }
   } catch (_error) {
     req.user = undefined;

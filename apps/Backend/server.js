@@ -4,6 +4,16 @@ const rateLimit = require("express-rate-limit");
 require('dotenv').config();
 const errorHandler = require("./middleware/errorHandler");
 
+const parseCookies = (cookieHeader = "") => Object.fromEntries(
+  cookieHeader.split(";").map((part) => {
+    const index = part.indexOf("=");
+    if (index === -1) return ["", ""];
+    const key = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+    try { return [key, decodeURIComponent(value)]; } catch { return [key, value]; }
+  }).filter(([key]) => key)
+);
+
 const app = express()
 const port = process.env.PORT || 3000
 const trustProxy = process.env.TRUST_PROXY
@@ -12,13 +22,20 @@ if (trustProxy) {
   app.set('trust proxy', trustProxy === 'true' ? 1 : trustProxy)
 }
 
+const localOrigins = process.env.NODE_ENV === "production"
+  ? []
+  : [
+      process.env.FRONTEND_URL_LOCAL || "http://localhost:5173",
+      "http://localhost:5175",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:5175",
+      process.env.ADMIN_URL_LOCAL || "http://localhost:5174",
+    ];
+
+// Credentialed CORS must use exact origins; never use a wildcard here.
 const allowedOrigins = [
-  process.env.FRONTEND_URL_LOCAL || 'http://localhost:5173',
-  'http://localhost:5175',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5175',
+  ...localOrigins,
   process.env.FRONTEND_URL_PROD,
-  process.env.ADMIN_URL_LOCAL || 'http://localhost:5174',
   process.env.ADMIN_URL_PROD,
   process.env.FRONTEND_URL,
   process.env.ADMIN_URL,
@@ -66,6 +83,10 @@ app.use(
 
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true, limit: '1mb' }))
+app.use((req, _res, next) => {
+  req.cookies = parseCookies(req.headers.cookie);
+  next();
+})
 
 const connectDB = require("./config/dbConnection");
 connectDB();

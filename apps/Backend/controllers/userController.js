@@ -8,6 +8,7 @@ const bcrypt = require("bcryptjs");
 const { uploadStream } = require("../services/uploadStream");
 const { createNotification } = require("./notificationController");
 const { writeAuditLog } = require("../services/auditLogger");
+const { revokeAllUserSessions } = require("../services/sessionService");
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
@@ -129,6 +130,7 @@ const deletAccount = async (req, res) => {
 
     await Enrollment.deleteMany({ userId: req.params.id });
     await Payment.deleteMany({ userId: req.params.id });
+    await revokeAllUserSessions(user._id);
 
     await writeAuditLog({
       actorId: req.user.id,
@@ -167,7 +169,12 @@ const updateUserStatus = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    user.isActive = Boolean(isActive);
+    const nextIsActive = Boolean(isActive);
+    if (user.isActive !== nextIsActive) {
+      user.isActive = nextIsActive;
+      user.sessionVersion = (user.sessionVersion || 0) + 1;
+      await revokeAllUserSessions(user._id);
+    }
     await user.save();
     await writeAuditLog({ actorId: req.user.id, action: user.isActive ? "user.activated" : "user.deactivated", targetType: "user", targetId: user._id, metadata: { email: user.email } });
 
