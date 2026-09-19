@@ -1,9 +1,10 @@
-import { clearToken, getToken } from "./tokenStorage";
+import { clearToken, getToken, setToken } from "./tokenStorage";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export const SESSION_EXPIRED_EVENT = "user-session-expired";
+let refreshPromise = null;
 
 function getFriendlyErrorMessage(status, backendMessage) {
   if (
@@ -18,27 +19,57 @@ function getFriendlyErrorMessage(status, backendMessage) {
   return backendMessage || "Something went wrong";
 }
 
+export async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.accessToken) throw new Error(data?.message || "Session expired");
+        return data.accessToken;
+      })
+      .then((token) => {
+        // Keep the only JS-readable token in memory.
+        setToken(token);
+        return token;
+      })
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
+
 async function request(path, options = {}) {
-  const token = getToken();
+  const requestToken = options.token === undefined ? getToken() : options.token;
   const headers = new Headers(options.headers || {});
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
+  if (requestToken) {
+    headers.set("Authorization", `Bearer ${requestToken}`);
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers,
+    credentials: "include",
   });
 
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401 && token) {
+    if (response.status === 401 && requestToken && !options.skipRefresh) {
+      try {
+        const freshToken = await refreshAccessToken();
+        return request(path, { ...options, token: freshToken, skipRefresh: true });
+      } catch {
+        // The common expiry/deactivation path is handled below.
+      }
+    }
+    if (response.status === 401 && requestToken) {
       clearToken();
       window.dispatchEvent(
         new CustomEvent(SESSION_EXPIRED_EVENT, {

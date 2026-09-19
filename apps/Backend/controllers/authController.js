@@ -1,8 +1,17 @@
 const User = require('../models/userModel')
 const bcrypt = require('bcryptjs')
-const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
 const sendEmail = require('../services/sendEmail')
+const {
+  REFRESH_COOKIE_NAME,
+  refreshCookieOptions,
+  clearRefreshCookieOptions,
+  issueAccessToken,
+  createRefreshSession,
+  rotateRefreshSession,
+  revokeRefreshSession,
+  revokeAllUserSessions,
+} = require('../services/sessionService')
 
 const GENERIC_LOGIN_ERROR_MESSAGE = "Invalid email, password, or account status";
 const GENERIC_PASSWORD_RESET_MESSAGE = "If that email exists, a password reset link has been sent";
@@ -317,11 +326,36 @@ const login = async (req, res) => {
     });
   }
 
-  const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: "1h",
-  });
+  const refreshToken = await createRefreshSession(user);
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
+  // Kept as the existing login response contract. The frontend holds this
+  // access token in memory only.
+  res.json({ accessToken: issueAccessToken(user) });
+};
 
-  res.json({ accessToken: token });
+const refresh = async (req, res) => {
+  try {
+    const result = await rotateRefreshSession(req.cookies?.[REFRESH_COOKIE_NAME]);
+    if (!result?.user) {
+      res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
+      return res.status(401).json({ message: "Session expired. Please log in again." });
+    }
+
+    res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, refreshCookieOptions());
+    return res.json({ accessToken: issueAccessToken(result.user) });
+  } catch (error) {
+    return res.status(500).json({ message: "Unable to refresh your session" });
+  }
+};
+
+const logout = async (req, res) => {
+  try {
+    await revokeRefreshSession(req.cookies?.[REFRESH_COOKIE_NAME]);
+  } catch (error) {
+    console.error("Session logout failed:", error.message);
+  }
+  res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
+  return res.status(204).end();
 };
 
 const getCurrentUser = async (req, res) => {
@@ -358,11 +392,12 @@ const forgotPassword = async (req, res) => {
     if (!user) {
       return res.status(200).json({ message: GENERIC_PASSWORD_RESET_MESSAGE });
     }
-    // Generate token
+    // Store only a hash. Existing raw tokens remain accepted once during the
+    // transition so emailed links issued before this release still work.
     const resetToken = crypto.randomBytes(20).toString("hex");
     const resetTokenExpire = Date.now() + 15 * 60 * 1000; // 15 mins
     // Save to DB
-    user.resetToken = resetToken;
+    user.resetToken = hashVerificationToken(resetToken);
     user.resetTokenExpire = resetTokenExpire;
     await user.save();
 
@@ -397,7 +432,7 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: "Use a password with at least 12 characters, including uppercase, lowercase, and a number." });
     }
     const user = await User.findOne({
-      resetToken: token,
+      resetToken: { $in: [hashVerificationToken(token), token] },
       resetTokenExpire: { $gt: Date.now() },
     });
     if (!user) {
@@ -412,7 +447,10 @@ const resetPassword = async (req, res) => {
     user.password = hashedPassword;
     user.resetToken = null;
     user.resetTokenExpire = null;
+    user.sessionVersion = (user.sessionVersion || 0) + 1;
+    user.passwordChangedAt = new Date();
     await user.save();
+    await revokeAllUserSessions(user._id);
     res.json({ message: "Password has been reset successfully" });
   } catch (error) {
     console.error("Password reset failed:", error.message);
@@ -425,6 +463,8 @@ module.exports = {
   verifyEmail,
   resendVerification,
   login,
+  refresh,
+  logout,
   getCurrentUser,
   forgotPassword,
   resetPassword

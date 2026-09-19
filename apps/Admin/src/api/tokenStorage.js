@@ -1,13 +1,13 @@
-const TOKEN_KEY = "admin_auth_token";
+let accessToken = null;
 
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return accessToken;
 }
 
 export function setToken(token) {
-  localStorage.setItem(TOKEN_KEY, token);
+  accessToken = token || null;
 }
 
 export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  accessToken = null;
 }
