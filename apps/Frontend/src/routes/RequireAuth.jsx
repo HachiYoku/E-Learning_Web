@@ -19,7 +19,7 @@ function RequireAuth() {
   }
 
   if (user?.role !== "user") {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ accessDenied: true }} />;
   }
 
   return <><Seo title="Your learning account" noIndex /><Outlet /></>;

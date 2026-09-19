@@ -299,7 +299,7 @@ const login = async (req, res) => {
   const { email, password } = req.body;
   const normalizedEmail = normalizeEmail(email);
 
-  const user = await User.findOne({ email: normalizedEmail });
+  const user = await User.findOne({ email: normalizedEmail }).select("+password");
 
   if (!user) {
     return res.status(401).json({ message: GENERIC_LOGIN_ERROR_MESSAGE });

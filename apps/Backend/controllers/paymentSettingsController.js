@@ -36,7 +36,7 @@ const updatePaymentSettings = async (req, res) => {
       }
 
       // Verify admin password
-      const adminUser = await User.findById(req.user?.id);
+      const adminUser = await User.findById(req.user?.id).select("+password");
       if (!adminUser) {
         return res.status(403).json({ message: "Admin user not found" });
       }
