@@ -19,9 +19,10 @@ function Login() {
   const [error, setError] = useState("");
   const [loginErrorCode, setLoginErrorCode] = useState("");
   const [infoMessage, setInfoMessage] = useState(location.state?.registrationMessage || "");
-  const { login, logout, isAuthenticated } = useAuth();
+  const { login, logout, isAuthenticated, isBootstrapping, user } = useAuth();
   const { showToast } = useToast();
-  const redirectTo = location.state?.from?.pathname || "/app";
+  const requestedPath = location.state?.from?.pathname;
+  const redirectTo = requestedPath && requestedPath !== "/login" ? requestedPath : "/app";
   const canResendVerification = location.state?.emailSent === false || loginErrorCode === "EMAIL_UNVERIFIED";
   const accountIsDeactivated = loginErrorCode === "ACCOUNT_DEACTIVATED";
 
@@ -44,7 +45,17 @@ function Login() {
     finally { setResending(false); }
   };
 
-  useEffect(() => { if (isAuthenticated) navigate(redirectTo, { replace: true }); }, [isAuthenticated, navigate, redirectTo]);
+  useEffect(() => {
+    if (!isBootstrapping && isAuthenticated && user?.role === "user") {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [isAuthenticated, isBootstrapping, navigate, redirectTo, user?.role]);
+  useEffect(() => {
+    if (!isBootstrapping && isAuthenticated && user && user.role !== "user") {
+      logout();
+      setError("This login page is for student accounts. Please use the admin site for admin access.");
+    }
+  }, [isAuthenticated, isBootstrapping, logout, user]);
   useEffect(() => { if (location.state?.registrationMessage) setInfoMessage(location.state.registrationMessage); }, [location.state]);
 
   return <AuthShell title={<>Welcome back to <span className="text-[#E58C1A]">Arun Thai.</span></>} description="Continue your Thai learning journey from exactly where you left off." footer={<>New to Arun Thai? <Link to="/register" className="font-bold text-[#C97112] hover:underline">Create an account</Link></>}>

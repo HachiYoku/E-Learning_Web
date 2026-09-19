@@ -87,6 +87,17 @@ async function createUser({ email, role = "user" }) {
   });
 }
 
+async function readJavaScriptFiles(directory) {
+  const entries = await fs.readdir(directory, { withFileTypes: true });
+  const contents = await Promise.all(entries.map(async (entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return readJavaScriptFiles(entryPath);
+    if (/\.(js|jsx)$/.test(entry.name)) return fs.readFile(entryPath, "utf8");
+    return [];
+  }));
+  return contents.flat();
+}
+
 async function login(email) {
   const response = await request("/auth/login", { method: "POST", body: { email, password }, origin: "https://student.example.test" });
   assert.equal(response.status, 200);
@@ -138,6 +149,13 @@ test("access tokens are not persisted in localStorage", async () => {
   const adminStorage = await fs.readFile(path.join(projectDirectory, "apps/admin/src/api/tokenStorage.js"), "utf8");
   assert.doesNotMatch(studentStorage, /localStorage/);
   assert.doesNotMatch(adminStorage, /localStorage/);
+});
+
+test("admin source has no persistent auth/user storage writes", async () => {
+  const adminSources = (await readJavaScriptFiles(path.join(projectDirectory, "apps/admin/src"))).join("\n");
+  assert.doesNotMatch(adminSources, /(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|getItem)/);
+  assert.doesNotMatch(adminSources, /indexedDB/);
+  assert.match(adminSources, /localStorage\.removeItem\(key\)/);
 });
 
 test("login works and production refresh cookie has secure flags", async () => {
@@ -243,6 +261,18 @@ test("normal users cannot call admin APIs", async () => {
   await createUser({ email: "student-admin-api@example.test" });
   const loginResult = await login("student-admin-api@example.test");
   assert.equal((await request("/reports/summary", { token: loginResult.body.accessToken, origin: "https://student.example.test" })).status, 403);
+});
+
+test("authenticated-user and admin user responses never expose password fields", async () => {
+  const student = await createUser({ email: "no-password-leak@example.test" });
+  const admin = await createUser({ email: "no-password-leak-admin@example.test", role: "admin" });
+  const studentLogin = await login(student.email);
+  const adminLogin = await login(admin.email);
+  const me = await responseJson(await request("/auth/me", { token: studentLogin.body.accessToken, origin: "https://student.example.test" }));
+  const users = await responseJson(await request("/user", { token: adminLogin.body.accessToken, origin: "https://admin.example.test" }));
+  assert.equal(Object.hasOwn(me.user, "password"), false);
+  assert.equal(Object.hasOwn(me.user, "passwordHash"), false);
+  assert.ok(users.every((user) => !Object.hasOwn(user, "password") && !Object.hasOwn(user, "passwordHash")));
 });
 
 test("invalid and expired refresh tokens are rejected", async () => {

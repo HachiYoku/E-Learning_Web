@@ -18,7 +18,7 @@ function RequireAdmin() {
   }
 
   if (user?.role !== "admin") {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ accessDenied: true }} />;
   }
 
   return <Outlet />;

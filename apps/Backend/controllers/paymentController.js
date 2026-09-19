@@ -230,7 +230,7 @@ const approvePayment = async (req, res) => {
       return res.status(400).json({ message: "Admin password is required to approve a payment" });
     }
 
-    const adminUser = await User.findById(req.user?.id);
+    const adminUser = await User.findById(req.user?.id).select("+password");
     if (!adminUser) {
       return res.status(403).json({ message: "Admin user not found" });
     }
@@ -339,7 +339,7 @@ const rejectPayment = async (req, res) => {
       return res.status(400).json({ message: "Admin password is required to deny a payment" });
     }
 
-    const adminUser = await User.findById(req.user?.id);
+    const adminUser = await User.findById(req.user?.id).select("+password");
     if (!adminUser) {
       return res.status(403).json({ message: "Admin user not found" });
     }

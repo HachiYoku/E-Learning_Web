@@ -1,0 +1,13 @@
+{
+  "name": "Arun Thai Admin",
+  "short_name": "Arun Thai Admin",
+  "start_url": "/",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "/images/favicon-arunthai.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}
