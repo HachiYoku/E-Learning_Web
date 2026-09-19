@@ -27,12 +27,12 @@ function getEmbedUrl(src) {
         return `https://www.youtube.com/embed/${videoId}?${params.toString()}`
       }
     }
-    if (url.hostname.includes('drive.google.com')) {
-      const fileId = url.pathname.match(/\/file\/d\/([^/]+)/)?.[1] || url.searchParams.get('id')
-      if (fileId) return `https://drive.google.com/file/d/${fileId}/preview?embedded=true`
-    }
   } catch { return '' }
   return src
+}
+
+function isGoogleDriveUrl(src) {
+  try { return new URL(src).hostname === 'drive.google.com' } catch { return false }
 }
 
 function CourseLessons() {
@@ -46,6 +46,7 @@ function CourseLessons() {
   const [activeLesson, setActiveLesson] = useState(null)
   const [progress, setProgress] = useState(null)
   const activeVideoUrl = useMemo(() => getEmbedUrl(activeLesson?.videoUrl), [activeLesson])
+  const activeVideoIsGoogleDrive = useMemo(() => isGoogleDriveUrl(activeLesson?.videoUrl), [activeLesson])
 
   useEffect(() => {
     async function loadCourseLessons() {
@@ -117,7 +118,7 @@ function CourseLessons() {
         </div>
       </main>
 
-      {activeLesson ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6" onClick={() => setActiveLesson(null)}><div className="relative w-full max-w-4xl overflow-hidden rounded-[1.75rem] bg-[#2D2E30] shadow-2xl" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setActiveLesson(null)} className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2D2E30] transition hover:bg-[#FFF4D8]" aria-label="Close video"><X className="h-5 w-5" /></button><div className="aspect-video w-full"><iframe src={activeVideoUrl || activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div><div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-bold text-white">{activeLesson.title}</p><button type="button" onClick={() => navigate(`/app/learn/${courseId}/quiz/${activeLesson.id}`)} className="rounded-xl bg-[#F8C56A] px-4 py-2.5 text-xs font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]">Take lesson quiz</button></div></div></div> : null}
+      {activeLesson ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6" onClick={() => setActiveLesson(null)}><div className="relative w-full max-w-4xl overflow-hidden rounded-[1.75rem] bg-[#2D2E30] shadow-2xl" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setActiveLesson(null)} className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2D2E30] transition hover:bg-[#FFF4D8]" aria-label="Close video"><X className="h-5 w-5" /></button>{activeVideoIsGoogleDrive ? <div className="flex aspect-video flex-col items-center justify-center bg-[#FFF9EA] px-6 text-center"><p className="text-lg font-bold text-[#2D2E30]">Open this Google Drive lesson</p><p className="mt-2 max-w-md text-sm leading-6 text-[#765F55]">Google blocks sign-in pages from being embedded. Open the lesson directly in Google Drive to watch it securely.</p><a href={activeLesson.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-6 rounded-xl bg-[#E58C1A] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#C97112]">Open in Google Drive</a></div> : <div className="aspect-video w-full"><iframe src={activeVideoUrl || activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>}<div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-bold text-white">{activeLesson.title}</p><button type="button" onClick={() => navigate(`/app/learn/${courseId}/quiz/${activeLesson.id}`)} className="rounded-xl bg-[#F8C56A] px-4 py-2.5 text-xs font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]">Take lesson quiz</button></div></div></div> : null}
       <Footer />
     </div>
   )

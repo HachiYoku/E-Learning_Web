@@ -24,6 +24,7 @@ export async function refreshAccessToken() {
     refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
+      headers: { "X-Auth-Portal": "student" },
     })
       .then(async (response) => {
         const data = await response.json().catch(() => null);
@@ -43,6 +44,7 @@ export async function refreshAccessToken() {
 async function request(path, options = {}) {
   const requestToken = options.token === undefined ? getToken() : options.token;
   const headers = new Headers(options.headers || {});
+  headers.set("X-Auth-Portal", "student");
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");

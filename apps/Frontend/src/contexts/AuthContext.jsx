@@ -94,10 +94,14 @@ export function AuthProvider({ children }) {
     clearToken();
   }
 
-  async function logout() {
+  function clearLocalSession() {
     clearToken();
     setTokenState(null);
     setUser(null);
+  }
+
+  async function logout() {
+    clearLocalSession();
     try {
       await logoutRequest();
     } catch {
@@ -114,6 +118,7 @@ export function AuthProvider({ children }) {
       isBootstrapping,
       login,
       logout,
+      clearLocalSession,
       setUser,
     }),
     [token, user, isBootstrapping]

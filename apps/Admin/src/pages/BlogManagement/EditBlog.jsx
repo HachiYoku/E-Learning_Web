@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchBlogById, updateBlog } from "../../services/blogService";
 import { validateFileSize } from "../../utils/fileValidation";
+import { sanitizeHtmlContent } from "../../utils/sanitizeHtmlContent";
 
 const TEXT_COLORS = [
   { name: "Black", value: "#111827" },
@@ -129,7 +130,7 @@ function EditBlog() {
       return;
     }
 
-    const nextContent = formData.content || "";
+    const nextContent = sanitizeHtmlContent(formData.content || "");
 
     if (contentRef.current.innerHTML !== nextContent) {
       contentRef.current.innerHTML = nextContent;
@@ -183,7 +184,8 @@ function EditBlog() {
   };
 
   const handleEditorChange = ({ recordHistory = true } = {}) => {
-    const content = contentRef.current?.innerHTML || "";
+    const content = sanitizeHtmlContent(contentRef.current?.innerHTML || "");
+    if (contentRef.current && contentRef.current.innerHTML !== content) contentRef.current.innerHTML = content;
     const plainText = contentRef.current?.textContent || "";
 
     setFormData((prev) => ({
@@ -206,7 +208,7 @@ function EditBlog() {
       return;
     }
 
-    editor.innerHTML = history.entries[nextIndex];
+    editor.innerHTML = sanitizeHtmlContent(history.entries[nextIndex]);
     editorHistoryRef.current = { ...history, index: nextIndex };
     editor.focus();
     handleEditorChange({ recordHistory: false });
@@ -487,7 +489,7 @@ function EditBlog() {
       setError("");
       await updateBlog(id, {
         title: formData.title.trim(),
-        content: formData.content,
+        content: sanitizeHtmlContent(formData.content),
         image: blog?.image || "",
         imageFile: formData.imageFile,
       });

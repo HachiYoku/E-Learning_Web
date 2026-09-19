@@ -8,12 +8,16 @@ import { fetchPendingPaymentCount } from '../services/paymentService'
 function Sidebar({ isOpen = true, onNavigate }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { logout } = useAuth()
+  const { logout, user, isAuthenticated, isBootstrapping } = useAuth()
   const [badges, setBadges] = useState({ contacts: 0, payments: 0 })
   const [expandedGroups, setExpandedGroups] = useState({})
 
   useEffect(() => {
     let active = true
+    if (isBootstrapping || !isAuthenticated || user?.role !== 'admin') {
+      setBadges({ contacts: 0, payments: 0 })
+      return () => { active = false }
+    }
     const loadBadges = async () => {
       try {
         const [contacts, payments] = await Promise.all([fetchUnreadContactLeadCount(), fetchPendingPaymentCount()])
@@ -26,7 +30,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
     const intervalId = window.setInterval(loadBadges, 60000)
     window.addEventListener('admin-badges-refresh', loadBadges)
     return () => { active = false; window.clearInterval(intervalId); window.removeEventListener('admin-badges-refresh', loadBadges) }
-  }, [])
+  }, [isAuthenticated, isBootstrapping, user?.role])
 
   const isActive = (path) => path === '/' ? location.pathname === '/' : location.pathname === path || location.pathname.startsWith(path + '/')
   const handleNavigate = (path) => { navigate(path); onNavigate?.() }
