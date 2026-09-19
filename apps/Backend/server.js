@@ -17,6 +17,7 @@ const parseCookies = (cookieHeader = "") => Object.fromEntries(
 const app = express()
 const port = process.env.PORT || 3000
 const trustProxy = process.env.TRUST_PROXY
+const isProduction = process.env.NODE_ENV === "production"
 
 if (trustProxy) {
   app.set('trust proxy', trustProxy === 'true' ? 1 : trustProxy)
@@ -43,10 +44,25 @@ const allowedOrigins = [
 
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        objectSrc: ["'none'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    strictTransportSecurity: isProduction ? { maxAge: 31536000, includeSubDomains: true } : false,
   })
 )
+
+app.use((_req, res, next) => {
+  res.setHeader("Permissions-Policy", "camera=(), geolocation=(), microphone=(), payment=(), usb=()");
+  next();
+});
 
 app.use((req, res, next) => {
   const origin = req.headers.origin
@@ -58,7 +74,7 @@ app.use((req, res, next) => {
     }
 
     res.header('Access-Control-Allow-Credentials', 'true')
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Portal')
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
 
     if (req.method === 'OPTIONS') {
@@ -140,7 +156,7 @@ const reportRoutes = require('./routes/report')
 app.use('/reports', reportRoutes)
 
 app.get('/', (req, res) => {
-  res.send('Hello English Kafe!')
+  res.send('Hello Arun Thai!')
 })
 
 app.use(errorHandler)

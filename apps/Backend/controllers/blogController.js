@@ -3,6 +3,7 @@ const { uploadStream } = require("../services/uploadStream");
 const sanitizeHtmlContent = require("../utils/sanitizeHtmlContent");
 
 const BLOG_AUTHOR_FIELDS = "name email avatar";
+const hasArticleText = (content) => content.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim().length > 0;
 
 const sanitizeBlogPayload = (blog) => {
   if (!blog) {
@@ -17,8 +18,9 @@ const sanitizeBlogPayload = (blog) => {
 const createBlog = async (req, res) => {
   try {
     const { title, content, image } = req.body;
+    const sanitizedContent = sanitizeHtmlContent(content);
 
-    if (!title || !content) {
+    if (typeof title !== "string" || !title.trim() || !hasArticleText(sanitizedContent)) {
       return res.status(400).json({ message: "Title and content are required" });
     }
 
@@ -32,8 +34,8 @@ const createBlog = async (req, res) => {
     }
 
     const blog = await Blog.create({
-      title,
-      content: sanitizeHtmlContent(content),
+      title: title.trim(),
+      content: sanitizedContent,
       image: imageUrl,
       imagePublicId,
       createdBy: req.user.id,
@@ -79,8 +81,15 @@ const updateBlog = async (req, res) => {
       return res.status(404).json({ message: "Blog not found" });
     }
 
-    if (title !== undefined) blog.title = title;
-    if (content !== undefined) blog.content = sanitizeHtmlContent(content);
+    if (title !== undefined) {
+      if (typeof title !== "string" || !title.trim()) return res.status(400).json({ message: "Title is required" });
+      blog.title = title.trim();
+    }
+    if (content !== undefined) {
+      const sanitizedContent = sanitizeHtmlContent(content);
+      if (!hasArticleText(sanitizedContent)) return res.status(400).json({ message: "Content is required" });
+      blog.content = sanitizedContent;
+    }
     if (image !== undefined) blog.image = image;
 
     if (req.file?.buffer) {

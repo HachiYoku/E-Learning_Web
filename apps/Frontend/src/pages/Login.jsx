@@ -19,7 +19,7 @@ function Login() {
   const [error, setError] = useState("");
   const [loginErrorCode, setLoginErrorCode] = useState("");
   const [infoMessage, setInfoMessage] = useState(location.state?.registrationMessage || "");
-  const { login, logout, isAuthenticated, isBootstrapping, user } = useAuth();
+  const { login, clearLocalSession, isAuthenticated, isBootstrapping, user } = useAuth();
   const { showToast } = useToast();
   const requestedPath = location.state?.from?.pathname;
   const redirectTo = requestedPath && requestedPath !== "/login" ? requestedPath : "/app";
@@ -30,7 +30,7 @@ function Login() {
     event.preventDefault(); setLoading(true); setError(""); setLoginErrorCode(""); setInfoMessage("");
     try {
       const user = await login({ email, password });
-      if (user.role !== "user") { logout(); setError("This login page is for student accounts. Please use the admin site for admin access."); return; }
+      if (user.role !== "user") { clearLocalSession(); setError("This login page is for student accounts. Please use the admin site for admin access."); return; }
       showToast({ title: "Login successful", message: "Welcome back! You are now signed in.", type: "success" });
       navigate(redirectTo, { replace: true });
     } catch (loginError) { setError(loginError.message); setLoginErrorCode(loginError.data?.code || ""); showToast({ title: "Login failed", message: loginError.message, type: "error" }); }
@@ -52,10 +52,10 @@ function Login() {
   }, [isAuthenticated, isBootstrapping, navigate, redirectTo, user?.role]);
   useEffect(() => {
     if (!isBootstrapping && isAuthenticated && user && user.role !== "user") {
-      logout();
+      clearLocalSession();
       setError("This login page is for student accounts. Please use the admin site for admin access.");
     }
-  }, [isAuthenticated, isBootstrapping, logout, user]);
+  }, [isAuthenticated, isBootstrapping, clearLocalSession, user]);
   useEffect(() => { if (location.state?.registrationMessage) setInfoMessage(location.state.registrationMessage); }, [location.state]);
 
   return <AuthShell title={<>Welcome back to <span className="text-[#E58C1A]">Arun Thai.</span></>} description="Continue your Thai learning journey from exactly where you left off." footer={<>New to Arun Thai? <Link to="/register" className="font-bold text-[#C97112] hover:underline">Create an account</Link></>}>

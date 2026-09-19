@@ -1,203 +1,50 @@
-const ALLOWED_TAGS = new Set([
-  "a",
-  "b",
-  "blockquote",
-  "br",
-  "code",
-  "em",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "hr",
-  "i",
-  "img",
-  "li",
-  "ol",
-  "p",
-  "pre",
-  "strong",
-  "span",
-  "table",
-  "tbody",
-  "td",
-  "th",
-  "thead",
-  "tr",
-  "u",
-  "ul",
-]);
+const sanitizeHtml = require("sanitize-html");
 
-const ALLOWED_ATTRS = {
-  a: new Set(["href", "title", "target", "rel"]),
-  img: new Set(["src", "alt", "title"]),
-  span: new Set(["style"]),
+const ALLOWED_TAGS = [
+  "a", "b", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3", "h4", "h5", "h6",
+  "hr", "i", "img", "li", "ol", "p", "pre", "span", "strong", "table", "tbody", "td", "th",
+  "thead", "tr", "u", "ul",
+];
+
+const ALLOWED_ATTRIBUTES = {
+  a: ["href", "title", "target", "rel"],
+  img: ["src", "alt", "title"],
+  div: ["style"],
+  span: ["style"],
 };
 
-function escapeHtml(value = "") {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function normalizeAttributeValue(rawValue = "") {
-  const trimmed = rawValue.trim();
-
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1);
-  }
-
-  return trimmed;
-}
-
-function isSafeUrl(attributeName, value) {
-  const normalized = value.trim().toLowerCase();
-
-  if (!normalized) {
-    return false;
-  }
-
-  if (
-    normalized.startsWith("javascript:") ||
-    normalized.startsWith("vbscript:") ||
-    normalized.startsWith("data:")
-  ) {
-    return false;
-  }
-
-  if (attributeName === "href") {
-    return /^(https?:|mailto:|tel:|\/|#)/i.test(value.trim());
-  }
-
-  if (attributeName === "src") {
-    return /^(https?:|\/)/i.test(value.trim());
-  }
-
-  return false;
-}
-
-function sanitizeAttributes(tagName, rawAttributes = "") {
-  const allowedAttributes = ALLOWED_ATTRS[tagName];
-
-  if (!allowedAttributes) {
-    return "";
-  }
-
-  const safeAttributes = [];
-  const attributePattern = /([a-zA-Z0-9:-]+)(?:\s*=\s*(".*?"|'.*?'|[^\s"'=<>`]+))?/g;
-  let attributeMatch;
-
-  while ((attributeMatch = attributePattern.exec(rawAttributes)) !== null) {
-    const attributeName = attributeMatch[1].toLowerCase();
-
-    if (
-      !allowedAttributes.has(attributeName) ||
-      attributeName.startsWith("on") ||
-      (attributeName === "style" && !(tagName === "span" && allowedAttributes.has("style")))
-    ) {
-      continue;
-    }
-
-    const normalizedValue = normalizeAttributeValue(attributeMatch[2] || "");
-
-    if (!normalizedValue) {
-      continue;
-    }
-
-    if (tagName === "span" && attributeName === "style") {
-      const fontSizeMatch = normalizedValue.match(/(?:^|;)\s*font-size:\s*(\d{1,2})px\s*(?:;|$)/i);
-      const colorMatch = normalizedValue.match(/(?:^|;)\s*color:\s*(#[0-9a-f]{6}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))\s*(?:;|$)/i);
-      const numericFontSize = Number(fontSizeMatch?.[1]);
-
-      if (!fontSizeMatch && !colorMatch || fontSizeMatch && (numericFontSize < 8 || numericFontSize > 72)) {
-        continue;
-      }
-
-      const safeStyles = [];
-      if (fontSizeMatch) safeStyles.push(`font-size: ${numericFontSize}px`);
-      if (colorMatch) {
-        const colorValue = colorMatch[1].toLowerCase();
-        const rgbValues = colorValue.match(/\d+/g)?.map(Number);
-        const hexValue = rgbValues?.length === 3
-          ? `#${rgbValues.map((value) => Math.min(value, 255).toString(16).padStart(2, "0")).join("")}`
-          : colorValue;
-        safeStyles.push(`color: ${hexValue}`);
-      }
-      safeAttributes.push(`style="${safeStyles.join("; ")}"`);
-      continue;
-    }
-
-    if ((attributeName === "href" || attributeName === "src") && !isSafeUrl(attributeName, normalizedValue)) {
-      continue;
-    }
-
-    if (tagName === "a" && attributeName === "target") {
-      const safeTarget = normalizedValue === "_blank" ? "_blank" : null;
-      if (!safeTarget) {
-        continue;
-      }
-
-      safeAttributes.push(`${attributeName}="${safeTarget}"`);
-      continue;
-    }
-
-    if (tagName === "a" && attributeName === "rel") {
-      continue;
-    }
-
-    safeAttributes.push(`${attributeName}="${escapeHtml(normalizedValue)}"`);
-  }
-
-  if (tagName === "a") {
-    const hasTargetBlank = safeAttributes.some((attribute) => attribute === 'target="_blank"');
-    if (hasTargetBlank) {
-      safeAttributes.push('rel="noopener noreferrer"');
-    }
-  }
-
-  return safeAttributes.length ? ` ${safeAttributes.join(" ")}` : "";
-}
+const ALLOWED_STYLES = {
+  "font-size": [/^(?:[8-9]|[1-6][0-9]|7[0-2])px$/],
+  color: [/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i, /^rgb\(\s*(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\s*,\s*(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\s*,\s*(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\s*\)$/i],
+  "text-align": [/^(?:left|center|right|justify)$/],
+};
 
 function sanitizeHtmlContent(html = "") {
-  if (typeof html !== "string") {
-    return "";
-  }
+  if (typeof html !== "string") return "";
 
-  return html
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
-    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
-    .replace(/<iframe\b[\s\S]*?<\/iframe>/gi, "")
-    .replace(/<object\b[\s\S]*?<\/object>/gi, "")
-    .replace(/<embed\b[\s\S]*?<\/embed>/gi, "")
-    .replace(/<form\b[\s\S]*?<\/form>/gi, "")
-    .replace(/<(link|meta|base)[^>]*>/gi, "")
-    .replace(/<\s*(\/?)\s*([a-z0-9-]+)([^>]*)>/gi, (match, closingSlash, rawTagName, rawAttributes) => {
-      const tagName = rawTagName.toLowerCase();
-
-      if (!ALLOWED_TAGS.has(tagName)) {
-        return "";
-      }
-
-      if (closingSlash) {
-        return `</${tagName}>`;
-      }
-
-      const safeAttributes = sanitizeAttributes(tagName, rawAttributes);
-      const selfClosing = /\/\s*$/.test(rawAttributes) || tagName === "br" || tagName === "hr" || tagName === "img";
-
-      return selfClosing
-        ? `<${tagName}${safeAttributes} />`
-        : `<${tagName}${safeAttributes}>`;
-    });
+  return sanitizeHtml(html, {
+    allowedTags: ALLOWED_TAGS,
+    allowedAttributes: ALLOWED_ATTRIBUTES,
+    allowedSchemes: ["http", "https", "mailto", "tel"],
+    allowedSchemesByTag: { img: ["http", "https"] },
+    allowProtocolRelative: false,
+    allowedStyles: { div: ALLOWED_STYLES, span: ALLOWED_STYLES },
+    disallowedTagsMode: "discard",
+    exclusiveFilter: (frame) => frame.tag === "img" && !frame.attribs.src,
+    transformTags: {
+      a: (tagName, attributes) => {
+        const attribs = { ...attributes };
+        if (attribs.target === "_blank") attribs.rel = "noopener noreferrer";
+        else {
+          delete attribs.target;
+          delete attribs.rel;
+        }
+        return { tagName, attribs };
+      },
+    },
+  });
 }
 
 module.exports = sanitizeHtmlContent;
+module.exports.ALLOWED_TAGS = ALLOWED_TAGS;
+module.exports.ALLOWED_ATTRIBUTES = ALLOWED_ATTRIBUTES;

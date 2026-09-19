@@ -41,5 +41,3 @@ export function sanitizeHtmlContent(html = "") {
     ALLOW_UNKNOWN_PROTOCOLS: false,
   });
 }
-
-export { ALLOWED_TAGS, ALLOWED_ATTR, ALLOWED_ATTRIBUTES_BY_TAG };

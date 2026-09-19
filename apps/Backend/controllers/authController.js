@@ -4,6 +4,8 @@ const crypto = require('crypto')
 const sendEmail = require('../services/sendEmail')
 const {
   REFRESH_COOKIE_NAME,
+  STUDENT_REFRESH_COOKIE_NAME,
+  ADMIN_REFRESH_COOKIE_NAME,
   refreshCookieOptions,
   clearRefreshCookieOptions,
   issueAccessToken,
@@ -12,6 +14,10 @@ const {
   revokeRefreshSession,
   revokeAllUserSessions,
 } = require('../services/sessionService')
+
+const getAuthPortal = (req) => ["student", "admin"].includes(req.get("X-Auth-Portal")) ? req.get("X-Auth-Portal") : null;
+const refreshCookieNameForPortal = (portal) => portal === "student" ? STUDENT_REFRESH_COOKIE_NAME : portal === "admin" ? ADMIN_REFRESH_COOKIE_NAME : REFRESH_COOKIE_NAME;
+const expectedRoleForPortal = (portal) => portal === "student" ? "user" : portal === "admin" ? "admin" : undefined;
 
 const GENERIC_LOGIN_ERROR_MESSAGE = "Invalid email, password, or account status";
 const GENERIC_PASSWORD_RESET_MESSAGE = "If that email exists, a password reset link has been sent";
@@ -327,7 +333,7 @@ const login = async (req, res) => {
   }
 
   const refreshToken = await createRefreshSession(user);
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
+  res.cookie(refreshCookieNameForPortal(getAuthPortal(req)), refreshToken, refreshCookieOptions());
   // Kept as the existing login response contract. The frontend holds this
   // access token in memory only.
   res.json({ accessToken: issueAccessToken(user) });
@@ -335,13 +341,18 @@ const login = async (req, res) => {
 
 const refresh = async (req, res) => {
   try {
-    const result = await rotateRefreshSession(req.cookies?.[REFRESH_COOKIE_NAME]);
+    const portal = getAuthPortal(req);
+    const cookieName = refreshCookieNameForPortal(portal);
+    const refreshToken = req.cookies?.[cookieName] || req.cookies?.[REFRESH_COOKIE_NAME];
+    const usedLegacyCookie = Boolean(portal && !req.cookies?.[cookieName] && req.cookies?.[REFRESH_COOKIE_NAME]);
+    const result = await rotateRefreshSession(refreshToken, expectedRoleForPortal(portal));
     if (!result?.user) {
-      res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
+      res.clearCookie(cookieName, clearRefreshCookieOptions());
       return res.status(401).json({ message: "Session expired. Please log in again." });
     }
 
-    res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, refreshCookieOptions());
+    res.cookie(cookieName, result.refreshToken, refreshCookieOptions());
+    if (usedLegacyCookie) res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
     return res.json({ accessToken: issueAccessToken(result.user) });
   } catch (error) {
     return res.status(500).json({ message: "Unable to refresh your session" });
@@ -350,11 +361,13 @@ const refresh = async (req, res) => {
 
 const logout = async (req, res) => {
   try {
-    await revokeRefreshSession(req.cookies?.[REFRESH_COOKIE_NAME]);
+    const portal = getAuthPortal(req);
+    const cookieName = refreshCookieNameForPortal(portal);
+    await revokeRefreshSession(req.cookies?.[cookieName] || req.cookies?.[REFRESH_COOKIE_NAME]);
+    res.clearCookie(cookieName, clearRefreshCookieOptions());
   } catch (error) {
     console.error("Session logout failed:", error.message);
   }
-  res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
   return res.status(204).end();
 };
 

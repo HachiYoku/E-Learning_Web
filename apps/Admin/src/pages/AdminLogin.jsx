@@ -11,7 +11,7 @@ function AdminLogin() {
   const [error, setError] = useState('')
   const navigate = useNavigate()
   const location = useLocation()
-  const { login, logout, isAuthenticated, isBootstrapping, user } = useAuth()
+  const { login, clearLocalSession, isAuthenticated, isBootstrapping, user } = useAuth()
 
   const requestedPath = location.state?.from?.pathname
   const redirectTo = requestedPath && requestedPath !== '/login' ? requestedPath : '/'
@@ -25,7 +25,7 @@ function AdminLogin() {
       const user = await login({ email, password })
 
       if (user.role !== 'admin') {
-        logout()
+        clearLocalSession()
         setError('This account does not have admin access.')
         return
       }
@@ -46,10 +46,10 @@ function AdminLogin() {
 
   useEffect(() => {
     if (!isBootstrapping && isAuthenticated && user && user.role !== 'admin') {
-      logout()
+      clearLocalSession()
       setError('This account does not have admin access.')
     }
-  }, [isAuthenticated, isBootstrapping, logout, user])
+  }, [isAuthenticated, isBootstrapping, clearLocalSession, user])
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-3 sm:px-4 py-6 sm:py-8">
