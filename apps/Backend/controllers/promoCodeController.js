@@ -21,7 +21,7 @@ exports.createPromo = async (req, res) => {
   try {
     const { adminPassword } = req.body || {};
     if (typeof adminPassword !== "string" || !adminPassword.trim()) return res.status(400).json({ message: "Admin password is required to create a promo code." });
-    const adminUser = await User.findById(req.user?.id);
+    const adminUser = await User.findById(req.user?.id).select("+password");
     if (!adminUser || !bcrypt.compareSync(adminPassword, adminUser.password)) return res.status(403).json({ message: "Invalid admin password" });
     const fields = validateFields(req.body);
     return res.status(201).json(await PromoCode.create(fields));
@@ -32,7 +32,7 @@ exports.deletePromo = async (req, res) => {
   try {
     const { adminPassword } = req.body || {};
     if (typeof adminPassword !== "string" || !adminPassword.trim()) return res.status(400).json({ message: "Admin password is required to delete a promo code." });
-    const adminUser = await User.findById(req.user?.id);
+    const adminUser = await User.findById(req.user?.id).select("+password");
     if (!adminUser || !bcrypt.compareSync(adminPassword, adminUser.password)) return res.status(403).json({ message: "Invalid admin password" });
     const promo = await PromoCode.findByIdAndDelete(req.params.id);
     if (!promo) return res.status(404).json({ message: 'Promo code not found' });

@@ -4,7 +4,7 @@ const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
 const validateToken = require('../middleware/authMiddleware');
 
-const { register, verifyEmail, resendVerification, login, getCurrentUser, forgotPassword, resetPassword } = require('../controllers/authController');
+const { register, verifyEmail, resendVerification, login, refresh, logout, getCurrentUser, forgotPassword, resetPassword } = require('../controllers/authController');
 const rateLimitMessage = (message) => (req, res) => res.status(429).json({ message });
 const emailAndIpKey = (req) => `${ipKeyGenerator(req.ip)}:${String(req.body?.email || "").trim().toLowerCase()}`;
 
@@ -65,6 +65,8 @@ router.post('/register', registrationLimiter, register);
 router.get('/verify-email', verifyEmail);
 router.post('/resend-verification', verificationEmailLimiter, resendVerification);
 router.post('/login', loginIpLimiter, loginAccountLimiter, login);
+router.post('/refresh', refresh);
+router.post('/logout', logout);
 router.get('/me', validateToken, getCurrentUser);
 router.post('/forgot-password', passwordResetRequestLimiter, forgotPassword);
 router.post('/reset-password/:token', passwordResetLimiter, resetPassword);

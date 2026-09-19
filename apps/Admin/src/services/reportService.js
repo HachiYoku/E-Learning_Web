@@ -1,4 +1,4 @@
-import { apiClient } from '../api/client'
+import { apiClient, refreshAccessToken } from '../api/client'
 import { getToken } from '../api/tokenStorage'
 
 export async function fetchReportSummary({ period, startDate, endDate }) {
@@ -15,9 +15,13 @@ export async function downloadReportCsv(type, { period, startDate, endDate }) {
   if (period !== 'all' && !startDate && !endDate) params.set('days', period)
   if (startDate) params.set('startDate', startDate)
   if (endDate) params.set('endDate', endDate)
-  const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/reports/export?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
+  const exportUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/reports/export?${params.toString()}`
+  const requestExport = (token) => fetch(exportUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+    credentials: 'include',
   })
+  let response = await requestExport(getToken())
+  if (response.status === 401) response = await requestExport(await refreshAccessToken())
   if (!response.ok) throw new Error('Unable to export report data')
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)

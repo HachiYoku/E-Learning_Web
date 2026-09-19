@@ -8,6 +8,10 @@ export function getCurrentUser() {
   return apiClient.get("/auth/me");
 }
 
+export function logout() {
+  return apiClient.post("/auth/logout");
+}
+
 export function updateCurrentUserProfile(payload) {
   const formData = new FormData();
 

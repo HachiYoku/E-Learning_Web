@@ -6,13 +6,13 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCurrentUser, login as loginRequest } from "../services/authService";
+import { getCurrentUser, login as loginRequest, logout as logoutRequest } from "../services/authService";
 import {
   clearToken,
   getToken,
   setToken as persistToken,
 } from "../api/tokenStorage";
-import { SESSION_EXPIRED_EVENT } from "../api/client";
+import { refreshAccessToken, SESSION_EXPIRED_EVENT } from "../api/client";
 import SessionExpiredModal from "../components/SessionExpiredModal";
 
 const AuthContext = createContext(null);
@@ -20,21 +20,18 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [token, setTokenState] = useState(() => getToken());
   const [user, setUser] = useState(null);
-  const [isBootstrapping, setIsBootstrapping] = useState(Boolean(getToken()));
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!token) {
-      setUser(null);
-      setIsBootstrapping(false);
-      return;
-    }
-
     let isMounted = true;
 
     async function bootstrapUser() {
       try {
+        const restoredToken = getToken() || await refreshAccessToken();
+        if (!isMounted) return;
+        setTokenState(restoredToken);
         const response = await getCurrentUser();
         if (isMounted) {
           setUser(response.user);
@@ -57,7 +54,7 @@ export function AuthProvider({ children }) {
     return () => {
       isMounted = false;
     };
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     function handleSessionExpired(event) {
@@ -97,10 +94,16 @@ export function AuthProvider({ children }) {
     clearToken();
   }
 
-  function logout() {
+  async function logout() {
     clearToken();
     setTokenState(null);
     setUser(null);
+    try {
+      await logoutRequest();
+    } catch {
+      // Local state is still cleared. The server cookie expires naturally if
+      // the network is unavailable, and is revoked on the next successful logout.
+    }
   }
 
   const value = useMemo(

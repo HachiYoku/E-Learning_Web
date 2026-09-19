@@ -24,6 +24,10 @@ export function getCurrentUser() {
   return apiClient.get("/auth/me");
 }
 
+export function logout() {
+  return apiClient.post("/auth/logout");
+}
+
 export function updateProfile(payload) {
   if (payload instanceof FormData) {
     return apiClient.put("/user", payload);

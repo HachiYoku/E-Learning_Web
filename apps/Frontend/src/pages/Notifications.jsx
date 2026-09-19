@@ -89,7 +89,6 @@ function Notifications() {
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C97112]">Your learning space</p>
               <div className="mt-3 flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#FFF1D0] text-[#C97112]"><Bell className="h-5 w-5" aria-hidden="true" /></span>
                 <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Notifications</h1>
               </div>
               <p className="mt-3 text-sm text-[#765F55] sm:text-base">Keep track of your courses, payments, and updates.</p>

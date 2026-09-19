@@ -9,6 +9,7 @@ import { AlertTriangle, ShieldAlert } from "lucide-react";
 import {
   getCurrentUser,
   login as loginRequest,
+  logout as logoutRequest,
   updateCurrentUserProfile,
 } from "../services/authService";
 import {
@@ -16,27 +17,24 @@ import {
   getToken,
   setToken as persistToken,
 } from "../api/tokenStorage";
-import { SESSION_EXPIRED_EVENT } from "../api/client";
+import { refreshAccessToken, SESSION_EXPIRED_EVENT } from "../api/client";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [token, setTokenState] = useState(() => getToken());
   const [user, setUser] = useState(null);
-  const [isBootstrapping, setIsBootstrapping] = useState(Boolean(getToken()));
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState("");
 
   useEffect(() => {
-    if (!token) {
-      setUser(null);
-      setIsBootstrapping(false);
-      return;
-    }
-
     let isMounted = true;
 
     async function bootstrapUser() {
       try {
+        const restoredToken = getToken() || await refreshAccessToken();
+        if (!isMounted) return;
+        setTokenState(restoredToken);
         const response = await getCurrentUser();
         if (isMounted) {
           setUser(response.user);
@@ -59,7 +57,7 @@ export function AuthProvider({ children }) {
     return () => {
       isMounted = false;
     };
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     function handleSessionExpired(event) {
@@ -105,10 +103,15 @@ export function AuthProvider({ children }) {
     clearToken();
   }
 
-  function logout() {
+  async function logout() {
     clearToken();
     setTokenState(null);
     setUser(null);
+    try {
+      await logoutRequest();
+    } catch {
+      // The browser no longer has an access token even if the network failed.
+    }
   }
 
   const value = useMemo(
