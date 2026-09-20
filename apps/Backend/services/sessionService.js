@@ -5,6 +5,8 @@ const RefreshSession = require("../models/refreshSessionModel");
 const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL || "15m";
 const REFRESH_TOKEN_TTL_DAYS = Number(process.env.REFRESH_TOKEN_TTL_DAYS || 14);
 const REFRESH_COOKIE_NAME = process.env.REFRESH_COOKIE_NAME || "refresh_token";
+const STUDENT_REFRESH_COOKIE_NAME = process.env.STUDENT_REFRESH_COOKIE_NAME || "student_refresh_token";
+const ADMIN_REFRESH_COOKIE_NAME = process.env.ADMIN_REFRESH_COOKIE_NAME || "admin_refresh_token";
 
 const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 const newOpaqueToken = () => crypto.randomBytes(48).toString("base64url");
@@ -42,16 +44,12 @@ async function createRefreshSession(user) {
   return token;
 }
 
-async function rotateRefreshSession(token) {
+async function rotateRefreshSession(token, expectedRole) {
   if (!token) return null;
 
-  // Mark first, rather than delete, so a replay of an already-rotated token
-  // can invalidate all sessions for that user.
-  const session = await RefreshSession.findOneAndUpdate(
-    { tokenHash: hashToken(token), revokedAt: null, expiresAt: { $gt: new Date() } },
-    { $set: { revokedAt: new Date() } },
-    { new: false }
-  );
+  const session = await RefreshSession.findOne({
+    tokenHash: hashToken(token), revokedAt: null, expiresAt: { $gt: new Date() },
+  });
   if (!session) {
     // A previously revoked token being presented is a replay signal. It can
     // happen when a token is stolen, so revoke the user's remaining sessions.
@@ -65,6 +63,20 @@ async function rotateRefreshSession(token) {
   if (!user || !user.isActive || !user.isVerified || Number(user.sessionVersion || 0) !== session.sessionVersion) {
     return { invalid: true, userId: session.userId };
   }
+  if (expectedRole && user.role !== expectedRole) {
+    // Keep a valid session for the other portal intact.
+    return { portalMismatch: true };
+  }
+
+  // Mark first, rather than delete, so a replay of an already-rotated token
+  // can invalidate all sessions for that user. The conditional update keeps
+  // this rotation atomic after the portal-role check above.
+  const rotatedSession = await RefreshSession.findOneAndUpdate(
+    { _id: session._id, revokedAt: null, expiresAt: { $gt: new Date() } },
+    { $set: { revokedAt: new Date() } },
+    { new: false }
+  );
+  if (!rotatedSession) return null;
 
   return { user, refreshToken: await createRefreshSession(user) };
 }
@@ -86,6 +98,8 @@ async function revokeAllUserSessions(userId) {
 
 module.exports = {
   REFRESH_COOKIE_NAME,
+  STUDENT_REFRESH_COOKIE_NAME,
+  ADMIN_REFRESH_COOKIE_NAME,
   refreshCookieOptions,
   clearRefreshCookieOptions,
   issueAccessToken,

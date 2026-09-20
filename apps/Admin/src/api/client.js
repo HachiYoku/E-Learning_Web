@@ -24,6 +24,7 @@ export async function refreshAccessToken() {
     refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
+      headers: { "X-Auth-Portal": "admin" },
     })
       .then(async (response) => {
         const data = await response.json().catch(() => null);
@@ -42,6 +43,7 @@ export async function refreshAccessToken() {
 async function request(path, options = {}) {
   const requestToken = options.token === undefined ? getToken() : options.token;
   const headers = new Headers(options.headers || {});
+  headers.set("X-Auth-Portal", "admin");
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
@@ -60,7 +62,7 @@ async function request(path, options = {}) {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401 && requestToken && !options.skipRefresh) {
+    if (response.status === 401 && !options.skipRefresh) {
       try {
         const freshToken = await refreshAccessToken();
         return request(path, { ...options, token: freshToken, skipRefresh: true });
@@ -68,13 +70,21 @@ async function request(path, options = {}) {
         // The common expiry/deactivation path is handled below.
       }
     }
-    if (response.status === 401 && requestToken) {
+    if (response.status === 401) {
       clearToken();
       window.dispatchEvent(
         new CustomEvent(SESSION_EXPIRED_EVENT, {
           detail: {
             message: getFriendlyErrorMessage(response.status, data?.message),
           },
+        })
+      );
+    }
+    if (response.status === 403 && data?.message === "Admin access only") {
+      clearToken();
+      window.dispatchEvent(
+        new CustomEvent(SESSION_EXPIRED_EVENT, {
+          detail: { message: "Your admin access is no longer available. Please sign in with an authorized account." },
         })
       );
     }

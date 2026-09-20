@@ -59,12 +59,13 @@ function cookieValue(response) {
   return setCookie.split(";", 1)[0];
 }
 
-async function request(route, { method = "GET", body, cookie, token, origin } = {}) {
+async function request(route, { method = "GET", body, cookie, token, origin, portal } = {}) {
   const headers = {};
   if (body) headers["Content-Type"] = "application/json";
   if (cookie) headers.Cookie = cookie;
   if (token) headers.Authorization = `Bearer ${token}`;
   if (origin) headers.Origin = origin;
+  if (portal) headers["X-Auth-Portal"] = portal;
   return fetch(`${apiBaseUrl}${route}`, {
     method,
     headers,
@@ -98,8 +99,8 @@ async function readJavaScriptFiles(directory) {
   return contents.flat();
 }
 
-async function login(email) {
-  const response = await request("/auth/login", { method: "POST", body: { email, password }, origin: "https://student.example.test" });
+async function login(email, { portal } = {}) {
+  const response = await request("/auth/login", { method: "POST", body: { email, password }, origin: "https://student.example.test", portal });
   assert.equal(response.status, 200);
   return { response, body: await responseJson(response), cookie: cookieValue(response) };
 }
@@ -178,6 +179,22 @@ test("refresh restores a reloaded session and rotates its token", async () => {
   assert.ok(refreshed.accessToken);
   const rotatedCookie = cookieValue(refreshResponse);
   assert.notEqual(rotatedCookie, loginResult.cookie);
+});
+
+test("student and admin portals keep independent refresh sessions", async () => {
+  await createUser({ email: "portal-student@example.test" });
+  await createUser({ email: "portal-admin@example.test", role: "admin" });
+  const student = await login("portal-student@example.test", { portal: "student" });
+  const admin = await login("portal-admin@example.test", { portal: "admin" });
+  assert.match(student.response.headers.get("set-cookie"), /student_refresh_token=/);
+  assert.match(admin.response.headers.get("set-cookie"), /admin_refresh_token=/);
+
+  const studentRefresh = await request("/auth/refresh", { method: "POST", cookie: student.cookie, portal: "student" });
+  const adminRefresh = await request("/auth/refresh", { method: "POST", cookie: admin.cookie, portal: "admin" });
+  assert.equal(studentRefresh.status, 200);
+  assert.equal(adminRefresh.status, 200);
+  assert.equal(jwt.decode((await responseJson(studentRefresh)).accessToken).role, "user");
+  assert.equal(jwt.decode((await responseJson(adminRefresh)).accessToken).role, "admin");
 });
 
 test("expired access tokens can be replaced and the protected request retried", async () => {

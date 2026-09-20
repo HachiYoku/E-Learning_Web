@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { createBlog } from "../../services/blogService";
 import { validateFileSize } from "../../utils/fileValidation";
+import { sanitizeHtmlContent } from "../../utils/sanitizeHtmlContent";
 
 const TEXT_COLORS = [
   { name: "Black", value: "#111827" },
@@ -54,8 +55,9 @@ function AddBlog() {
   const [isDiscardDialogOpen, setIsDiscardDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (contentRef.current && contentRef.current.innerHTML !== formData.content) {
-      contentRef.current.innerHTML = formData.content;
+    const safeContent = sanitizeHtmlContent(formData.content);
+    if (contentRef.current && contentRef.current.innerHTML !== safeContent) {
+      contentRef.current.innerHTML = safeContent;
     }
   }, [formData.content]);
 
@@ -136,7 +138,8 @@ function AddBlog() {
   };
 
   const handleEditorChange = ({ recordHistory = true } = {}) => {
-    const content = contentRef.current?.innerHTML || "";
+    const content = sanitizeHtmlContent(contentRef.current?.innerHTML || "");
+    if (contentRef.current && contentRef.current.innerHTML !== content) contentRef.current.innerHTML = content;
     const plainText = contentRef.current?.textContent || "";
 
     setFormData((prev) => ({
@@ -159,7 +162,7 @@ function AddBlog() {
       return;
     }
 
-    editor.innerHTML = history.entries[nextIndex];
+    editor.innerHTML = sanitizeHtmlContent(history.entries[nextIndex]);
     editorHistoryRef.current = { ...history, index: nextIndex };
     editor.focus();
     handleEditorChange({ recordHistory: false });
@@ -444,7 +447,7 @@ function AddBlog() {
       setError("");
       await createBlog({
         title: formData.title.trim(),
-        content: formData.content,
+        content: sanitizeHtmlContent(formData.content),
         imageFile: formData.imageFile,
       });
       initialFormRef.current = getFormSnapshot(formData);
