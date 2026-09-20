@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "../services/notificationService";
+import { getSafeNotificationPath } from "../utils/notificationLink";
 
 const FILTER_OPTIONS = [
   { key: "all", label: "All" },
@@ -45,8 +46,9 @@ function Notifications() {
       }
     }
 
-    if (notification.link) {
-      navigate(notification.link);
+    const destination = getSafeNotificationPath(notification.link);
+    if (destination) {
+      navigate(destination);
       return;
     }
 
