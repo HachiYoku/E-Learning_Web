@@ -6,7 +6,8 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "test:auth-security": "node --test tests/auth-security.test.js",
-    "test:xss-security": "node --test tests/xss-security.test.js"
+    "test:xss-security": "node --test tests/xss-security.test.js",
+    "test:notification-link-security": "node --test tests/notification-link-security.test.js"
   },
   "author": "",
   "license": "ISC",

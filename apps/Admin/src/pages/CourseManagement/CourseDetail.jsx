@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Trash2, Edit2 } from "lucide-react";
+import { ArrowLeft, BookOpen, CheckCircle2, Edit2, ExternalLink, ListVideo, PlayCircle, Plus, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useState, useEffect } from "react";
 import ConfirmationModal from "../../components/ConfirmationModal";
@@ -70,199 +70,128 @@ function CourseDetail() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-600">Loading course...</p>
+      <div className="flex min-h-screen items-center justify-center bg-[#FFFDF8] p-6">
+        <div className="rounded-2xl border border-[#2D2E30]/10 bg-white px-6 py-5 text-sm font-semibold text-[#765F55] shadow-sm">Loading course details...</div>
       </div>
     );
   }
 
   if (!course) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-600">{error || "Course not found"}</p>
+      <div className="flex min-h-screen items-center justify-center bg-[#FFFDF8] p-6">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-sm font-semibold text-red-700">{error || "Course not found"}</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Bar */}
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 md:px-8 py-4 sm:py-5">
-        <div className="flex items-center justify-between gap-3">
-          <button
-            onClick={() => navigate("/courses")}
-            className="flex items-center gap-1.5 text-sm text-gray-700 hover:text-gray-900 shrink-0"
-          >
-            <ArrowLeft size={18} />
-            <span className="hidden sm:inline">Back</span>
-          </button>
+    <div className="min-h-screen bg-[#FFFDF8] p-4 sm:p-6 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        <button
+          type="button"
+          onClick={() => navigate("/courses")}
+          className="mb-5 inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"
+        >
+          <ArrowLeft size={17} /> Back to courses
+        </button>
 
-          <h1 className="flex-1 text-center text-lg sm:text-2xl md:text-3xl font-bold text-gray-900">
-            Course Lessons
-          </h1>
-
+        <header className="mb-6 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112] sm:text-xs">Course curriculum</p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl md:text-4xl">Manage lessons</h1>
+            <p className="mt-2 text-sm text-[#765F55] sm:text-base">Build a clear learning journey for <span className="font-semibold text-[#2D2E30]">{course.title}</span>.</p>
+          </div>
           <button
+            type="button"
             onClick={handleAddLesson}
-            className="shrink-0 flex items-center gap-1.5 bg-pink-300 text-gray-800 px-3 sm:px-5 py-2 rounded-lg hover:bg-pink-400 transition-colors font-medium text-sm sm:text-base"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white shadow-md shadow-[#2D2E30]/15 transition-all hover:-translate-y-0.5 hover:bg-[#E58C1A] focus:outline-none focus:ring-2 focus:ring-[#E58C1A] focus:ring-offset-2 sm:w-auto"
           >
-            <Plus size={18} />
-            <span className="hidden sm:inline">Add Lesson</span>
+            <Plus size={18} /> Add lesson
           </button>
-        </div>
-      </div>
+        </header>
 
-      {/* Content */}
-      <div className="p-4 sm:p-6 md:p-8">
         {error ? (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         ) : null}
 
-        {/*
-          Layout:
-          - mobile: stacked (course card on top, lessons below)
-          - lg+: sidebar (course card left 1/3, lessons right 2/3)
-        */}
-        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 md:gap-8 items-start">
-          {/* Course Info Card */}
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,0.78fr)_minmax(0,1.7fr)] lg:gap-8">
           <div className="w-full lg:col-span-1 lg:sticky lg:top-8">
-            <div className="bg-white rounded-lg overflow-hidden shadow-md flex flex-row lg:flex-col">
+            <div className="overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_16px_35px_-28px_rgba(45,46,48,0.5)]">
               {course.image ? (
                 <img
                   src={course.image}
                   alt={course.title}
-                  className="w-28 sm:w-40 md:w-48 lg:w-full h-28 sm:h-40 md:h-48 lg:h-52 object-cover shrink-0"
+                  className="h-48 w-full object-cover"
                 />
               ) : (
-                <div className="flex w-28 sm:w-40 lg:w-full h-28 sm:h-40 lg:h-52 items-center justify-center bg-gray-100 text-gray-500 text-sm shrink-0">
-                  No image
+                <div className="flex h-48 items-center justify-center bg-[#FFF1CE] text-[#9A5816]">
+                  <BookOpen size={28} />
                 </div>
               )}
-
-              <div className="p-3 sm:p-4 lg:p-5 flex flex-col justify-center min-w-0">
-                <h2 className="text-sm sm:text-base lg:text-xl font-bold text-gray-900 mb-1 truncate">
-                  {course.title}
-                </h2>
-                <p className="text-xs text-gray-600 mb-2 line-clamp-2 lg:line-clamp-none">
-                  {course.description}
-                </p>
-                <div className="mb-1"><p className="text-sm sm:text-base lg:text-lg font-bold text-gray-900">{course.price}</p>{course.hasDiscount ? <p className="text-xs text-gray-500 line-through">{course.originalPrice}</p> : null}</div>
-                <p
-                  className={`mb-0 text-xs font-semibold uppercase tracking-wide lg:mb-4 ${
-                    course.isPublished ? "text-pink-400" : "text-gray-500"
-                  }`}
-                >
-                  {course.isPublished
-                    ? "Published on frontend"
-                    : "Hidden from frontend"}
-                </p>
-
-                {/* What you'll learn — only show on lg+ in sidebar; hide on mobile to keep card compact */}
+              <div className="p-5">
+                <div className="mb-3 flex items-center justify-between gap-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${course.isPublished ? "bg-[#EDF8EE] text-[#246B35]" : "bg-[#FFF1CE] text-[#9A5816]"}`}>{course.isPublished ? "Published" : "Draft"}</span><span className="text-sm font-bold text-[#C97112]">{course.price}</span></div>
+                <h2 className="text-lg font-bold text-[#2D2E30]">{course.title}</h2>
+                <p className="mt-2 text-sm leading-6 text-[#765F55]">{course.description || "No course description yet."}</p>
+                <div className="mt-5 flex items-center gap-2 border-t border-[#2D2E30]/10 pt-4 text-sm font-semibold text-[#765F55]"><ListVideo size={17} className="text-[#C97112]" /> {lessons.length} lesson{lessons.length === 1 ? "" : "s"}</div>
                 {learnings.length > 0 && (
-                  <div className="hidden lg:block mt-2">
-                    <h3 className="font-semibold text-gray-900 mb-2 text-sm">
-                      What you'll learn:
-                    </h3>
-                    <ul className="space-y-1.5">
+                  <div className="mt-5 border-t border-[#2D2E30]/10 pt-4">
+                    <h3 className="text-sm font-bold text-[#2D2E30]">What students will learn</h3>
+                    <ul className="mt-3 space-y-2">
                       {learnings.map((learning, index) => (
-                        <li
-                          key={index}
-                          className="flex gap-2 text-xs text-gray-700"
-                        >
-                          <span className="text-gray-400 shrink-0">•</span>
-                          <span>{learning}</span>
-                        </li>
+                        <li key={index} className="flex gap-2 text-xs leading-5 text-[#765F55]"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-[#7EAF85]" />{learning}</li>
                       ))}
                     </ul>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* What you'll learn on mobile — shown below the card */}
-            {learnings.length > 0 && (
-              <div className="lg:hidden mt-4 bg-white rounded-lg shadow-md p-4">
-                <h3 className="font-semibold text-gray-900 mb-2 text-sm">
-                  What you'll learn:
-                </h3>
-                <ul className="space-y-1.5">
-                  {learnings.map((learning, index) => (
-                    <li
-                      key={index}
-                      className="flex gap-2 text-xs text-gray-700"
-                    >
-                      <span className="text-gray-400 shrink-0">•</span>
-                      <span>{learning}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
 
-          {/* Lessons List */}
-          <div className="w-full lg:col-span-2">
+          <div className="w-full">
             {lessons.length === 0 ? (
-              <div className="bg-white rounded-lg shadow-md p-8 sm:p-12 text-center">
-                <p className="text-gray-500 mb-1 text-sm sm:text-base">
-                  No lessons in the course.
-                </p>
-                <p className="text-gray-500 text-sm sm:text-base">
-                  Click add to create a new lesson.
-                </p>
+              <div className="rounded-2xl border border-dashed border-[#E58C1A]/35 bg-[#FFF9EA] p-8 text-center sm:p-12">
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1CE] text-[#C97112]"><ListVideo size={23} /></span>
+                <p className="mt-4 text-lg font-bold text-[#2D2E30]">No lessons yet</p>
+                <p className="mt-2 text-sm text-[#765F55]">Create the first lesson to start building this course.</p>
+                <button type="button" onClick={handleAddLesson} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#E58C1A]"><Plus size={16} /> Add first lesson</button>
               </div>
             ) : (
-              <div className="space-y-3 sm:space-y-4">
+              <div className="overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_16px_35px_-28px_rgba(45,46,48,0.45)]">
+                <div className="flex items-center justify-between border-b border-[#2D2E30]/10 px-4 py-4 sm:px-5"><div><h2 className="font-bold text-[#2D2E30]">Lesson sequence</h2><p className="mt-0.5 text-xs text-[#765F55]">Students see these lessons in order.</p></div><span className="rounded-full bg-[#FFF9EA] px-3 py-1 text-xs font-bold text-[#9A5816]">{lessons.length} total</span></div>
+                <div className="divide-y divide-[#2D2E30]/8">
                 {lessons.map((lesson) => (
                   <div
                     key={lesson.id}
-                    className="bg-white rounded-xl shadow-md p-4 sm:p-5 md:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                    className="group flex flex-col gap-4 p-4 transition hover:bg-[#FFFDF8] sm:flex-row sm:items-center sm:px-5"
                   >
-                    {/* LEFT CONTENT */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className="text-sm sm:text-base font-bold text-gray-900 whitespace-nowrap">
-                          Lesson {lesson.order}
-                        </span>
-
-                        <span className="text-xs sm:text-sm font-medium bg-blue-100 text-blue-900 px-2.5 py-1 rounded-full truncate max-w-[180px] sm:max-w-[250px] md:max-w-full">
-                          {lesson.title}
-                        </span>
-                      </div>
-
-                      {lesson.videoUrl && (
-                        <a
-                          href={lesson.videoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs sm:text-sm text-blue-600 hover:underline break-all"
-                        >
-                          {lesson.videoUrl}
-                        </a>
-                      )}
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FFF1CE] text-sm font-bold text-[#9A5816]">{lesson.order}</span>
+                      <div className="min-w-0"><h3 className="truncate font-bold text-[#2D2E30]">{lesson.title}</h3>{lesson.videoUrl ? <a href={lesson.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex max-w-full items-center gap-1 truncate text-xs font-medium text-[#765F55] transition hover:text-[#C97112]"><PlayCircle size={14} className="shrink-0 text-[#C97112]" /><span className="truncate">Video lesson</span><ExternalLink size={12} className="shrink-0" /></a> : <p className="mt-1 text-xs text-[#9B867C]">No video link added</p>}</div>
                     </div>
-
-                    {/* RIGHT BUTTONS */}
-                    <div className="flex items-center justify-end sm:justify-start gap-2">
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
                       <button
+                        type="button"
                         onClick={() => handleEditLesson(lesson.id)}
-                        className="flex items-center justify-center bg-gray-100 text-gray-700 p-2.5 rounded-lg hover:bg-gray-200 transition-colors"
+                        className="inline-flex items-center gap-2 rounded-xl border border-[#2D2E30]/12 bg-white px-3 py-2 text-xs font-bold text-[#2D2E30] transition hover:border-[#E58C1A]/40 hover:bg-[#FFF9EA]"
                         title="Edit lesson"
                       >
-                        <Edit2 size={18} />
+                        <Edit2 size={15} /> <span className="hidden sm:inline">Edit</span>
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => handleDeleteClick(lesson.id)}
-                        className="flex items-center justify-center bg-gray-200 text-gray-700 p-2.5 rounded-lg hover:bg-gray-300 transition-colors"
+                        className="inline-flex items-center justify-center rounded-xl border border-[#A34D45]/20 bg-[#FFF0EE] p-2 text-[#A34D45] transition hover:bg-[#FFE1DD]"
                         title="Delete lesson"
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
             )}
           </div>

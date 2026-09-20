@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { isSafeNotificationLink } = require("../services/notificationLinkValidator");
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -27,6 +28,10 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       default: "",
       trim: true,
+      validate: {
+        validator: isSafeNotificationLink,
+        message: "Notification link must be a supported internal application path",
+      },
     },
     announcementId: {
       type: mongoose.Schema.Types.ObjectId,

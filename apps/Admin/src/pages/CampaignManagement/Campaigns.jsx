@@ -6,6 +6,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { fetchContactLeads } from "../../services/contactLeadService";
 import { fetchUsers } from "../../services/userService";
 import { createCampaign, deleteAnnouncement, deleteDraftCampaign, fetchAnnouncements, fetchCampaigns, sendCampaign, sendUserAnnouncement, updateDraftCampaign } from "../../services/campaignService";
+import { getSafeNotificationPath } from "../../utils/notificationLink";
 
 function Campaigns() {
   const { user: currentAdmin } = useAuth();
@@ -57,8 +58,10 @@ function Campaigns() {
   };
   const sendAnnouncement = async () => {
     if (!subject.trim() || !message.trim()) return setStatus({ type: "error", message: "Add a title and message before sending." });
+    const safeLink = getSafeNotificationPath(link);
+    if (link.trim() && !safeLink) return setStatus({ type: "error", message: "Destination link must be a supported internal application path, such as /courses or /my-courses." });
     setSaving(true); setStatus({ type: "", message: "" });
-    try { const response = await sendUserAnnouncement({ title: subject.trim(), message: message.trim(), link: link.trim(), type: notificationType }); setStatus({ type: "success", message: `Announcement sent to ${response.sentCount || 0} active students.` }); resetComposer(); await loadAnnouncements(); } catch (error) { setStatus({ type: "error", message: error.message || "Unable to send the announcement." }); } finally { setSaving(false); }
+    try { const response = await sendUserAnnouncement({ title: subject.trim(), message: message.trim(), link: safeLink, type: notificationType }); setStatus({ type: "success", message: `Announcement sent to ${response.sentCount || 0} active students.` }); resetComposer(); await loadAnnouncements(); } catch (error) { setStatus({ type: "error", message: error.message || "Unable to send the announcement." }); } finally { setSaving(false); }
   };
   const sendDraft = async (id) => { setSendingId(id); try { const sent = await sendCampaign(id); setStatus({ type: "success", message: `Email update sent to ${sent.sentCount} recipients.` }); await loadCampaigns(); } catch (error) { setStatus({ type: "error", message: error.message }); } finally { setSendingId(""); } };
   const deleteDraft = async () => { if (!draftToDelete) return; try { await deleteDraftCampaign(draftToDelete); setStatus({ type: "success", message: "Draft deleted." }); await loadCampaigns(); } catch (error) { setStatus({ type: "error", message: error.message }); } finally { setDraftToDelete(null); } };
