@@ -34,12 +34,12 @@ const getMyEnrollments = async (req, res) => {
   try {
     const enrollments = await Enrollment.find({ userId: req.user.id })
       .populate("courseId", "title description price thumbnail isPublished")
-      .populate("paymentId", "status paymentImage")
+      .populate("paymentId", "status")
       .populate("lastOpenedLesson", "title order")
       .sort({ createdAt: -1 });
 
     const results = await Promise.all(
-      enrollments.map(async (enrollment) => {
+      enrollments.filter((enrollment) => enrollment.courseId).map(async (enrollment) => {
         const totalLessons = await Lesson.countDocuments({ course: enrollment.courseId?._id || enrollment.courseId });
         return { ...enrollment.toObject(), progress: serializeProgress(enrollment, totalLessons) };
       })

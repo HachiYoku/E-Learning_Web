@@ -1,6 +1,6 @@
-# English Kafé Frontend
+# Arun Thai Frontend
 
-Public-facing student website for the English Kafé learning platform built with React and Vite.
+Public-facing student website for the Arun Thai learning platform, built with React and Vite.
 
 ## Features
 

@@ -14,7 +14,14 @@ function normalizePayment(payment) {
         priceValue: Number(payment.courseId.price || 0),
         image: payment.courseId.thumbnail || "",
       }
-    : null;
+    : {
+        id: null,
+        title: payment.courseSnapshot?.title || "Removed course",
+        description: payment.courseSnapshot?.description || "This course is no longer available.",
+        price: `${Number(payment.courseSnapshot?.price ?? payment.originalAmount ?? payment.amount ?? 0).toLocaleString()} ฿`,
+        priceValue: Number(payment.courseSnapshot?.price ?? payment.originalAmount ?? payment.amount ?? 0),
+        image: payment.courseSnapshot?.thumbnail || "",
+      };
 
   return {
     id: payment._id,
@@ -22,7 +29,8 @@ function normalizePayment(payment) {
     rejectReason: payment.rejectReason || "",
     reviewedAt: payment.reviewedAt || null,
     createdAt: payment.createdAt,
-    paymentImage: payment.paymentImage,
+    courseUnavailable: Boolean(payment.courseDeletedAt || !payment.courseId),
+    hasPaymentProof: Boolean(payment.hasPaymentProof),
     course,
   };
 }

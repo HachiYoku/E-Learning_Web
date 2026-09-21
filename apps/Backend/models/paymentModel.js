@@ -14,6 +14,15 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Retains the purchase description for order history if the course is
+    // later removed from the catalogue.
+    courseSnapshot: {
+      title: { type: String, trim: true, default: "" },
+      description: { type: String, default: "" },
+      thumbnail: { type: String, default: "" },
+      price: { type: Number, min: 0 },
+    },
+    courseDeletedAt: { type: Date, default: null },
     amount: {
       type: Number,
       required: true,
@@ -35,12 +44,28 @@ const paymentSchema = new mongoose.Schema(
     },
     paymentImage: {
       type: String,
-      required: true,
       trim: true,
+      select: false,
     },
     paymentImagePublicId: {
       type: String,
       trim: true,
+      select: false,
+    },
+    paymentProofPublicId: {
+      type: String,
+      trim: true,
+      select: false,
+    },
+    paymentProofFormat: {
+      type: String,
+      trim: true,
+      select: false,
+    },
+    paymentProofStorage: {
+      type: String,
+      enum: ["authenticated", "legacy"],
+      select: false,
     },
     status: {
       type: String,

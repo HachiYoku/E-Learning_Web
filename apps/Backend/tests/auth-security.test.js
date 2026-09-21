@@ -8,6 +8,7 @@ const path = require("node:path");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { issuePaymentProofAccessToken, verifyPaymentProofAccessToken } = require("../services/paymentProofAccess");
 
 const backendDirectory = path.resolve(__dirname, "..");
 const projectDirectory = path.resolve(backendDirectory, "..", "..");
@@ -19,6 +20,10 @@ let apiBaseUrl;
 let mongoUri;
 let User;
 let RefreshSession;
+let Payment;
+let Course;
+let Enrollment;
+let Notification;
 
 const password = "CorrectHorseBattery1";
 
@@ -125,6 +130,7 @@ before(async () => {
       JWT_SECRET: jwtSecret,
       ACCESS_TOKEN_TTL: "15m",
       REFRESH_TOKEN_TTL_DAYS: "1",
+      BACKEND_URL: "https://api.example.test",
       FRONTEND_URL_PROD: "https://student.example.test",
       ADMIN_URL_PROD: "https://admin.example.test",
       TRUST_PROXY: "true",
@@ -136,6 +142,10 @@ before(async () => {
   await mongoose.connect(mongoUri);
   User = require("../models/userModel");
   RefreshSession = require("../models/refreshSessionModel");
+  Payment = require("../models/paymentModel");
+  Course = require("../models/courseModel");
+  Enrollment = require("../models/enrollmentModel");
+  Notification = require("../models/notificationModel");
 });
 
 after(async () => {
@@ -280,6 +290,32 @@ test("normal users cannot call admin APIs", async () => {
   assert.equal((await request("/reports/summary", { token: loginResult.body.accessToken, origin: "https://student.example.test" })).status, 403);
 });
 
+test("course deletion requires the current admin password", async () => {
+  const admin = await createUser({ email: "course-delete-admin@example.test", role: "admin" });
+  const student = await createUser({ email: "course-delete-student@example.test" });
+  const course = await Course.create({ title: "Protected deletion course", price: 100, createdBy: admin._id });
+  await Enrollment.create({ userId: student._id, courseId: course._id });
+  const payment = await Payment.create({ userId: student._id, courseId: course._id, amount: 100, originalAmount: 100, status: "approved" });
+  await Notification.create({ userId: student._id, courseId: course._id, type: "enrollment", title: "Enrollment confirmed", message: `You are enrolled in ${course.title}.`, link: "/my-courses" });
+  await Notification.create({ userId: student._id, type: "payment", title: "Legacy payment", message: `Payment approved for ${course.title}.`, link: "/my-courses" });
+  const loginResult = await login(admin.email);
+
+  assert.equal((await request(`/courses/${course._id}`, { method: "DELETE", token: loginResult.body.accessToken, origin: "https://admin.example.test" })).status, 400);
+  assert.equal((await request(`/courses/${course._id}`, { method: "DELETE", body: { adminPassword: "incorrect-password" }, token: loginResult.body.accessToken, origin: "https://admin.example.test" })).status, 403);
+  assert.ok(await Course.exists({ _id: course._id }));
+
+  assert.equal((await request(`/courses/${course._id}`, { method: "DELETE", body: { adminPassword: password }, token: loginResult.body.accessToken, origin: "https://admin.example.test" })).status, 200);
+  assert.equal(await Course.exists({ _id: course._id }), null);
+  assert.equal(await Enrollment.exists({ userId: student._id, courseId: course._id }), null);
+  assert.equal(await Notification.exists({ userId: student._id, title: "Enrollment confirmed" }), null);
+  assert.equal(await Notification.exists({ userId: student._id, title: "Legacy payment" }), null);
+  const removalNotice = await Notification.findOne({ userId: student._id, title: "Course no longer available" });
+  assert.equal(removalNotice?.link, "/app/courses");
+  const historicalPayment = await Payment.findById(payment._id);
+  assert.equal(historicalPayment?.courseDeletedAt instanceof Date, true);
+  assert.equal(historicalPayment?.courseSnapshot?.title, "Protected deletion course");
+});
+
 test("authenticated-user and admin user responses never expose password fields", async () => {
   const student = await createUser({ email: "no-password-leak@example.test" });
   const admin = await createUser({ email: "no-password-leak-admin@example.test", role: "admin" });
@@ -307,4 +343,79 @@ test("invalid and expired refresh tokens are rejected", async () => {
 test("CORS rejects unauthorized origins", async () => {
   const response = await request("/", { origin: "https://attacker.example.test" });
   assert.equal(response.status, 403);
+});
+
+test("payment proofs are private, admin-gated, and absent from normal API responses", async () => {
+  const owner = await createUser({ email: "proof-owner@example.test" });
+  const otherStudent = await createUser({ email: "proof-other@example.test" });
+  const admin = await createUser({ email: "proof-admin@example.test", role: "admin" });
+  const payment = await Payment.create({
+    userId: owner._id,
+    courseId: new mongoose.Types.ObjectId(),
+    amount: 1,
+    paymentProofPublicId: "arun_thai/payment_proofs/test-private-proof",
+    paymentProofFormat: "png",
+    paymentProofStorage: "authenticated",
+    status: "pending",
+  });
+
+  assert.equal((await request(`/payments/${payment._id}/proof-access`, { origin: "https://student.example.test" })).status, 401);
+  const studentLogin = await login(otherStudent.email);
+  assert.equal((await request(`/payments/${payment._id}/proof-access`, { token: studentLogin.body.accessToken, origin: "https://student.example.test" })).status, 403);
+
+  const adminLogin = await login(admin.email);
+  const accessResponse = await request(`/payments/${payment._id}/proof-access`, { token: adminLogin.body.accessToken, origin: "https://admin.example.test" });
+  assert.equal(accessResponse.status, 200);
+  const access = await responseJson(accessResponse);
+  assert.match(access.url, new RegExp(`/payments/${payment._id}/proof\\?token=`));
+  assert.doesNotMatch(access.url, /res\.cloudinary\.com|api_secret|CLOUDINARY/i);
+  assert.ok(Date.parse(access.expiresAt) > Date.now());
+
+  const myPayments = await responseJson(await request("/payments/my", { token: (await login(owner.email)).body.accessToken, origin: "https://student.example.test" }));
+  const allPayments = await responseJson(await request("/payments", { token: adminLogin.body.accessToken, origin: "https://admin.example.test" }));
+  assert.equal(JSON.stringify(myPayments).includes("paymentImage"), false);
+  assert.equal(JSON.stringify(allPayments).includes("paymentImage"), false);
+  assert.equal(JSON.stringify(allPayments).includes("test-private-proof"), false);
+});
+
+test("payment proof access links reject invalid and expired signatures", async () => {
+  const admin = await createUser({ email: "proof-expiry-admin@example.test", role: "admin" });
+  const payment = await Payment.create({ userId: admin._id, courseId: new mongoose.Types.ObjectId(), amount: 1, paymentProofPublicId: "arun_thai/payment_proofs/test-expired-proof", paymentProofFormat: "png", paymentProofStorage: "authenticated", status: "pending" });
+  assert.equal((await request(`/payments/${payment._id}/proof?token=invalid`, { origin: "https://admin.example.test" })).status, 401);
+  const expired = jwt.sign({ purpose: "payment-proof-view", paymentId: String(payment._id), adminId: String(admin._id) }, jwtSecret, { expiresIn: -1 });
+  assert.equal((await request(`/payments/${payment._id}/proof?token=${expired}`, { origin: "https://admin.example.test" })).status, 401);
+});
+
+test("a newly issued payment proof access link is immediately valid", () => {
+  const paymentId = new mongoose.Types.ObjectId();
+  const adminId = new mongoose.Types.ObjectId();
+  const originalSecret = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = jwtSecret;
+  try {
+    const token = issuePaymentProofAccessToken({ paymentId, adminId });
+    const payload = verifyPaymentProofAccessToken(token, paymentId);
+    assert.equal(payload.adminId, String(adminId));
+  } finally {
+    if (originalSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = originalSecret;
+  }
+});
+
+test("payment approval and rejection preserve the existing review workflow without exposing proofs", async () => {
+  const admin = await createUser({ email: "proof-review-admin@example.test", role: "admin" });
+  const student = await createUser({ email: "proof-review-student@example.test" });
+  const course = await Course.create({ title: "Proof review course", price: 100, createdBy: admin._id });
+  const approvedPayment = await Payment.create({ userId: student._id, courseId: course._id, amount: 100, paymentProofPublicId: "arun_thai/payment_proofs/approval-proof", paymentProofFormat: "png", paymentProofStorage: "authenticated", status: "pending" });
+  const rejectedPayment = await Payment.create({ userId: admin._id, courseId: course._id, amount: 100, paymentProofPublicId: "arun_thai/payment_proofs/rejection-proof", paymentProofFormat: "png", paymentProofStorage: "authenticated", status: "pending" });
+  const loginResult = await login(admin.email);
+
+  const approved = await request(`/payments/${approvedPayment._id}/approve`, { method: "PATCH", token: loginResult.body.accessToken, body: { adminPassword: password }, origin: "https://admin.example.test" });
+  assert.equal(approved.status, 200);
+  assert.equal((await responseJson(approved)).payment.status, "approved");
+
+  const rejected = await request(`/payments/${rejectedPayment._id}/reject`, { method: "PATCH", token: loginResult.body.accessToken, body: { adminPassword: password, rejectReason: "Receipt is incomplete" }, origin: "https://admin.example.test" });
+  assert.equal(rejected.status, 200);
+  const rejectedBody = await responseJson(rejected);
+  assert.equal(rejectedBody.payment.status, "rejected");
+  assert.equal(JSON.stringify(rejectedBody).includes("paymentProofPublicId"), false);
 });

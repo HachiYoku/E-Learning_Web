@@ -1,6 +1,6 @@
-# English Kafé Admin Dashboard
+# Arun Thai Admin Dashboard
 
-Admin dashboard for the English Kafé learning platform built with React, Vite, and Tailwind CSS.
+Admin dashboard for the Arun Thai learning platform, built with React, Vite, and Tailwind CSS.
 
 ## Features
 
