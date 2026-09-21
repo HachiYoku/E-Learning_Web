@@ -1,9 +1,9 @@
-import { Maximize2, X } from 'lucide-react'
+import { Loader2, Maximize2, RotateCcw, ShieldCheck, X } from 'lucide-react'
 import { useState } from 'react'
 import { fetchPaymentProofBlob } from '../services/paymentService'
 
 function PaymentCard({ payment, onApprove, onDeny, status = 'review' }) {
-  const [showSlipModal, setShowSlipModal] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const [proofUrl, setProofUrl] = useState('')
   const [proofError, setProofError] = useState('')
   const [loadingProof, setLoadingProof] = useState(false)
@@ -12,13 +12,14 @@ function PaymentCard({ payment, onApprove, onDeny, status = 'review' }) {
   const statusStyle = approved ? 'bg-[#EDF8EE] text-[#246B35]' : denied ? 'bg-[#FFF0EE] text-[#A34D45]' : 'bg-[#FFF1CE] text-[#A86710]'
   const statusLabel = approved ? 'Approved' : denied ? 'Denied' : 'Awaiting review'
 
-  const openProof = async () => {
+  const loadProof = async () => {
     if (!payment.hasPaymentProof) return
+    if (proofUrl) URL.revokeObjectURL(proofUrl)
+    setProofUrl('')
+    setProofError('')
+    setLoadingProof(true)
     try {
-      setLoadingProof(true)
-      setProofError('')
       setProofUrl(await fetchPaymentProofBlob(payment.id))
-      setShowSlipModal(true)
     } catch (error) {
       setProofError(error.message || 'Unable to securely load this payment proof.')
     } finally {
@@ -26,18 +27,28 @@ function PaymentCard({ payment, onApprove, onDeny, status = 'review' }) {
     }
   }
 
+  const openProof = () => {
+    if (!payment.hasPaymentProof) return
+    setViewerOpen(true)
+    loadProof()
+  }
+
   const closeProof = () => {
-    setShowSlipModal(false)
+    setViewerOpen(false)
     if (proofUrl) URL.revokeObjectURL(proofUrl)
     setProofUrl('')
+    setProofError('')
   }
 
   return <>
     <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_14px_34px_-28px_rgba(45,46,48,.6)]">
       <div className="flex items-center justify-between border-b border-[#2D2E30]/10 bg-[#FFFDF8] px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusStyle}`}>{statusLabel}</span><span className="text-xs text-[#9B867C]">{payment.date || payment.userDate}</span></div>
       <div className="flex flex-1 flex-col p-4 sm:p-5">
-        <button type="button" onClick={openProof} disabled={!payment.hasPaymentProof || loadingProof} className="relative block w-full overflow-hidden rounded-xl border border-[#2D2E30]/10 bg-[#F5F1EA] text-left disabled:cursor-not-allowed">
-          <div className="flex h-44 items-center justify-center text-[#765F55]">{loadingProof ? 'Loading secure receipt…' : payment.hasPaymentProof ? 'View secure payment receipt' : 'No receipt image'}</div><span className="absolute right-3 top-3 rounded-lg bg-white p-2"><Maximize2 size={15} /></span>
+        <button type="button" onClick={openProof} disabled={!payment.hasPaymentProof || loadingProof} title={payment.hasPaymentProof ? 'Open secure payment receipt' : 'No payment receipt available'} className="group relative block w-full overflow-hidden rounded-xl border border-[#2D2E30]/10 bg-[#F5F1EA] text-left transition hover:border-[#E58C1A]/45 hover:bg-[#FFF9EA] focus:outline-none focus:ring-2 focus:ring-[#E58C1A]/50 disabled:cursor-not-allowed">
+          <div className="flex h-44 flex-col items-center justify-center gap-2 px-4 text-center text-[#765F55]">
+            {loadingProof ? <><Loader2 className="h-5 w-5 animate-spin text-[#C97112]" /><span className="text-sm font-semibold">Loading secure receipt…</span></> : payment.hasPaymentProof ? <><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-[#C97112] shadow-sm"><ShieldCheck size={20} /></span><span className="text-sm font-semibold">View secure payment receipt</span><span className="text-xs text-[#9B867C]">Opens in a private viewer</span></> : 'No receipt image'}
+          </div>
+          <span className="absolute right-3 top-3 rounded-lg bg-white p-2 text-[#2D2E30] shadow-sm transition group-hover:bg-[#FFF1CE]"><Maximize2 size={15} /></span>
         </button>
         {proofError ? <p className="mt-2 text-xs text-[#A34D45]">{proofError}</p> : null}
         <div className="mt-4 flex items-center gap-3"><img src={payment.userAvatar} alt="" className="h-10 w-10 rounded-full object-cover" /><div className="min-w-0"><h3 className="truncate font-bold">{payment.userName}</h3><p className="truncate text-xs text-[#765F55]">{payment.userEmail}</p></div></div>
@@ -46,7 +57,22 @@ function PaymentCard({ payment, onApprove, onDeny, status = 'review' }) {
         {status === 'review' ? <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => onDeny(payment.id)} className="rounded-xl border border-[#A34D45]/25 px-3 py-2.5 text-sm font-bold text-[#A34D45] hover:bg-[#FFF0EE]">Deny</button><button type="button" onClick={() => onApprove(payment.id)} className="rounded-xl bg-[#2D2E30] px-3 py-2.5 text-sm font-bold text-white hover:bg-[#E58C1A]">Approve</button></div> : null}
       </div>
     </article>
-    {showSlipModal ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D2E30]/65 p-4"><div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white"><div className="flex items-center justify-between p-4"><b>Payment receipt — {payment.userName}</b><button onClick={closeProof}><X /></button></div>{proofUrl ? <img src={proofUrl} alt="Payment receipt" className="max-h-[70vh] w-full object-contain p-4" /> : null}<div className="p-4"><button onClick={closeProof} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white">Close</button></div></div></div> : null}
+
+    {viewerOpen ? <div className="fixed inset-0 z-50 overflow-y-auto bg-[#2D2E30]/70 p-2 backdrop-blur-[2px] sm:p-5" role="dialog" aria-modal="true" aria-labelledby={`payment-proof-title-${payment.id}`}>
+      <div className="flex min-h-full items-center justify-center">
+        <section className="flex h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/20 bg-[#FFFDF8] shadow-2xl sm:h-[calc(100dvh-2.5rem)]">
+          <header className="flex shrink-0 items-center justify-between border-b border-[#2D2E30]/10 bg-white px-4 py-3 sm:px-6 sm:py-4">
+            <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#C97112]">Secure payment receipt</p><h2 id={`payment-proof-title-${payment.id}`} className="mt-1 truncate text-base font-bold text-[#2D2E30] sm:text-lg">Receipt from {payment.userName}</h2></div>
+            <button type="button" onClick={closeProof} className="ml-4 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8] text-[#765F55] transition hover:border-[#A34D45]/25 hover:bg-[#FFF0EE] hover:text-[#A34D45] focus:outline-none focus:ring-2 focus:ring-[#A34D45]/30" aria-label="Close payment receipt"><X size={22} /></button>
+          </header>
+          <div className="min-h-0 flex-1 overflow-auto bg-[#EFE8DC] p-3 sm:p-6">
+            {loadingProof ? <div className="flex h-full min-h-64 flex-col items-center justify-center gap-3 text-center text-[#765F55]"><Loader2 className="h-7 w-7 animate-spin text-[#C97112]" /><div><p className="font-semibold">Loading secure receipt…</p><p className="mt-1 text-sm">The image is retrieved only after you open it.</p></div></div> : null}
+            {!loadingProof && proofError ? <div className="flex h-full min-h-64 flex-col items-center justify-center gap-4 text-center"><div><p className="font-bold text-[#A34D45]">Unable to load this receipt</p><p className="mt-1 max-w-md text-sm text-[#765F55]">{proofError}</p></div><button type="button" onClick={loadProof} className="inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#E58C1A]"><RotateCcw size={16} />Retry</button></div> : null}
+            {!loadingProof && !proofError && proofUrl ? <div className="flex min-h-full items-center justify-center"><img src={proofUrl} alt={`Payment receipt submitted by ${payment.userName}`} style={{ width: 'min(100%, 620px)', height: 'auto', maxHeight: '62dvh', objectFit: 'contain' }} className="block rounded-lg bg-white shadow-[0_12px_30px_-20px_rgba(45,46,48,.55)]" /></div> : null}
+          </div>
+        </section>
+      </div>
+    </div> : null}
   </>
 }
 
