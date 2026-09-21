@@ -64,7 +64,9 @@ function MyCourseOrder() {
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
               {payments.map((payment) => {
                 const course = payment.course
-                const status = getStatusDetails(payment.status)
+                const status = payment.courseUnavailable
+                  ? { label: 'Course unavailable', detail: 'This course has been removed from the catalogue.', Icon: XCircle, classes: 'border-[#D78A86]/30 bg-[#FFF3F1] text-[#A34D45]' }
+                  : getStatusDetails(payment.status)
                 const StatusIcon = status.Icon
 
                 return (
@@ -88,11 +90,11 @@ function MyCourseOrder() {
                       </div>
 
                       <button
-                        onClick={() => navigate(payment.status === 'approved' ? `/app/learn/${course?.id}` : `/app/orders/${payment.id}`)}
+                        onClick={() => navigate(payment.courseUnavailable ? '/app/support' : payment.status === 'approved' ? `/app/learn/${course.id}` : `/app/orders/${payment.id}`)}
                         className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-[#FFF9EA] px-4 py-3 text-sm font-bold text-[#2D2E30] transition-colors hover:border-[#E58C1A] hover:bg-[#FFF4D8]"
                       >
-                        {payment.status === 'approved' ? <CircleCheck className="h-4 w-4 text-[#4D7C57]" aria-hidden="true" /> : <FileSearch className="h-4 w-4 text-[#C97112]" aria-hidden="true" />}
-                        {payment.status === 'approved' ? 'Start learning' : 'View order details'}
+                        {payment.courseUnavailable ? <FileSearch className="h-4 w-4 text-[#A34D45]" aria-hidden="true" /> : payment.status === 'approved' ? <CircleCheck className="h-4 w-4 text-[#4D7C57]" aria-hidden="true" /> : <FileSearch className="h-4 w-4 text-[#C97112]" aria-hidden="true" />}
+                        {payment.courseUnavailable ? 'Contact support' : payment.status === 'approved' ? 'Start learning' : 'View order details'}
                       </button>
                     </div>
                   </article>

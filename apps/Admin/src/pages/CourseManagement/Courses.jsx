@@ -12,6 +12,9 @@ function Courses() {
   const [error, setError] = useState('')
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [courseToDelete, setCourseToDelete] = useState(null)
+  const [adminPassword, setAdminPassword] = useState('')
+  const [confirmationError, setConfirmationError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     async function loadCourses() {
@@ -33,6 +36,8 @@ function Courses() {
   const handleDeleteClick = (id) => {
     const selectedCourse = courses.find((course) => course.id === id) || null
     setCourseToDelete(selectedCourse)
+    setAdminPassword('')
+    setConfirmationError('')
     setShowConfirmation(true)
   }
 
@@ -40,23 +45,34 @@ function Courses() {
     if (!courseToDelete?.id) {
       return
     }
+    if (!adminPassword.trim()) {
+      setConfirmationError('Enter your admin password to delete this course.')
+      return
+    }
 
     try {
-      await deleteCourse(courseToDelete.id)
+      setDeleting(true)
+      setConfirmationError('')
+      await deleteCourse(courseToDelete.id, adminPassword)
       setCourses((currentCourses) =>
         currentCourses.filter((course) => course.id !== courseToDelete.id)
       )
-    } catch (deleteError) {
-      setError(deleteError.message)
-    } finally {
       setShowConfirmation(false)
       setCourseToDelete(null)
+      setAdminPassword('')
+    } catch (deleteError) {
+      setConfirmationError(deleteError.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
   const handleCancelDelete = () => {
+    if (deleting) return
     setShowConfirmation(false)
     setCourseToDelete(null)
+    setAdminPassword('')
+    setConfirmationError('')
   }
 
   const handleEdit = (id) => {
@@ -128,6 +144,10 @@ function Courses() {
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
         isDangerous={true}
+        password={adminPassword}
+        onPasswordChange={setAdminPassword}
+        error={confirmationError}
+        isSaving={deleting}
       />
     </div>
   )

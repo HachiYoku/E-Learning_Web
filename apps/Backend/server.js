@@ -3,6 +3,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 require('dotenv').config();
 const errorHandler = require("./middleware/errorHandler");
+const { getTrustedUrls } = require("./config/trustedUrls");
 
 const parseCookies = (cookieHeader = "") => Object.fromEntries(
   cookieHeader.split(";").map((part) => {
@@ -18,6 +19,14 @@ const app = express()
 const port = process.env.PORT || 3000
 const trustProxy = process.env.TRUST_PROXY
 const isProduction = process.env.NODE_ENV === "production"
+let trustedUrls;
+
+try {
+  trustedUrls = getTrustedUrls();
+} catch (error) {
+  console.error(`Configuration error: ${error.message}`);
+  process.exit(1);
+}
 
 if (trustProxy) {
   app.set('trust proxy', trustProxy === 'true' ? 1 : trustProxy)
@@ -36,10 +45,8 @@ const localOrigins = process.env.NODE_ENV === "production"
 // Credentialed CORS must use exact origins; never use a wildcard here.
 const allowedOrigins = [
   ...localOrigins,
-  process.env.FRONTEND_URL_PROD,
-  process.env.ADMIN_URL_PROD,
-  process.env.FRONTEND_URL,
-  process.env.ADMIN_URL,
+  trustedUrls.frontendUrl,
+  trustedUrls.adminUrl,
 ].filter(Boolean)
 
 app.use(

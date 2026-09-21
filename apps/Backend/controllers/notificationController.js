@@ -73,6 +73,7 @@ const markAllNotificationsRead = async (req, res) => {
 
 const createNotification = async ({
   userId,
+  courseId = null,
   type = "info",
   title,
   message,
@@ -86,6 +87,7 @@ const createNotification = async ({
 
   return Notification.create({
     userId,
+    courseId,
     type,
     title,
     message,

@@ -74,6 +74,6 @@ export async function updateCourse(id, payload) {
   return normalizeCourse(course);
 }
 
-export async function deleteCourse(id) {
-  return apiClient.delete(`/courses/${id}`);
+export async function deleteCourse(id, adminPassword) {
+  return apiClient.delete(`/courses/${id}`, { adminPassword });
 }

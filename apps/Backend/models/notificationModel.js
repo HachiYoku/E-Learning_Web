@@ -9,6 +9,14 @@ const notificationSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Makes course-related notices removable when an administrator deletes
+    // the course, without relying on a title or message text match.
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
+      default: null,
+      index: true,
+    },
     type: {
       type: String,
       enum: ["payment", "enrollment", "course", "system", "info"],
