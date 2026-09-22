@@ -1,0 +1,151 @@
+name: Security and builds
+
+on:
+  pull_request:
+    branches:
+      - testing-environment
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-security:
+    name: Backend security tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.0
+          cache: npm
+          cache-dependency-path: apps/Backend/package-lock.json
+
+      # The auth integration suite starts its own temporary mongod process.
+      # Install only the MongoDB server binary on this ephemeral runner; no
+      # database service is started and no production connection is used.
+      - name: Provision local MongoDB executable
+        run: |
+          curl --fail --silent --show-error --location https://pgp.mongodb.com/server-7.0.asc | sudo gpg --dearmor --yes --output /usr/share/keyrings/mongodb-server-7.0.gpg
+          echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update
+          sudo apt-get install --yes mongodb-org-server
+
+      - name: Verify mongod is available
+        run: mongod --version
+
+      - name: Install backend dependencies
+        working-directory: apps/Backend
+        run: npm ci --workspaces=false
+
+      - name: Run authentication and private-payment-proof security tests
+        working-directory: apps/Backend
+        env:
+          NODE_ENV: test
+          RESEND_API_KEY: re_test_ci_placeholder
+          EMAIL_FROM: test@example.invalid
+        run: npm run test:auth-security
+
+      - name: Run trusted URL security tests
+        working-directory: apps/Backend
+        run: npm run test:trusted-url-security
+
+      - name: Run XSS security tests
+        working-directory: apps/Backend
+        run: npm run test:xss-security
+
+      - name: Run notification-link security tests
+        working-directory: apps/Backend
+        run: npm run test:notification-link-security
+
+  student-build:
+    name: Student frontend production build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.0
+          cache: npm
+          cache-dependency-path: apps/Frontend/package-lock.json
+
+      - name: Install student frontend dependencies
+        working-directory: apps/Frontend
+        run: npm ci --workspaces=false
+
+      - name: Build student frontend
+        working-directory: apps/Frontend
+        run: npm run build
+
+  admin-build:
+    name: Admin frontend production build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.0
+          cache: npm
+          cache-dependency-path: apps/Admin/package-lock.json
+
+      - name: Install admin frontend dependencies
+        working-directory: apps/Admin
+        run: npm ci --workspaces=false
+
+      - name: Build admin frontend
+        working-directory: apps/Admin
+        run: npm run build
+
+  dependency-audit:
+    name: Production dependency audit
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.0
+          cache: npm
+          cache-dependency-path: |
+            apps/Backend/package-lock.json
+            apps/Frontend/package-lock.json
+            apps/Admin/package-lock.json
+
+      - name: Install backend production dependencies
+        working-directory: apps/Backend
+        run: npm ci --workspaces=false --omit=dev
+
+      - name: Audit backend production dependencies
+        working-directory: apps/Backend
+        run: npm audit --workspaces=false --omit=dev --audit-level=high
+
+      - name: Install student frontend production dependencies
+        working-directory: apps/Frontend
+        run: npm ci --workspaces=false --omit=dev
+
+      - name: Audit student frontend production dependencies
+        working-directory: apps/Frontend
+        run: npm audit --workspaces=false --omit=dev --audit-level=high
+
+      - name: Install admin frontend production dependencies
+        working-directory: apps/Admin
+        run: npm ci --workspaces=false --omit=dev
+
+      - name: Audit admin frontend production dependencies
+        working-directory: apps/Admin
+        run: npm audit --workspaces=false --omit=dev --audit-level=high

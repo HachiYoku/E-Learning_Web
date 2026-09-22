@@ -61,7 +61,7 @@ test("preserves valid article formatting and approved link safety", () => {
 });
 
 test("production CSP configurations are strict and parseable", () => {
-  for (const app of ["Frontend", "admin"]) {
+  for (const app of ["Frontend", "Admin"]) {
     const config = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", app, "vercel.json"), "utf8"));
     const csp = config.headers[0].headers.find((header) => header.key === "Content-Security-Policy").value;
     assert.match(csp, /frame-ancestors 'none'/);

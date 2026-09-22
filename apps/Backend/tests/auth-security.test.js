@@ -40,19 +40,45 @@ function freePort() {
 
 function waitForOutput(child, text) {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${text}`)), 15000);
+    let output = "";
+    const appendOutput = (chunk) => { output = `${output}${chunk}`.slice(-4000); };
+    const cleanup = () => {
+      clearTimeout(timeout);
+      child.stdout.off("data", onData);
+      child.stderr.off("data", appendOutput);
+      child.off("exit", onExit);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for ${text}. Process output: ${output || "<none>"}`));
+    }, 15000);
     const onData = (chunk) => {
+      appendOutput(chunk);
       if (chunk.toString().includes(text)) {
-        clearTimeout(timeout);
-        child.stdout.off("data", onData);
+        cleanup();
         resolve();
       }
     };
+    const onExit = (code) => {
+      cleanup();
+      reject(new Error(`Process exited before ready (${code}). Process output: ${output || "<none>"}`));
+    };
     child.stdout.on("data", onData);
-    child.once("exit", (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`Process exited before ready (${code})`));
+    child.stderr.on("data", appendOutput);
+    child.once("exit", onExit);
+  });
+}
+
+function stopProcess(child) {
+  return new Promise((resolve) => {
+    if (!child || child.exitCode !== null) return resolve();
+
+    const forceStopTimer = setTimeout(() => child.kill("SIGKILL"), 5000);
+    child.once("exit", () => {
+      clearTimeout(forceStopTimer);
+      resolve();
     });
+    child.kill("SIGTERM");
   });
 }
 
@@ -150,20 +176,19 @@ before(async () => {
 
 after(async () => {
   await mongoose.disconnect();
-  apiProcess?.kill("SIGTERM");
-  mongoProcess?.kill("SIGTERM");
-  if (mongoDirectory) await fs.rm(mongoDirectory, { recursive: true, force: true });
+  await Promise.all([stopProcess(apiProcess), stopProcess(mongoProcess)]);
+  if (mongoDirectory) await fs.rm(mongoDirectory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 });
 
 test("access tokens are not persisted in localStorage", async () => {
   const studentStorage = await fs.readFile(path.join(projectDirectory, "apps/Frontend/src/api/tokenStorage.js"), "utf8");
-  const adminStorage = await fs.readFile(path.join(projectDirectory, "apps/admin/src/api/tokenStorage.js"), "utf8");
+  const adminStorage = await fs.readFile(path.join(projectDirectory, "apps/Admin/src/api/tokenStorage.js"), "utf8");
   assert.doesNotMatch(studentStorage, /localStorage/);
   assert.doesNotMatch(adminStorage, /localStorage/);
 });
 
 test("admin source has no persistent auth/user storage writes", async () => {
-  const adminSources = (await readJavaScriptFiles(path.join(projectDirectory, "apps/admin/src"))).join("\n");
+  const adminSources = (await readJavaScriptFiles(path.join(projectDirectory, "apps/Admin/src"))).join("\n");
   assert.doesNotMatch(adminSources, /(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|getItem)/);
   assert.doesNotMatch(adminSources, /indexedDB/);
   assert.match(adminSources, /localStorage\.removeItem\(key\)/);
