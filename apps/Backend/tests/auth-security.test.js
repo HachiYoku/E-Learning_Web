@@ -56,6 +56,19 @@ function waitForOutput(child, text) {
   });
 }
 
+function stopProcess(child) {
+  return new Promise((resolve) => {
+    if (!child || child.exitCode !== null) return resolve();
+
+    const forceStopTimer = setTimeout(() => child.kill("SIGKILL"), 5000);
+    child.once("exit", () => {
+      clearTimeout(forceStopTimer);
+      resolve();
+    });
+    child.kill("SIGTERM");
+  });
+}
+
 function cookieValue(response) {
   const setCookie = typeof response.headers.getSetCookie === "function"
     ? response.headers.getSetCookie()[0]
@@ -150,9 +163,8 @@ before(async () => {
 
 after(async () => {
   await mongoose.disconnect();
-  apiProcess?.kill("SIGTERM");
-  mongoProcess?.kill("SIGTERM");
-  if (mongoDirectory) await fs.rm(mongoDirectory, { recursive: true, force: true });
+  await Promise.all([stopProcess(apiProcess), stopProcess(mongoProcess)]);
+  if (mongoDirectory) await fs.rm(mongoDirectory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 });
 
 test("access tokens are not persisted in localStorage", async () => {
