@@ -182,13 +182,13 @@ after(async () => {
 
 test("access tokens are not persisted in localStorage", async () => {
   const studentStorage = await fs.readFile(path.join(projectDirectory, "apps/Frontend/src/api/tokenStorage.js"), "utf8");
-  const adminStorage = await fs.readFile(path.join(projectDirectory, "apps/admin/src/api/tokenStorage.js"), "utf8");
+  const adminStorage = await fs.readFile(path.join(projectDirectory, "apps/Admin/src/api/tokenStorage.js"), "utf8");
   assert.doesNotMatch(studentStorage, /localStorage/);
   assert.doesNotMatch(adminStorage, /localStorage/);
 });
 
 test("admin source has no persistent auth/user storage writes", async () => {
-  const adminSources = (await readJavaScriptFiles(path.join(projectDirectory, "apps/admin/src"))).join("\n");
+  const adminSources = (await readJavaScriptFiles(path.join(projectDirectory, "apps/Admin/src"))).join("\n");
   assert.doesNotMatch(adminSources, /(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|getItem)/);
   assert.doesNotMatch(adminSources, /indexedDB/);
   assert.match(adminSources, /localStorage\.removeItem\(key\)/);
