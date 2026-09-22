@@ -33,8 +33,8 @@ jobs:
       # database service is started and no production connection is used.
       - name: Provision local MongoDB executable
         run: |
-          curl --fail --silent --show-error --location https://pgp.mongodb.com/server-8.0.asc | sudo gpg --dearmor --yes --output /usr/share/keyrings/mongodb-server-8.0.gpg
-          echo "deb [signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+          curl --fail --silent --show-error --location https://pgp.mongodb.com/server-7.0.asc | sudo gpg --dearmor --yes --output /usr/share/keyrings/mongodb-server-7.0.gpg
+          echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
           sudo apt-get update
           sudo apt-get install --yes mongodb-org-server
 
