@@ -40,19 +40,32 @@ function freePort() {
 
 function waitForOutput(child, text) {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${text}`)), 15000);
+    let output = "";
+    const appendOutput = (chunk) => { output = `${output}${chunk}`.slice(-4000); };
+    const cleanup = () => {
+      clearTimeout(timeout);
+      child.stdout.off("data", onData);
+      child.stderr.off("data", appendOutput);
+      child.off("exit", onExit);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for ${text}. Process output: ${output || "<none>"}`));
+    }, 15000);
     const onData = (chunk) => {
+      appendOutput(chunk);
       if (chunk.toString().includes(text)) {
-        clearTimeout(timeout);
-        child.stdout.off("data", onData);
+        cleanup();
         resolve();
       }
     };
+    const onExit = (code) => {
+      cleanup();
+      reject(new Error(`Process exited before ready (${code}). Process output: ${output || "<none>"}`));
+    };
     child.stdout.on("data", onData);
-    child.once("exit", (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`Process exited before ready (${code})`));
-    });
+    child.stderr.on("data", appendOutput);
+    child.once("exit", onExit);
   });
 }
 
