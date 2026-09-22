@@ -47,6 +47,10 @@ jobs:
 
       - name: Run authentication and private-payment-proof security tests
         working-directory: apps/Backend
+        env:
+          NODE_ENV: test
+          RESEND_API_KEY: re_test_ci_placeholder
+          EMAIL_FROM: test@example.invalid
         run: npm run test:auth-security
 
       - name: Run trusted URL security tests
