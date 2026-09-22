@@ -217,7 +217,7 @@ const verifyEmail = async (req, res) => {
     );
   } catch (error) {
     return res.redirect(
-      getVerificationRedirectUrl("error", error.message || "Email verification failed")
+      getVerificationRedirectUrl("error", "Email verification failed")
     );
   }
 };
