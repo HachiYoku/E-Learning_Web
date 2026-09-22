@@ -29,7 +29,8 @@ function normalizePayment(payment) {
     cardInfo: payment.userId?.email || "",
     status: payment.status,
     denialReason: payment.rejectReason || "",
-    paymentImage: payment.paymentImage || "",
+    hasPaymentProof: Boolean(payment.hasPaymentProof),
+    proofStorage: payment.proofStorage || null,
   };
 }
 
@@ -40,6 +41,20 @@ export async function fetchAllPayments() {
 
 export function fetchPendingPaymentCount() {
   return apiClient.get("/payments/pending-count");
+}
+
+export function fetchPaymentProofAccess(paymentId) {
+  return apiClient.get(`/payments/${paymentId}/proof-access`);
+}
+
+export async function fetchPaymentProofBlob(paymentId) {
+  const access = await fetchPaymentProofAccess(paymentId);
+  const response = await fetch(access.url, { credentials: "include" });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message || "Unable to load the secure payment proof.");
+  }
+  return URL.createObjectURL(await response.blob());
 }
 
 export async function approvePayment(paymentId, adminPassword) {

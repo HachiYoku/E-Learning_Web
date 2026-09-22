@@ -2,6 +2,7 @@ const User = require('../models/userModel')
 const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
 const sendEmail = require('../services/sendEmail')
+const { getTrustedUrls, buildTrustedUrl, buildVerificationUrl, buildPasswordResetUrl } = require('../config/trustedUrls')
 const {
   REFRESH_COOKIE_NAME,
   STUDENT_REFRESH_COOKIE_NAME,
@@ -31,49 +32,10 @@ const isStrongPassword = (password) => typeof password === "string"
   && /[A-Z]/.test(password)
   && /\d/.test(password);
 
-const getAppUrl = (appName) => {
-  const isProduction = process.env.NODE_ENV === 'production'
-  const appKey = appName.toUpperCase()
-  const localUrl = process.env[`${appKey}_URL`]
-  const productionUrl = process.env[`${appKey}_URL_PROD`]
-
-  const selectedUrl = isProduction
-    ? productionUrl || localUrl
-    : localUrl || productionUrl
-
-  if (!selectedUrl) {
-    return appName === 'admin' ? 'http://localhost:5174' : 'http://localhost:5173'
-  }
-
-  return selectedUrl.replace(/\/$/, '')
-}
-
-const getBackendBaseUrl = (req) => {
-  if (process.env.BACKEND_URL) {
-    return process.env.BACKEND_URL.replace(/\/$/, '')
-  }
-
-  return `${req.protocol}://${req.get('host')}`
-}
-
 const getVerificationRedirectUrl = (status, message, email) => {
-  const frontendUrl = getAppUrl('frontend')
+  const { frontendUrl } = getTrustedUrls()
   const redirectPath = status === 'error' ? '/verification-help' : '/login'
-  const redirectUrl = new URL(redirectPath, frontendUrl)
-
-  if (status) {
-    redirectUrl.searchParams.set('verification', status)
-  }
-
-  if (message) {
-    redirectUrl.searchParams.set('message', message)
-  }
-
-  if (email) {
-    redirectUrl.searchParams.set('email', email)
-  }
-
-  return redirectUrl.toString()
+  return buildTrustedUrl(frontendUrl, redirectPath, { verification: status, message, email })
 }
 
 const escapeHtml = (value = "") => String(value)
@@ -185,7 +147,7 @@ const register = async (req, res) => {
       isVerified: false,
     });
     
-    const verifyLink = `${getBackendBaseUrl(req)}/auth/verify-email?token=${verificationToken}`;
+    const verifyLink = buildVerificationUrl(verificationToken);
 
     try {
       await sendEmail(
@@ -255,7 +217,7 @@ const verifyEmail = async (req, res) => {
     );
   } catch (error) {
     return res.redirect(
-      getVerificationRedirectUrl("error", error.message || "Email verification failed")
+      getVerificationRedirectUrl("error", "Email verification failed")
     );
   }
 };
@@ -285,7 +247,7 @@ const resendVerification = async (req, res) => {
     user.verificationTokenExpires = Date.now() + 1000 * 60 * 60; // 1 hour
     await user.save();
 
-    const verifyLink = `${getBackendBaseUrl(req)}/auth/verify-email?token=${verificationToken}`;
+    const verifyLink = buildVerificationUrl(verificationToken);
 
     await sendEmail(
       user.email,
@@ -415,9 +377,7 @@ const forgotPassword = async (req, res) => {
     await user.save();
 
     // Send email
-    const resetLink = `${
-      getAppUrl('frontend')
-    }/reset-password/${resetToken}`;
+    const resetLink = buildPasswordResetUrl(resetToken);
     const html = buildAuthEmail({
       name: user.name,
       actionUrl: resetLink,
@@ -480,5 +440,5 @@ module.exports = {
   logout,
   getCurrentUser,
   forgotPassword,
-  resetPassword
+  resetPassword,
 }

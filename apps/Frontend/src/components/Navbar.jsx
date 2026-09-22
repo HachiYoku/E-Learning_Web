@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import { useNotification } from "../contexts/NotificationContext"
+import { getSafeNotificationPath } from "../utils/notificationLink"
 import LogoutConfirmModal from "./LogoutConfirmModal"
 
 const NOTIFICATION_FILTERS = [
@@ -14,6 +15,7 @@ const NOTIFICATION_FILTERS = [
 ];
 
 function NotificationBell({ compact = false }) {
+  const navigate = useNavigate()
   const {
     unreadCount,
     isOpen: isNotificationOpen,
@@ -96,7 +98,8 @@ function NotificationBell({ compact = false }) {
                   onClick={() => {
                     if (!notification.isRead) markAsRead(notification._id);
                     setNotificationOpen(false);
-                    if (notification.link) window.location.href = notification.link;
+                    const destination = getSafeNotificationPath(notification.link);
+                    if (destination) navigate(destination);
                   }}
                   className={`flex w-full items-start gap-3 border-b border-[#2D2E30]/8 px-4 py-3 text-left transition hover:bg-[#FFF4D8]/50 ${
                     !notification.isRead ? "bg-[#FFF7E6]" : "bg-transparent"

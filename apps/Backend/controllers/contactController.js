@@ -1,6 +1,7 @@
 const ContactLead = require("../models/contactLeadModel");
 const sendEmail = require("../services/sendEmail");
 const jwt = require("jsonwebtoken");
+const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const escapeHtml = (value) => String(value)
@@ -74,8 +75,7 @@ const createContactLead = async (req, res) => {
           process.env.JWT_SECRET,
           { expiresIn: "1y" }
         );
-        const baseUrl = (process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
-        const unsubscribeUrl = `${baseUrl}/contacts/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
+        const unsubscribeUrl = buildTrustedUrl(getTrustedUrls().backendUrl, "/contacts/unsubscribe", { token: unsubscribeToken });
         await sendEmail(
           normalizedEmail,
           "You're on the Arun Thai list",

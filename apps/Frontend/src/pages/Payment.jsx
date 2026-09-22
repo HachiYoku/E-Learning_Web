@@ -16,7 +16,7 @@ import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useToast } from "../contexts/ToastContext";
 import { fetchCourseById } from "../services/courseService";
-import { createPayment } from "../services/paymentService";
+import { createPayment, fetchMyPayments } from "../services/paymentService";
 import { fetchPaymentSettings } from "../services/paymentSettingsService";
 import { validateFileSize } from "../utils/fileValidation";
 import { validatePromoCode } from "../services/promoCodeService";
@@ -40,6 +40,7 @@ function Payment() {
   const [promo, setPromo] = useState(null);
   const [promoMessage, setPromoMessage] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
+  const [hasSubmittedProof, setHasSubmittedProof] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -47,12 +48,18 @@ function Payment() {
       try {
         setLoading(true);
         setError("");
-        const [loadedCourse, paymentSettings] = await Promise.all([
+        const [loadedCourse, paymentSettings, payments] = await Promise.all([
           fetchCourseById(courseId),
           fetchPaymentSettings(),
+          fetchMyPayments(),
         ]);
         setCourse(loadedCourse);
         setPaymentQr(loadedCourse.paymentQr || paymentSettings.paymentQr || "");
+        const hasPendingProof = payments.some((payment) =>
+          payment.status === "pending" && String(payment.course?.id) === String(courseId)
+        );
+        setHasSubmittedProof(hasPendingProof);
+        if (hasPendingProof) setCurrentStep(3);
       } catch (loadError) {
         setError(loadError.message);
       } finally {
@@ -88,7 +95,11 @@ function Payment() {
     setError("");
   };
 
+  const promoLocked = hasSubmittedProof || currentStep === 3;
+  const promoLockedMessage = "A promo code cannot be changed after your payment proof has been submitted.";
+
   const applyPromo = async () => {
+    if (promoLocked) return setPromoMessage(promoLockedMessage);
     if (course?.hasDiscount) return setPromoMessage("This course is already discounted, so a promo code cannot be applied.");
     if (!promoInput.trim()) return setPromoMessage("Enter a promo code first.");
     try { setPromoLoading(true); setPromoMessage(""); const result = await validatePromoCode(promoInput, courseId); setPromo(result); setPromoInput(result.code); }
@@ -110,6 +121,7 @@ function Payment() {
         message: "Your receipt has been uploaded and is pending review.",
         type: "success",
       });
+      setHasSubmittedProof(true);
       setCurrentStep(3);
     } catch (submitError) {
       setError(submitError.message);
@@ -266,7 +278,7 @@ function Payment() {
               </div>
 
               <div className="px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6 md:px-8 md:pb-8">
-              {course.hasDiscount ? <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Course discount applied</p><p className="mt-1 text-sm leading-5 text-[#765F55]">Promo codes cannot be combined with this course discount.</p></div> : <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setPromoMessage(""); }} placeholder="WELCOME20" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promo ? <p className="mt-2 text-sm font-semibold text-[#246B35]">Applied: save ฿{promo.discountAmount.toLocaleString()} — pay ฿{promo.finalAmount.toLocaleString()}</p> : promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div>}
+              {course.hasDiscount ? <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Course discount applied</p><p className="mt-1 text-sm leading-5 text-[#765F55]">Promo codes cannot be combined with this course discount.</p></div> : promoLocked ? null : <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setPromoMessage(""); }} placeholder="Enter promo code" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promo ? <p className="mt-2 text-sm font-semibold text-[#246B35]">Applied: save ฿{promo.discountAmount.toLocaleString()} — pay ฿{promo.finalAmount.toLocaleString()}</p> : promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div>}
               {/* Step 1 — QR Code */}
               {currentStep === 1 ? (
                 <div className="space-y-4 sm:space-y-5 md:space-y-6">

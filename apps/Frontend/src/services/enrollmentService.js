@@ -18,10 +18,9 @@ function normalizeEnrollment(enrollment) {
         }
       : null,
     payment: enrollment.paymentId
-      ? {
+        ? {
           id: enrollment.paymentId._id,
           status: enrollment.paymentId.status,
-          paymentImage: enrollment.paymentId.paymentImage,
         }
       : null,
     progress: normalizeProgress(enrollment.progress),
@@ -48,7 +47,9 @@ function normalizeProgress(progress) {
 
 export async function fetchMyEnrollments() {
   const enrollments = await apiClient.get("/enrollments/my");
-  return enrollments.map(normalizeEnrollment);
+  // Defensive handling for records left by older course deletions. New
+  // deletions remove the enrollment server-side.
+  return enrollments.map(normalizeEnrollment).filter((enrollment) => enrollment.course);
 }
 
 export async function checkEnrollment(courseId) {

@@ -1,6 +1,6 @@
-# English Kafé Backend
+# Arun Thai Backend
 
-Express API backend for English Kafé with authentication, course management, payments, enrollments, and blog content.
+Express API backend for Arun Thai, with authentication, Thai-language course management, payments, enrollments, and blog content.
 
 ## Features
 
@@ -67,4 +67,6 @@ npm run start
 
 - Ensure `JWT_SECRET` is strong and never committed to source control.
 - Use HTTPS in production and configure CORS origins carefully.
+- On Render production, set `BACKEND_URL` and `FRONTEND_URL_PROD` to their public HTTPS origins. The backend refuses to start if either is missing or invalid.
+- Payment proofs are uploaded as Cloudinary `authenticated` images. When an admin opens a legacy proof, the backend migrates its trusted Cloudinary image to authenticated storage, removes the old asset when possible, and then opens the private copy.
 - Keep dependencies updated and run security audits regularly.

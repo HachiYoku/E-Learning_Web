@@ -1,8 +1,17 @@
 const express = require('express')
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const mongoose = require("mongoose");
 require('dotenv').config();
 const errorHandler = require("./middleware/errorHandler");
+const { getTrustedUrls } = require("./config/trustedUrls");
+const {
+  requestId,
+  requestCompletionLogger,
+  sanitizeServerErrorResponses,
+  redact,
+} = require("./middleware/monitoring");
+const healthCheck = require("./middleware/health");
 
 const parseCookies = (cookieHeader = "") => Object.fromEntries(
   cookieHeader.split(";").map((part) => {
@@ -18,6 +27,16 @@ const app = express()
 const port = process.env.PORT || 3000
 const trustProxy = process.env.TRUST_PROXY
 const isProduction = process.env.NODE_ENV === "production"
+let trustedUrls;
+
+try {
+  trustedUrls = getTrustedUrls();
+} catch (error) {
+  // These validation messages name configuration keys only; they never echo
+  // configured origin values or credentials.
+  console.error(`Configuration error: ${error.message}`);
+  process.exit(1);
+}
 
 if (trustProxy) {
   app.set('trust proxy', trustProxy === 'true' ? 1 : trustProxy)
@@ -36,10 +55,8 @@ const localOrigins = process.env.NODE_ENV === "production"
 // Credentialed CORS must use exact origins; never use a wildcard here.
 const allowedOrigins = [
   ...localOrigins,
-  process.env.FRONTEND_URL_PROD,
-  process.env.ADMIN_URL_PROD,
-  process.env.FRONTEND_URL,
-  process.env.ADMIN_URL,
+  trustedUrls.frontendUrl,
+  trustedUrls.adminUrl,
 ].filter(Boolean)
 
 app.use(
@@ -58,6 +75,10 @@ app.use(
     strictTransportSecurity: isProduction ? { maxAge: 31536000, includeSubDomains: true } : false,
   })
 )
+
+app.use(requestId);
+app.use(requestCompletionLogger);
+app.use(sanitizeServerErrorResponses);
 
 app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), geolocation=(), microphone=(), payment=(), usb=()");
@@ -105,7 +126,41 @@ app.use((req, _res, next) => {
 })
 
 const connectDB = require("./config/dbConnection");
-connectDB();
+let server;
+let shuttingDown = false;
+
+function shutdown(reason) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.error(`[FATAL] ${reason}`);
+
+  const forceExit = setTimeout(() => process.exit(1), 10_000);
+  forceExit.unref();
+
+  const closeDatabase = mongoose.connection.readyState === 0
+    ? Promise.resolve()
+    : mongoose.disconnect().catch(() => undefined);
+  const closeServer = new Promise((resolve) => {
+    if (!server) return resolve();
+    server.close(() => resolve());
+  });
+
+  Promise.allSettled([closeServer, closeDatabase]).finally(() => {
+    clearTimeout(forceExit);
+    process.exit(1);
+  });
+}
+
+process.on("unhandledRejection", (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  shutdown(`Unhandled promise rejection: ${redact(message)}`);
+});
+
+process.on("uncaughtException", (error) => {
+  shutdown(`Uncaught exception: ${redact(error?.message || error)}`);
+});
+
+connectDB().catch(() => shutdown("Database connection failed"));
 
 const authRoutes = require('./routes/auth')
 app.use('/auth', authRoutes)
@@ -159,8 +214,10 @@ app.get('/', (req, res) => {
   res.send('Hello Arun Thai!')
 })
 
+app.get('/health', healthCheck)
+
 app.use(errorHandler)
 
-app.listen(port, () => {
+server = app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })

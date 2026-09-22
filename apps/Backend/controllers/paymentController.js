@@ -9,6 +9,9 @@ const { createNotification } = require("./notificationController");
 const { uploadStream } = require("../services/uploadStream");
 const sendEmail = require("../services/sendEmail");
 const { writeAuditLog } = require("../services/auditLogger");
+const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
+const { uploadPaymentProof, migrateLegacyPaymentProof, streamPaymentProof, deletePaymentProof } = require("../services/paymentProofStorage");
+const { PAYMENT_PROOF_ACCESS_TTL_SECONDS, issuePaymentProofAccessToken, verifyPaymentProofAccessToken } = require("../services/paymentProofAccess");
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -18,15 +21,21 @@ const escapeHtml = (value = "") =>
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
-const getFrontendUrl = () => {
-  const localUrl = process.env.FRONTEND_URL;
-  const productionUrl = process.env.FRONTEND_URL_PROD;
-  const url = process.env.NODE_ENV === "production"
-    ? productionUrl || localUrl
-    : localUrl || productionUrl || "http://localhost:5173";
+const PAYMENT_PROOF_FIELDS = "+paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage";
 
-  return url.replace(/\/$/, "");
+const serializePayment = (payment) => {
+  const value = typeof payment.toObject === "function" ? payment.toObject() : { ...payment };
+  const hasPaymentProof = Boolean(value.paymentProofPublicId || value.paymentImagePublicId || value.paymentImage);
+  const proofStorage = value.paymentProofStorage || (hasPaymentProof ? "legacy" : null);
+  delete value.paymentImage;
+  delete value.paymentImagePublicId;
+  delete value.paymentProofPublicId;
+  delete value.paymentProofFormat;
+  delete value.paymentProofStorage;
+  return { ...value, hasPaymentProof, proofStorage };
 };
+
+const getPaymentProofRecord = (paymentId) => Payment.findById(paymentId).select(PAYMENT_PROOF_FIELDS);
 
 const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason }) => {
   if (!user?.email) return;
@@ -35,8 +44,7 @@ const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason 
   const safeCourseTitle = escapeHtml(courseTitle || "your course");
   const isApproved = status === "approved";
   const safeReason = escapeHtml(rejectReason);
-  const appUrl = getFrontendUrl();
-  const actionUrl = isApproved ? `${appUrl}/my-courses` : `${appUrl}/my-course-order`;
+  const actionUrl = buildTrustedUrl(getTrustedUrls().frontendUrl, isApproved ? "/my-courses" : "/my-course-order");
   const accentColor = isApproved ? "#4D7C57" : "#C97112";
   const statusLabel = isApproved ? "PAYMENT APPROVED" : "PAYMENT NEEDS ATTENTION";
   const heading = isApproved ? "Your enrollment is confirmed" : "Let’s resolve your payment";
@@ -157,10 +165,7 @@ const createPayment = async (req, res) => {
       });
     }
 
-    const uploadedProof = await uploadStream(
-      req.file.buffer,
-      "english_kafe/payment_proofs"
-    );
+    const uploadedProof = await uploadPaymentProof(req.file.buffer);
 
     const originalAmount = Number(course.price || 0); let discountAmount = 0; let promo; let redemption;
     if (promoCode) {
@@ -174,14 +179,28 @@ const createPayment = async (req, res) => {
     }
     let payment;
     try {
-      payment = await Payment.create({ userId: req.user.id, courseId, amount: originalAmount - discountAmount, originalAmount, discountAmount, promoCode: promo?.code, promoRedemptionId: redemption?._id, paymentImage: uploadedProof.secure_url, paymentImagePublicId: uploadedProof.public_id, status: "pending" });
+      payment = await Payment.create({ userId: req.user.id, courseId, courseSnapshot: { title: course.title, description: course.description || "", thumbnail: course.thumbnail || "", price: originalAmount }, amount: originalAmount - discountAmount, originalAmount, discountAmount, promoCode: promo?.code, promoRedemptionId: redemption?._id, paymentProofPublicId: uploadedProof.public_id, paymentProofFormat: uploadedProof.format, paymentProofStorage: "authenticated", status: "pending" });
       if (redemption) await PromoRedemption.updateOne({ _id: redemption._id }, { paymentId: payment._id });
     } catch (error) {
+      await deletePaymentProof(uploadedProof.public_id).catch(() => undefined);
       if (redemption) { await PromoRedemption.deleteOne({ _id: redemption._id }); await PromoCode.updateOne({ _id: promo._id, usageCount: { $gt: 0 } }, { $inc: { usageCount: -1 } }); }
       if (error.code === 11000) return res.status(400).json({ message: "You already have a pending payment for this course." }); throw error;
     }
 
-    return res.status(201).json(payment);
+    // The receipt and payment are already durable at this point. A transient
+    // notification failure must not make the student think their upload failed.
+    await createNotification({
+      userId: payment.userId,
+      courseId: course._id,
+      type: "payment",
+      title: "Payment proof submitted",
+      message: `Your payment proof for ${course.title} is under review. We'll notify you once it has been approved or rejected.`,
+      link: `/app/orders/${payment._id}`,
+    }).catch((notificationError) => {
+      console.warn("Failed to create payment-submission notification:", notificationError.message);
+    });
+
+    return res.status(201).json(serializePayment(payment));
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -189,11 +208,11 @@ const createPayment = async (req, res) => {
 
 const getMyPayments = async (req, res) => {
   try {
-    const payments = await Payment.find({ userId: req.user.id })
+    const payments = await Payment.find({ userId: req.user.id }).select(PAYMENT_PROOF_FIELDS)
       .populate("courseId", "title price thumbnail")
       .sort({ createdAt: -1 });
 
-    return res.status(200).json(payments);
+    return res.status(200).json(payments.map(serializePayment));
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -201,15 +220,97 @@ const getMyPayments = async (req, res) => {
 
 const getAllPayments = async (req, res) => {
   try {
-    const payments = await Payment.find()
+    const payments = await Payment.find().select(PAYMENT_PROOF_FIELDS)
       .populate("userId", "name email avatar")
       .populate("courseId", "title price")
       .populate("reviewedBy", "name email")
       .sort({ createdAt: -1 });
 
-    return res.status(200).json(payments);
+    return res.status(200).json(payments.map(serializePayment));
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  }
+};
+
+const replacePaymentProof = async (req, res) => {
+  let uploadedProof;
+  try {
+    if (!req.file?.buffer) return res.status(400).json({ message: "Payment proof is required" });
+    const payment = await Payment.findOne({ _id: req.params.paymentId, userId: req.user.id, status: "pending" }).select(PAYMENT_PROOF_FIELDS);
+    if (!payment) return res.status(404).json({ message: "Pending payment not found" });
+
+    uploadedProof = await uploadPaymentProof(req.file.buffer);
+    const previousPublicId = payment.paymentProofPublicId || payment.paymentImagePublicId;
+    const previousWasLegacy = payment.paymentProofStorage !== "authenticated";
+    payment.paymentProofPublicId = uploadedProof.public_id;
+    payment.paymentProofFormat = uploadedProof.format;
+    payment.paymentProofStorage = "authenticated";
+    payment.paymentImage = undefined;
+    payment.paymentImagePublicId = undefined;
+    await payment.save();
+    if (previousPublicId) await deletePaymentProof(previousPublicId, { legacy: previousWasLegacy }).catch(() => undefined);
+    return res.status(200).json(serializePayment(payment));
+  } catch (error) {
+    if (uploadedProof?.public_id) await deletePaymentProof(uploadedProof.public_id).catch(() => undefined);
+    return res.status(500).json({ message: "Unable to replace payment proof" });
+  }
+};
+
+const getPaymentProofAccess = async (req, res) => {
+  try {
+    const payment = await getPaymentProofRecord(req.params.paymentId);
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
+    if (payment.paymentProofStorage !== "authenticated" || !payment.paymentProofPublicId) {
+      if (!payment.paymentImage) {
+        return res.status(410).json({ message: "This legacy payment proof cannot be migrated because its original image is unavailable." });
+      }
+      const migratedProof = await migrateLegacyPaymentProof(payment.paymentImage);
+      const legacyPublicId = payment.paymentImagePublicId;
+      payment.paymentProofPublicId = migratedProof.public_id;
+      payment.paymentProofFormat = migratedProof.format;
+      payment.paymentProofStorage = "authenticated";
+      payment.paymentImage = undefined;
+      payment.paymentImagePublicId = undefined;
+      await payment.save();
+      if (legacyPublicId) await deletePaymentProof(legacyPublicId, { legacy: true }).catch(() => undefined);
+    }
+    const token = issuePaymentProofAccessToken({ paymentId: payment._id, adminId: req.user.id });
+    return res.status(200).json({
+      url: buildTrustedUrl(getTrustedUrls().backendUrl, `/payments/${payment._id}/proof`, { token }),
+      expiresAt: new Date(Date.now() + PAYMENT_PROOF_ACCESS_TTL_SECONDS * 1000).toISOString(),
+    });
+  } catch (_error) {
+    return res.status(500).json({ message: "Unable to create payment proof access link" });
+  }
+};
+
+const streamAuthorizedPaymentProof = async (req, res) => {
+  try {
+    const access = verifyPaymentProofAccessToken(req.query?.token, req.params.paymentId);
+    const admin = await User.findById(access.adminId).select("role isActive");
+    if (!admin || !admin.isActive || admin.role !== "admin") return res.status(403).json({ message: "Admin access only" });
+    const payment = await getPaymentProofRecord(req.params.paymentId);
+    if (!payment || payment.paymentProofStorage !== "authenticated" || !payment.paymentProofPublicId) return res.status(404).json({ message: "Payment proof not found" });
+    const proof = await streamPaymentProof(payment.paymentProofPublicId, payment.paymentProofFormat);
+    res.status(200).set({
+      "Content-Type": proof.headers.get("content-type") || "application/octet-stream",
+      "Cache-Control": "private, no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff",
+    });
+    // Uploads are limited to 5 MB. Sending a buffered response avoids mixing
+    // Fetch's Web ReadableStream with Express' Node response stream, which can
+    // make a valid private Cloudinary image fail only at this proxy boundary.
+    const imageBuffer = Buffer.from(await proof.arrayBuffer());
+    return res.send(imageBuffer);
+  } catch (error) {
+    if (error.name === "TokenExpiredError" || error.status === 401 || error.name === "JsonWebTokenError") {
+      return res.status(401).json({ message: "Payment proof access link is invalid or expired" });
+    }
+    // Operational detail is retained only on the server. Never log a signed
+    // delivery URL or the admin access token.
+    const safeMessage = String(error.message || "unknown error").replace(/https?:\/\/\S+/gi, "[redacted-url]");
+    console.error("Secure payment-proof delivery failed", { name: error.name, message: safeMessage });
+    return res.status(502).json({ message: "Payment proof is temporarily unavailable" });
   }
 };
 
@@ -295,6 +396,7 @@ const approvePayment = async (req, res) => {
 
     await createNotification({
       userId: payment.userId,
+      courseId: payment.courseId,
       type: "payment",
       title: "Payment approved",
       message: `Your payment for ${course?.title || "the course"} has been approved. You now have access to the course.`,
@@ -303,6 +405,7 @@ const approvePayment = async (req, res) => {
 
     await createNotification({
       userId: payment.userId,
+      courseId: payment.courseId,
       type: "enrollment",
       title: "Enrollment confirmed",
       message: `You are now enrolled in ${course?.title || "the course"}. Start learning today!`,
@@ -318,7 +421,7 @@ const approvePayment = async (req, res) => {
 
     return res.status(200).json({
       message: "Payment approved and enrollment created successfully",
-      payment,
+      payment: serializePayment(payment),
       enrollment,
     });
   } catch (error) {
@@ -394,6 +497,7 @@ const rejectPayment = async (req, res) => {
 
     await createNotification({
       userId: payment.userId,
+      courseId: payment.courseId,
       type: "payment",
       title: "Payment needs attention",
       message: `We could not verify your payment for ${course?.title || "the course"}. Please review the reason and submit a new receipt.`,
@@ -408,7 +512,7 @@ const rejectPayment = async (req, res) => {
       rejectReason: payment.rejectReason,
     });
 
-    return res.status(200).json({ message: "Payment rejected successfully", payment });
+    return res.status(200).json({ message: "Payment rejected successfully", payment: serializePayment(payment) });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -419,6 +523,9 @@ module.exports = {
   getMyPayments,
   getAllPayments,
   getPendingPaymentCount,
+  replacePaymentProof,
+  getPaymentProofAccess,
+  streamAuthorizedPaymentProof,
   approvePayment,
   rejectPayment,
 };

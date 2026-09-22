@@ -2,12 +2,22 @@ const Notification = require("../models/notificationModel");
 const User = require("../models/userModel");
 const Announcement = require("../models/announcementModel");
 const { writeAuditLog } = require("../services/auditLogger");
+const { normalizeNotificationLink } = require("../services/notificationLinkValidator");
+
+const safeNotificationLink = (link) => {
+  try {
+    return normalizeNotificationLink(link);
+  } catch {
+    return "";
+  }
+};
 
 const getUserNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({ userId: req.user.id })
       .sort({ createdAt: -1 })
-      .limit(30);
+      .limit(30)
+      .lean();
 
     const unreadCount = await Notification.countDocuments({
       userId: req.user.id,
@@ -15,7 +25,9 @@ const getUserNotifications = async (req, res) => {
     });
 
     return res.status(200).json({
-      notifications,
+      // Older records may predate link validation. Never return an unsafe
+      // destination to a client, even though new records are rejected before storage.
+      notifications: notifications.map((notification) => ({ ...notification, link: safeNotificationLink(notification.link) })),
       unreadCount,
     });
   } catch (error) {
@@ -61,6 +73,7 @@ const markAllNotificationsRead = async (req, res) => {
 
 const createNotification = async ({
   userId,
+  courseId = null,
   type = "info",
   title,
   message,
@@ -70,12 +83,15 @@ const createNotification = async ({
     return null;
   }
 
+  const safeLink = normalizeNotificationLink(link);
+
   return Notification.create({
     userId,
+    courseId,
     type,
     title,
     message,
-    link,
+    link: safeLink,
     isRead: false,
   });
 };
@@ -92,13 +108,20 @@ const broadcastNotificationToAllUsers = async (req, res) => {
       return res.status(400).json({ message: "Message is required" });
     }
 
+    let safeLink;
+    try {
+      safeLink = normalizeNotificationLink(link);
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+
     const users = await User.find({ role: "user", isVerified: true, isActive: true }).select("_id");
 
     const announcement = await Announcement.create({
       title: title.trim(),
       message: message.trim(),
       type,
-      link: link?.trim() || "",
+      link: safeLink,
       createdBy: req.user.id,
       recipientCount: users.length,
     });
@@ -109,7 +132,7 @@ const broadcastNotificationToAllUsers = async (req, res) => {
       type,
       title: title.trim(),
       message: message.trim(),
-      link: link?.trim() || "",
+      link: safeLink,
       isRead: false,
     }));
 
@@ -138,7 +161,7 @@ const getAnnouncements = async (_req, res) => {
       .sort({ createdAt: -1 })
       .limit(100)
       .lean();
-    return res.status(200).json(announcements);
+    return res.status(200).json(announcements.map((announcement) => ({ ...announcement, link: safeNotificationLink(announcement.link) })));
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

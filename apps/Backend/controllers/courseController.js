@@ -1,7 +1,15 @@
 const Course = require("../models/courseModel");
 const Lesson = require("../models/lessonModel");
 const Enrollment = require("../models/enrollmentModel");
+const Payment = require("../models/paymentModel");
+const User = require("../models/userModel");
+const Notification = require("../models/notificationModel");
+const bcrypt = require("bcryptjs");
 const { uploadStream } = require("../services/uploadStream");
+const { writeAuditLog } = require("../services/auditLogger");
+const { createNotification } = require("./notificationController");
+
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const parseFeatures = (input) => {
   if (input === undefined) {
@@ -205,14 +213,73 @@ const updateCourse = async (req, res) => {
 
 const deleteCourse = async (req, res) => {
   try {
+    const { adminPassword } = req.body || {};
+    if (typeof adminPassword !== "string" || !adminPassword.trim()) {
+      return res.status(400).json({ message: "Admin password is required to delete a course" });
+    }
+
+    const adminUser = await User.findById(req.user?.id).select("+password");
+    if (!adminUser || !bcrypt.compareSync(adminPassword, adminUser.password)) {
+      return res.status(403).json({ message: "Invalid admin password" });
+    }
+
     const course = await Course.findById(req.params.id);
 
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    const affectedEnrollments = await Enrollment.find({ courseId: course._id }).select("userId").lean();
+    const affectedStudentIds = [...new Set(affectedEnrollments.map((enrollment) => String(enrollment.userId)))];
+
+    // New notifications carry courseId. The text fallback removes legacy
+    // notifications created before that field existed, preventing stale
+    // course links and contradictory enrollment messages.
+    await Notification.deleteMany({
+      $or: [
+        { courseId: course._id },
+        {
+          type: { $in: ["course", "enrollment", "payment"] },
+          message: { $regex: escapeRegex(course.title), $options: "i" },
+        },
+      ],
+    });
+    await Enrollment.deleteMany({ courseId: course._id });
     await Lesson.deleteMany({ course: course._id });
+    await Payment.updateMany(
+      { courseId: course._id },
+      {
+        $set: {
+          courseDeletedAt: new Date(),
+          courseSnapshot: {
+            title: course.title,
+            description: course.description || "",
+            thumbnail: course.thumbnail || "",
+            price: Number(course.price || 0),
+          },
+        },
+      }
+    );
     await course.deleteOne();
+
+    await Promise.all(affectedStudentIds.map((userId) =>
+      createNotification({
+        userId,
+        type: "course",
+        title: "Course no longer available",
+        message: `${course.title} has been removed from the course catalogue and is no longer available in your library.`,
+        link: "/app/courses",
+      }).catch((notificationError) => {
+        console.warn("Failed to create course-removal notification:", notificationError.message);
+      })
+    ));
+    await writeAuditLog({
+      actorId: req.user.id,
+      action: "course.deleted",
+      targetType: "course",
+      targetId: course._id,
+      metadata: { title: course.title },
+    });
 
     return res.status(200).json({ message: "Course deleted successfully" });
   } catch (error) {

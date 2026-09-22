@@ -9,6 +9,7 @@ const { uploadStream } = require("../services/uploadStream");
 const { createNotification } = require("./notificationController");
 const { writeAuditLog } = require("../services/auditLogger");
 const { revokeAllUserSessions } = require("../services/sessionService");
+const { deletePaymentProof } = require("../services/paymentProofStorage");
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
@@ -129,6 +130,11 @@ const deletAccount = async (req, res) => {
     }
 
     await Enrollment.deleteMany({ userId: req.params.id });
+    const payments = await Payment.find({ userId: req.params.id }).select("+paymentProofPublicId +paymentProofStorage +paymentImagePublicId");
+    await Promise.all(payments.map((payment) => deletePaymentProof(
+      payment.paymentProofPublicId || payment.paymentImagePublicId,
+      { legacy: payment.paymentProofStorage !== "authenticated" }
+    ).catch(() => undefined)));
     await Payment.deleteMany({ userId: req.params.id });
     await revokeAllUserSessions(user._id);
 

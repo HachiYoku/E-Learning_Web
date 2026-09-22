@@ -13,7 +13,13 @@ function StudentDashboard() {
     fetchMyEnrollments().then(setEnrollments).catch(() => setEnrollments([])).finally(() => setLoading(false))
   }, [])
 
-  const activeEnrollment = enrollments.find((item) => item.progress?.lastOpenedLesson) || enrollments[0]
+  // The API returns newest enrollments first, but the dashboard should resume
+  // the course the learner actually studied most recently.
+  const activeEnrollment = [...enrollments]
+    .filter((item) => item.progress?.lastOpenedLesson && item.progress?.lastOpenedAt)
+    .sort((first, second) => new Date(second.progress.lastOpenedAt) - new Date(first.progress.lastOpenedAt))[0]
+    || enrollments.find((item) => item.progress?.lastOpenedLesson)
+    || enrollments[0]
   const course = activeEnrollment?.course
   const progress = activeEnrollment?.progress
 
