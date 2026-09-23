@@ -135,8 +135,13 @@ function Courses() {
           ) : loading ? (
               <LoadingSpinner message="Loading courses..." />
           ) : currentCourses.length === 0 ? (
-            <div className="rounded-2xl border border-[#2D2E30]/10 bg-white px-4 py-12 text-center text-[#765F55] shadow-sm">
-              No published courses are available yet.
+            <div className="mx-auto flex max-w-xl flex-col items-center rounded-[2rem] border border-[#2D2E30]/10 bg-[#FFFDF8] px-6 py-12 text-center shadow-[0_20px_50px_-36px_rgba(80,48,19,0.4)] sm:px-10">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1CE] text-[#C97112] shadow-sm">
+                <BookOpen className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.2em] text-[#C97112]">Course library</p>
+              <h3 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30]">New courses are on their way</h3>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-[#765F55]">We’re preparing practical Thai lessons to help you learn with confidence. Please check back soon.</p>
             </div>
           ) : (
             <>
