@@ -1,4 +1,4 @@
-import { ArrowRight, RefreshCw } from "lucide-react"
+import { ArrowRight, BookOpen, RefreshCw } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import CourseCard from "./CourseCard"
@@ -94,8 +94,12 @@ function Courses() {
         ) : loading ? (
           <LoadingSpinner message="Loading courses..." />
         ) : courses.length === 0 ? (
-          <div className="rounded-lg bg-white px-4 py-10 text-center text-gray-500 shadow-sm">
-            No courses available yet.
+          <div className="mx-auto flex max-w-xl flex-col items-center rounded-[2rem] border border-[#2D2E30]/10 bg-white/70 px-6 py-11 text-center shadow-[0_20px_50px_-36px_rgba(80,48,19,0.3)] sm:px-10">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1CE] text-[#C97112]">
+              <BookOpen className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <h3 className="mt-6 text-2xl font-bold tracking-tight text-[#2D2E30]">New courses are on their way</h3>
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-[#765F55]">We’re preparing practical Thai lessons for your learning journey. Please check back soon.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
