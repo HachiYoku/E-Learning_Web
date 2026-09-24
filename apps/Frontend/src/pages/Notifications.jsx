@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Bell, CheckCheck, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import { getNotifications, markAllNotificationsRead, markNotificationRead } from "../services/notificationService";
 import { getSafeNotificationPath } from "../utils/notificationLink";
+import { useNotification } from "../contexts/NotificationContext";
 
 const FILTER_OPTIONS = [
   { key: "all", label: "All" },
@@ -15,35 +15,12 @@ const FILTER_OPTIONS = [
 
 function Notifications() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const { notifications, loading, markAsRead, markAllRead } = useNotification();
   const [activeFilter, setActiveFilter] = useState("all");
-
-  const loadNotifications = async () => {
-    try {
-      setLoading(true);
-      const response = await getNotifications();
-      setNotifications(response.notifications || []);
-      setUnreadCount(response.unreadCount || 0);
-    } catch (error) {
-      console.error("Failed to load notifications", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadNotifications();
-  }, []);
 
   const handleOpen = async (notification) => {
     if (!notification.isRead) {
-      try {
-        await markNotificationRead(notification._id);
-      } catch (error) {
-        console.error("Failed to mark notification as read", error);
-      }
+      await markAsRead(notification._id);
     }
 
     const destination = getSafeNotificationPath(notification.link);
@@ -52,24 +29,10 @@ function Notifications() {
       return;
     }
 
-    setNotifications((current) =>
-      current.map((item) =>
-        item._id === notification._id ? { ...item, isRead: true } : item
-      )
-    );
-    setUnreadCount((count) => Math.max(count - 1, 0));
   };
 
   const handleMarkAllRead = async () => {
-    try {
-      await markAllNotificationsRead();
-      setNotifications((current) =>
-        current.map((notification) => ({ ...notification, isRead: true }))
-      );
-      setUnreadCount(0);
-    } catch (error) {
-      console.error("Failed to mark all notifications as read", error);
-    }
+    await markAllRead();
   };
 
   const filteredNotifications = notifications.filter((notification) => {

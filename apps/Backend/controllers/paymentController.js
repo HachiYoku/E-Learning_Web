@@ -6,6 +6,7 @@ const PromoRedemption = require("../models/promoRedemptionModel");
 const User = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
+const { emitAdminEvent } = require("../realtime/socketServer");
 const { uploadStream } = require("../services/uploadStream");
 const sendEmail = require("../services/sendEmail");
 const { writeAuditLog } = require("../services/auditLogger");
@@ -180,6 +181,7 @@ const createPayment = async (req, res) => {
     let payment;
     try {
       payment = await Payment.create({ userId: req.user.id, courseId, courseSnapshot: { title: course.title, description: course.description || "", thumbnail: course.thumbnail || "", price: originalAmount }, amount: originalAmount - discountAmount, originalAmount, discountAmount, promoCode: promo?.code, promoRedemptionId: redemption?._id, paymentProofPublicId: uploadedProof.public_id, paymentProofFormat: uploadedProof.format, paymentProofStorage: "authenticated", status: "pending" });
+      emitAdminEvent("admin:payment-updated");
       if (redemption) await PromoRedemption.updateOne({ _id: redemption._id }, { paymentId: payment._id });
     } catch (error) {
       await deletePaymentProof(uploadedProof.public_id).catch(() => undefined);
@@ -248,6 +250,7 @@ const replacePaymentProof = async (req, res) => {
     payment.paymentImage = undefined;
     payment.paymentImagePublicId = undefined;
     await payment.save();
+    emitAdminEvent("admin:payment-updated");
     if (previousPublicId) await deletePaymentProof(previousPublicId, { legacy: previousWasLegacy }).catch(() => undefined);
     return res.status(200).json(serializePayment(payment));
   } catch (error) {
@@ -364,6 +367,7 @@ const approvePayment = async (req, res) => {
     payment.reviewedAt = new Date();
     payment.rejectReason = undefined;
     await payment.save();
+    emitAdminEvent("admin:payment-updated");
 
     await writeAuditLog({
       actorId: req.user.id,
@@ -398,17 +402,8 @@ const approvePayment = async (req, res) => {
       userId: payment.userId,
       courseId: payment.courseId,
       type: "payment",
-      title: "Payment approved",
-      message: `Your payment for ${course?.title || "the course"} has been approved. You now have access to the course.`,
-      link: "/my-courses",
-    });
-
-    await createNotification({
-      userId: payment.userId,
-      courseId: payment.courseId,
-      type: "enrollment",
-      title: "Enrollment confirmed",
-      message: `You are now enrolled in ${course?.title || "the course"}. Start learning today!`,
+      title: "Payment approved — course access is ready",
+      message: `Your payment for ${course?.title || "the course"} was approved. You can now start learning.`,
       link: "/my-courses",
     });
 
@@ -474,6 +469,7 @@ const rejectPayment = async (req, res) => {
     payment.reviewedAt = new Date();
     payment.rejectReason = rejectReason.trim();
     await payment.save();
+    emitAdminEvent("admin:payment-updated");
 
     if (payment.promoRedemptionId) {
       const redemption = await PromoRedemption.findByIdAndDelete(payment.promoRedemptionId);
