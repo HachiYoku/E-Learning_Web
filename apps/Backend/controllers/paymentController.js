@@ -10,6 +10,7 @@ const { emitAdminEvent } = require("../realtime/socketServer");
 const { uploadStream } = require("../services/uploadStream");
 const sendEmail = require("../services/sendEmail");
 const { writeAuditLog } = require("../services/auditLogger");
+const { availabilityMessages, getPromoAvailability, calculatePromoDiscount } = require("../services/promoCodePolicy");
 const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
 const { uploadPaymentProof, migrateLegacyPaymentProof, streamPaymentProof, deletePaymentProof } = require("../services/paymentProofStorage");
 const { PAYMENT_PROOF_ACCESS_TTL_SECONDS, issuePaymentProofAccessToken, verifyPaymentProofAccessToken } = require("../services/paymentProofAccess");
@@ -37,6 +38,16 @@ const serializePayment = (payment) => {
 };
 
 const getPaymentProofRecord = (paymentId) => Payment.findById(paymentId).select(PAYMENT_PROOF_FIELDS);
+
+// Keeps receipt storage and the promo reservation in sync if persistence fails
+// after a receipt has already been uploaded.
+const rollbackFailedPaymentCreation = async ({ proofPublicId, redemptionId, promoId, deleteProof = deletePaymentProof }) => {
+  await deleteProof(proofPublicId).catch(() => undefined);
+  if (redemptionId) {
+    await PromoRedemption.deleteOne({ _id: redemptionId });
+    await PromoCode.updateOne({ _id: promoId, usageCount: { $gt: 0 } }, { $inc: { usageCount: -1 } });
+  }
+};
 
 const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason }) => {
   if (!user?.email) return;
@@ -166,17 +177,28 @@ const createPayment = async (req, res) => {
       });
     }
 
+    // Reject an invalid promo before uploading a private receipt. The same
+    // checks are repeated after upload because another redemption or admin
+    // change may occur while the upload is in flight.
+    if (promoCode) {
+      const preflightPromo = await PromoCode.findOne({ code: promoCode });
+      const reason = getPromoAvailability(preflightPromo, course._id);
+      if (reason) return res.status(400).json({ message: availabilityMessages[reason] });
+      if (await PromoRedemption.exists({ promoCode: preflightPromo._id, userId: req.user.id })) return res.status(400).json({ message: availabilityMessages["already-used"] });
+    }
+
     const uploadedProof = await uploadPaymentProof(req.file.buffer);
 
     const originalAmount = Number(course.price || 0); let discountAmount = 0; let promo; let redemption;
     if (promoCode) {
       promo = await PromoCode.findOne({ code: promoCode }); const now = new Date();
-      if (!promo || (promo.applicableCourses.length && !promo.applicableCourses.some((id) => String(id) === String(course._id)))) return res.status(400).json({ message: "This promo code is not available for this course." });
+      const reason = getPromoAvailability(promo, course._id, now);
+      if (reason) { await deletePaymentProof(uploadedProof.public_id).catch(() => undefined); return res.status(400).json({ message: availabilityMessages[reason] }); }
       try { redemption = await PromoRedemption.create({ promoCode: promo._id, userId: req.user.id }); }
-      catch (error) { if (error.code === 11000) return res.status(400).json({ message: "You have already used this promo code." }); throw error; }
+      catch (error) { await deletePaymentProof(uploadedProof.public_id).catch(() => undefined); if (error.code === 11000) return res.status(400).json({ message: availabilityMessages["already-used"] }); throw error; }
       promo = await PromoCode.findOneAndUpdate({ _id: promo._id, isActive: true, $and: [{ $or: [{ startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ expiresAt: null }, { expiresAt: { $gte: now } }] }, { $or: [{ usageLimit: null }, { $expr: { $lt: ["$usageCount", "$usageLimit"] } }] }] }, { $inc: { usageCount: 1 } }, { new: true });
-      if (!promo) { await PromoRedemption.deleteOne({ _id: redemption._id }); return res.status(400).json({ message: "This promo code is no longer available." }); }
-      discountAmount = Math.min(originalAmount, promo.discountType === "percent" ? originalAmount * promo.discountValue / 100 : promo.discountValue);
+      if (!promo) { await PromoRedemption.deleteOne({ _id: redemption._id }); await deletePaymentProof(uploadedProof.public_id).catch(() => undefined); return res.status(400).json({ message: "This promo code is no longer available." }); }
+      discountAmount = calculatePromoDiscount(originalAmount, promo).discountAmount;
     }
     let payment;
     try {
@@ -184,8 +206,7 @@ const createPayment = async (req, res) => {
       emitAdminEvent("admin:payment-updated");
       if (redemption) await PromoRedemption.updateOne({ _id: redemption._id }, { paymentId: payment._id });
     } catch (error) {
-      await deletePaymentProof(uploadedProof.public_id).catch(() => undefined);
-      if (redemption) { await PromoRedemption.deleteOne({ _id: redemption._id }); await PromoCode.updateOne({ _id: promo._id, usageCount: { $gt: 0 } }, { $inc: { usageCount: -1 } }); }
+      await rollbackFailedPaymentCreation({ proofPublicId: uploadedProof.public_id, redemptionId: redemption?._id, promoId: promo?._id });
       if (error.code === 11000) return res.status(400).json({ message: "You already have a pending payment for this course." }); throw error;
     }
 
@@ -496,7 +517,7 @@ const rejectPayment = async (req, res) => {
       courseId: payment.courseId,
       type: "payment",
       title: "Payment needs attention",
-      message: `We could not verify your payment for ${course?.title || "the course"}. Please review the reason and submit a new receipt.`,
+      message: `We could not verify your payment for ${course?.title || "the course"}. Please review the reason and submit a new receipt.${payment.promoCode ? " Your promo code was released and can be applied again if it is still valid." : ""}`,
       link: `/order-status/${payment._id}`,
     });
 
@@ -524,4 +545,5 @@ module.exports = {
   streamAuthorizedPaymentProof,
   approvePayment,
   rejectPayment,
+  rollbackFailedPaymentCreation,
 };

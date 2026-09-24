@@ -10,7 +10,8 @@
     "test:trusted-url-security": "node --test tests/trusted-url-security.test.js",
     "test:xss-security": "node --test tests/xss-security.test.js",
     "test:notification-link-security": "node --test tests/notification-link-security.test.js",
-    "test:realtime-notifications": "node --test tests/realtime-notifications.test.js"
+    "test:realtime-notifications": "node --test tests/realtime-notifications.test.js",
+    "test:promo-codes": "node --test tests/promo-codes.test.js"
   },
   "author": "",
   "license": "ISC",
