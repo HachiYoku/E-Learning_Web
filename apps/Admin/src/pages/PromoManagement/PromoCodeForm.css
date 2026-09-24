@@ -1,0 +1,131 @@
+.promo-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.promo-enable-switch {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 28px;
+  padding: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: #bdafa3;
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+.promo-enable-switch > span {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  transform: translateX(0);
+  transition: transform 150ms;
+}
+.promo-enable-switch[aria-checked="true"] { background: #e58c1a; }
+.promo-enable-switch[aria-checked="true"] > span { transform: translateX(20px); }
+.promo-enable-switch:focus-visible { outline: 2px solid #c97112; outline-offset: 4px; }
+.promo-enable-switch:disabled { opacity: .5; cursor: not-allowed; }
+
+.promo-form-body fieldset {
+  min-inline-size: 0;
+}
+
+.promo-form-body > fieldset > legend {
+  margin-bottom: 16px;
+}
+
+.promo-discount-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 20px;
+}
+
+.promo-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(45, 46, 48, .12);
+  border-radius: 12px;
+  background: #fff9ea;
+}
+
+.promo-scope-options {
+  max-width: 400px;
+}
+
+.promo-option {
+  position: relative;
+  display: block;
+  min-width: 0;
+  cursor: pointer;
+}
+
+/* Keep native keyboard/radio behavior without a second visible control. */
+.promo-option > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.promo-option > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  color: #765f55;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  transition: background-color 150ms, color 150ms;
+}
+
+.promo-option > span > svg {
+  flex-shrink: 0;
+}
+
+.promo-option-check-hidden {
+  visibility: hidden;
+}
+
+.promo-option > input:checked + span {
+  background: #2d2e30;
+  color: #f8c56a;
+  box-shadow: 0 1px 3px rgba(45, 46, 48, .12);
+}
+
+.promo-option > input:not(:checked):not(:disabled) + span:hover {
+  background: #fff;
+}
+
+.promo-option > input:focus-visible + span {
+  outline: 2px solid #c97112;
+  outline-offset: 2px;
+}
+
+.promo-option > input:disabled + span {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+@media (min-width: 1100px) {
+  .promo-discount-grid {
+    grid-template-columns: 1fr 1.15fr .7fr;
+  }
+}
