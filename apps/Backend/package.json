@@ -9,7 +9,8 @@
     "test:monitoring": "node --test tests/monitoring.test.js",
     "test:trusted-url-security": "node --test tests/trusted-url-security.test.js",
     "test:xss-security": "node --test tests/xss-security.test.js",
-    "test:notification-link-security": "node --test tests/notification-link-security.test.js"
+    "test:notification-link-security": "node --test tests/notification-link-security.test.js",
+    "test:realtime-notifications": "node --test tests/realtime-notifications.test.js"
   },
   "author": "",
   "license": "ISC",
@@ -26,11 +27,15 @@
     "multer": "^2.4.0",
     "resend": "^6.9.4",
     "sanitize-html": "^2.17.7",
+    "socket.io": "^4.8.3",
     "streamifier": "^0.1.1"
   },
   "overrides": {
     "body-parser": "^2.3.0",
     "ip-address": "^10.7.2",
     "qs": "^6.16.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
   }
 }

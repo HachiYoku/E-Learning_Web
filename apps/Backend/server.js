@@ -1,4 +1,5 @@
 const express = require('express')
+const http = require("http");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const mongoose = require("mongoose");
@@ -12,6 +13,7 @@ const {
   redact,
 } = require("./middleware/monitoring");
 const healthCheck = require("./middleware/health");
+const { initializeSocketServer, closeSocketServer } = require("./realtime/socketServer");
 
 const parseCookies = (cookieHeader = "") => Object.fromEntries(
   cookieHeader.split(";").map((part) => {
@@ -145,7 +147,7 @@ function shutdown(reason) {
     server.close(() => resolve());
   });
 
-  Promise.allSettled([closeServer, closeDatabase]).finally(() => {
+  Promise.allSettled([closeSocketServer(), closeServer, closeDatabase]).finally(() => {
     clearTimeout(forceExit);
     process.exit(1);
   });
@@ -218,6 +220,9 @@ app.get('/health', healthCheck)
 
 app.use(errorHandler)
 
-server = app.listen(port, () => {
+server = http.createServer(app);
+initializeSocketServer(server, { allowedOrigins });
+
+server.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })

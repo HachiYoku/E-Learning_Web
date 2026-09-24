@@ -12,6 +12,7 @@ function OrderStatus() {
   const { orderId } = useParams()
   const navigate = useNavigate()
   const [payment, setPayment] = useState(null)
+  const [resolvedByNewerPayment, setResolvedByNewerPayment] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -23,7 +24,11 @@ function OrderStatus() {
         const payments = await fetchMyPayments()
         const matchedPayment = payments.find((item) => item.id === orderId)
         if (!matchedPayment) throw new Error('Order not found')
-        setPayment(matchedPayment)
+        const approvedReplacement = matchedPayment.status === 'rejected'
+          ? payments.find((item) => item.course?.id === matchedPayment.course?.id && item.status === 'approved')
+          : null
+        setPayment(approvedReplacement || matchedPayment)
+        setResolvedByNewerPayment(Boolean(approvedReplacement))
       } catch (loadError) {
         setError(loadError.message)
       } finally {
@@ -45,7 +50,7 @@ function OrderStatus() {
   const isApproved = payment.status === 'approved'
   const isRejected = payment.status === 'rejected'
   const status = isApproved
-    ? { eyebrow: 'Verified payment', title: 'Enrollment confirmed', description: 'Your payment has been verified and your course is ready to explore.', Icon: CircleCheck, iconClasses: 'bg-[#E9F4EA] text-[#4D7C57]', buttonLabel: 'Start learning', onClick: () => navigate(`/app/learn/${course.id}`), buttonClasses: 'bg-[#F8C56A] text-[#2D2E30] hover:bg-[#E58C1A]' }
+    ? { eyebrow: resolvedByNewerPayment ? 'Resolved' : 'Verified payment', title: resolvedByNewerPayment ? 'Your updated payment was approved' : 'Enrollment confirmed', description: resolvedByNewerPayment ? 'Your previous receipt needed correction. Your latest payment was approved and you can now access this course.' : 'Your payment has been verified and your course is ready to explore.', Icon: CircleCheck, iconClasses: 'bg-[#E9F4EA] text-[#4D7C57]', buttonLabel: 'Start learning', onClick: () => navigate(`/app/learn/${course.id}`), buttonClasses: 'bg-[#F8C56A] text-[#2D2E30] hover:bg-[#E58C1A]' }
     : isRejected
       ? { eyebrow: 'Action needed', title: 'Payment needs attention', description: payment.rejectReason || 'We could not verify this receipt. Please upload a new one to continue.', Icon: XCircle, iconClasses: 'bg-[#FFF0EE] text-[#A34D45]', buttonLabel: 'Resubmit receipt', onClick: () => navigate(`/payment/${course.id}`), buttonClasses: 'bg-[#2D2E30] text-white hover:bg-[#E58C1A]' }
       : { eyebrow: 'Verification in progress', title: 'Payment under review', description: 'Your receipt was submitted successfully. Our team is reviewing it now.', Icon: Clock3, iconClasses: 'bg-[#FFF4D8] text-[#C97112]', buttonLabel: 'Back to orders', onClick: () => navigate('/app/orders'), buttonClasses: 'bg-[#2D2E30] text-white hover:bg-[#E58C1A]' }

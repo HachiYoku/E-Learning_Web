@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import { AuthProvider } from './contexts/AuthContext.jsx'
+import { AdminBadgeProvider } from './contexts/AdminBadgeContext.jsx'
 
 // Remove data created by the retired mock/localStorage authentication flow.
 // The current session is restored only from the HttpOnly refresh cookie.
@@ -32,7 +33,7 @@ if ('serviceWorker' in navigator) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
-      <App />
+      <AdminBadgeProvider><App /></AdminBadgeProvider>
     </AuthProvider>
   </React.StrictMode>,
 )

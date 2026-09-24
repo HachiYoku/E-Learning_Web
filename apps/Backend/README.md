@@ -68,5 +68,6 @@ npm run start
 - Ensure `JWT_SECRET` is strong and never committed to source control.
 - Use HTTPS in production and configure CORS origins carefully.
 - On Render production, set `BACKEND_URL` and `FRONTEND_URL_PROD` to their public HTTPS origins. The backend refuses to start if either is missing or invalid.
+- Socket.IO uses the same backend origin as the REST API and accepts only the configured frontend/admin origins. It authenticates each connection with an access token and places it in a server-derived per-user room. MongoDB remains the notification source of truth; clients reload `GET /notifications` after reconnecting. The Socket.IO initializer accepts an adapter factory so a Redis adapter can be introduced later for multi-instance deployment without changing notification producers.
 - Payment proofs are uploaded as Cloudinary `authenticated` images. When an admin opens a legacy proof, the backend migrates its trusted Cloudinary image to authenticated storage, removes the old asset when possible, and then opens the private copy.
 - Keep dependencies updated and run security audits regularly.
