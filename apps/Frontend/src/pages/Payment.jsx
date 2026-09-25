@@ -16,10 +16,8 @@ import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useToast } from "../contexts/ToastContext";
 import { fetchCourseById } from "../services/courseService";
-import { createPayment, fetchMyPayments } from "../services/paymentService";
-import { fetchPaymentSettings } from "../services/paymentSettingsService";
+import { createPayment, fetchMyPayments, fetchPaymentMethods, quotePayment } from "../services/paymentService";
 import { validateFileSize } from "../utils/fileValidation";
-import { validatePromoCode } from "../services/promoCodeService";
 
 const paymentSteps = ["Payment", "Upload Receipt", "Verification"];
 
@@ -31,7 +29,9 @@ function Payment() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [paymentQr, setPaymentQr] = useState("");
+  const [methods, setMethods] = useState([]);
+  const [selectedMethodId, setSelectedMethodId] = useState("");
+  const [quote, setQuote] = useState(null);
   const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptName, setReceiptName] = useState("");
@@ -42,19 +42,21 @@ function Payment() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [hasSubmittedProof, setHasSubmittedProof] = useState(false);
   const { showToast } = useToast();
+  const paymentQr = quote?.paymentMethod?.qrImage?.url || "";
+  const formatAmount = (amount, currency) => `${currency === "MMK" ? "Ks" : "฿"}${Number(amount || 0).toLocaleString()}`;
 
   useEffect(() => {
     async function loadCourse() {
       try {
         setLoading(true);
         setError("");
-        const [loadedCourse, paymentSettings, payments] = await Promise.all([
+        const [loadedCourse, availableMethods, payments] = await Promise.all([
           fetchCourseById(courseId),
-          fetchPaymentSettings(),
+          fetchPaymentMethods(courseId),
           fetchMyPayments(),
         ]);
         setCourse(loadedCourse);
-        setPaymentQr(loadedCourse.paymentQr || paymentSettings.paymentQr || "");
+        setMethods(availableMethods);
         const hasPendingProof = payments.some((payment) =>
           payment.status === "pending" && String(payment.course?.id) === String(courseId)
         );
@@ -98,15 +100,28 @@ function Payment() {
   const promoLocked = hasSubmittedProof || currentStep === 3;
   const promoLockedMessage = "A promo code cannot be changed after your payment proof has been submitted.";
 
+  const refreshQuote = async (methodId = selectedMethodId, code = promoInput) => {
+    if (!methodId) return;
+    const next = await quotePayment(courseId, methodId, code.trim());
+    setQuote(next); setPromo(next.promo); setPromoMessage("");
+  };
+  const selectMethod = async (methodId) => {
+    setSelectedMethodId(methodId); setQuote(null); setPromo(null); setCurrentStep(1);
+    try { await refreshQuote(methodId, promoInput); } catch (err) { setError(err.message); }
+  };
   const applyPromo = async () => {
     if (promoLocked) return setPromoMessage(promoLockedMessage);
-    if (course?.hasDiscount) return setPromoMessage("This course is already discounted, so a promo code cannot be applied.");
+    if (!selectedMethodId) return setPromoMessage("Choose a payment method first.");
     if (!promoInput.trim()) return setPromoMessage("Enter a promo code first.");
-    try { setPromoLoading(true); setPromoMessage(""); const result = await validatePromoCode(promoInput, courseId); setPromo(result); setPromoInput(result.code); }
+    try { setPromoLoading(true); setPromoMessage(""); await refreshQuote(selectedMethodId, promoInput); }
     catch (err) { setPromo(null); setPromoMessage(err.message); } finally { setPromoLoading(false); }
   };
 
   const handleUploadReceipt = async () => {
+    if (!quote) {
+      setError("Choose a payment method and review the current amount first.");
+      return;
+    }
     if (!receiptFile) {
       setError("Please upload your payment receipt first.");
       return;
@@ -115,7 +130,8 @@ function Payment() {
     try {
       setSubmitting(true);
       setError("");
-      await createPayment(courseId, receiptFile, promo?.code);
+      if (!selectedMethodId) throw new Error("Choose a payment method first.");
+      await createPayment(courseId, receiptFile, selectedMethodId, promo?.code, quote);
       showToast({
         title: "Payment submitted",
         message: "Your receipt has been uploaded and is pending review.",
@@ -223,7 +239,7 @@ function Payment() {
                     </div>
                 </div>
                 <div className="mt-5 flex items-end justify-between gap-4">
-                  <div className="w-full"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">{promo ? "Payment summary" : "Total"}</p>{promo ? <div className="mt-2 max-w-sm space-y-1 text-sm text-[#765F55]"><div className="flex justify-between gap-6"><span>Course price</span><span>฿{promo.originalAmount.toLocaleString()}</span></div><div className="flex justify-between gap-6 text-[#246B35]"><span>Promo {promo.code}</span><span>-฿{promo.discountAmount.toLocaleString()}</span></div><div className="border-t border-[#2D2E30]/10 pt-2 text-base font-bold text-[#2D2E30]"><div className="flex justify-between gap-6"><span>Total</span><span className="text-[#B96128]">฿{promo.finalAmount.toLocaleString()}</span></div></div></div> : <><p className="mt-1 text-2xl font-bold text-[#B96128]">{course.price}</p>{course.hasDiscount ? <p className="mt-1 text-sm text-[#9B867C]">Course discount included (was {course.originalPrice})</p> : null}</>}</div>
+                  <div className="w-full"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">{quote ? "Payment summary" : "Choose a method to see total"}</p>{quote ? <div className="mt-2 max-w-sm space-y-1 text-sm text-[#765F55]"><div className="flex justify-between gap-6"><span>Course price</span><span>{formatAmount(quote.originalAmount, quote.currency)}</span></div><div className="flex justify-between gap-6 text-[#246B35]"><span>Discount</span><span>-{formatAmount(quote.discountAmount, quote.currency)}</span></div><div className="border-t border-[#2D2E30]/10 pt-2 text-base font-bold text-[#2D2E30]"><div className="flex justify-between gap-6"><span>Total</span><span className="text-[#B96128]">{formatAmount(quote.amount, quote.currency)}</span></div></div></div> : <p className="mt-1 text-sm text-[#765F55]">Payment amount is calculated securely after method selection.</p>}</div>
                   <CreditCard className="h-6 w-6 text-[#E58C1A]" aria-hidden="true" />
                 </div>
               </div>
@@ -278,7 +294,7 @@ function Payment() {
               </div>
 
               <div className="px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6 md:px-8 md:pb-8">
-              {course.hasDiscount ? <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Course discount applied</p><p className="mt-1 text-sm leading-5 text-[#765F55]">Promo codes cannot be combined with this course discount.</p></div> : promoLocked ? null : <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setPromoMessage(""); }} placeholder="Enter promo code" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promo ? <div className="mt-3 rounded-xl border border-[#7EAF85]/30 bg-white px-3 py-2 text-sm text-[#246B35]"><strong>{promo.code} applied.</strong> The payment summary shows the server-validated total.</div> : promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div>}
+              {!promoLocked && <div className="mb-5 space-y-4"><div className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Choose payment method</p>{methods.length ? <div className="mt-3 grid gap-2">{methods.map((method) => <button type="button" key={method.id} onClick={() => selectMethod(method.id)} className={`rounded-xl border p-3 text-left text-sm transition ${selectedMethodId === method.id ? "border-[#E58C1A] bg-white" : "border-[#2D2E30]/10 bg-white hover:border-[#E58C1A]/50"}`}><strong>{method.name}</strong><span className="ml-2 text-[#765F55]">{method.type} · {method.currency}</span></button>)}</div> : <p className="mt-2 text-sm text-[#A34D45]">No active payment method is available for this course.</p>}</div><div className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setQuote(null); setPromoMessage(""); }} placeholder="Enter promo code" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div></div>}
               {/* Step 1 — QR Code */}
               {currentStep === 1 ? (
                 <div className="space-y-4 sm:space-y-5 md:space-y-6">
@@ -327,6 +343,7 @@ function Payment() {
                     </button>
                     <button
                       onClick={() => {
+                        if (!quote) { setError("Choose a payment method and review the amount first."); return; }
                         setCurrentStep(2);
                         setError(""); // Clear error when moving to step 2
                       }}

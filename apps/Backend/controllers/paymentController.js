@@ -136,6 +136,9 @@ const createPayment = async (req, res) => {
     if (!req.file?.buffer) return res.status(400).json({ message: "Payment proof is required" });
     const { payment, course } = await submitManualPayment({
       userId: req.user.id, courseId: req.params.courseId,
+      paymentMethodId: req.body.paymentMethodId,
+      courseMutationVersion: req.body.courseMutationVersion,
+      paymentMethodMutationVersion: req.body.paymentMethodMutationVersion,
       code: String(req.body.promoCode || "").trim().toUpperCase(), buffer: req.file.buffer,
     });
     await afterPaymentCommit(async () => emitAdminEvent("admin:payment-updated"));

@@ -51,6 +51,8 @@ const paymentSchema = new mongoose.Schema(
       description: { type: String, default: "" },
       thumbnail: { type: String, default: "" },
       price: { type: Number, min: 0 },
+      originalPrice: { type: Number, min: 0 },
+      currency: { type: String, enum: ["THB", "MMK"] },
     },
     courseDeletedAt: { type: Date, default: null },
     amount: {

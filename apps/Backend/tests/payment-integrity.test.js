@@ -45,6 +45,7 @@ const Course = require("../models/courseModel");
 const Payment = require("../models/paymentModel");
 const Enrollment = require("../models/enrollmentModel");
 const Promo = require("../models/promoCodeModel");
+const PaymentMethod = require("../models/paymentMethodModel");
 const Redemption = require("../models/promoRedemptionModel");
 const Cleanup = require("../models/paymentProofCleanupModel");
 const { cleanFailedProof } = require("../services/paymentProofCleanup");
@@ -66,14 +67,18 @@ async function request(route, { method = "GET", body, access = adminToken } = {}
 }
 async function fixture({ withPromo = true, limit = 5 } = {}) {
   const student = await User.create({ name: "Student", email: `payment-${++serial}@example.test`, password: "unused", isActive: true, isVerified: true });
-  const course = await Course.create({ title: `Course ${serial}`, price: 3000, createdBy: admin._id });
-  const promo = withPromo ? await Promo.create({ code: `INTEGRITY-${serial}`, discountType: "fixed", discountValue: 500, usageLimit: limit }) : null;
-  return { student, course, promo };
+  const course = await Course.create({ title: `Course ${serial}`, price: 3000, originalPrice: 3000, prices: { THB: { price: 3000, originalPrice: 3000 } }, createdBy: admin._id });
+  const method = await PaymentMethod.create({ name: `THB method ${serial}`, currency: "THB", type: "qr", provider: "manual", isActive: true, createdBy: admin._id, updatedBy: admin._id });
+  const promo = withPromo ? await Promo.create({ code: `INTEGRITY-${serial}`, discountType: "fixed", discountValue: 500, fixedAmounts: { THB: 500 }, usageLimit: limit }) : null;
+  return { student, course, method, promo };
 }
 async function submit(f) {
   const body = new FormData();
   body.append("paymentProof", new Blob([Buffer.from("89504e470d0a1a0a00000000", "hex")], { type: "image/png" }), "proof.png");
   if (f.promo) body.append("promoCode", f.promo.code);
+  body.append("paymentMethodId", String(f.method._id));
+  body.append("courseMutationVersion", "0");
+  body.append("paymentMethodMutationVersion", "0");
   body.append("amount", "1"); // Must be ignored.
   return request(`/payments/course/${f.course._id}`, { method: "POST", access: token(f.student), body });
 }
@@ -282,7 +287,7 @@ test("promo edit racing first use cannot repurpose a redeemed offer", async () =
   assert.equal(results[0].status, 201);
   const saved = await Promo.findById(f.promo._id);
   const payment = await Payment.findById(results[0].body._id);
-  assert.equal(payment.discountAmount, saved.discountValue);
+  assert.equal(payment.discountAmount, saved.fixedAmounts?.THB ?? saved.discountValue);
   assert.ok([200, 400].includes(results[1].status));
 });
 

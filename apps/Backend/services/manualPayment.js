@@ -9,15 +9,13 @@ const storage = require("./paymentProofStorage");
 const { cleanFailedProof } = require("./paymentProofCleanup");
 const { paymentError, paymentTransaction, assertPaymentDatabaseReady } = require("./paymentTransaction");
 const { availabilityMessages, getPromoAvailability, calculatePromoDiscount } = require("./promoCodePolicy");
+const { calculateCheckout } = require("./checkoutCalculation");
 
-async function validatePurchase(userId, courseId, code, session = null) {
+async function validatePurchase(userId, courseId, session = null) {
   const course = await Course.findById(courseId).session(session);
   if (!course) throw paymentError(404, "Course not found");
   if (await Enrollment.exists({ userId, courseId }).session(session)) throw paymentError(400, "You are already enrolled in this course");
   if (await Payment.exists({ userId, courseId, status: "pending" }).session(session)) throw paymentError(400, "You already have a pending payment for this course");
-  if (code && Number(course.originalPrice ?? course.price) > Number(course.price)) {
-    throw paymentError(400, "This course is already discounted, so a promo code cannot be applied.");
-  }
   return course;
 }
 
@@ -29,11 +27,12 @@ async function checkPromo(promo, courseId, userId, session = null) {
   }
 }
 
-async function submitManualPayment({ userId, courseId, code, buffer }) {
+async function submitManualPayment({ userId, courseId, paymentMethodId, courseMutationVersion, paymentMethodMutationVersion, code, buffer }) {
   // Fail before touching external storage if deployment/indexes are not ready.
   await assertPaymentDatabaseReady();
-  await validatePurchase(userId, courseId, code);
-  if (code) await checkPromo(await PromoCode.findOne({ code }), courseId, userId);
+  await validatePurchase(userId, courseId);
+  const observed = await calculateCheckout({ userId, courseId, paymentMethodId, promoCode: code });
+  if (Number(courseMutationVersion) !== observed.coursePrice.mutationVersion || Number(paymentMethodMutationVersion) !== observed.paymentMethod.mutationVersion) throw paymentError(409, "Payment details changed. Review the current quote before submitting.");
   const paymentId = new mongoose.Types.ObjectId();
   const publicId = `arun_thai/payment_proofs/${paymentId}`;
   await Cleanup.create([{ publicId }], { writeConcern: { w: "majority" } });
@@ -42,7 +41,9 @@ async function submitManualPayment({ userId, courseId, code, buffer }) {
     const proof = await storage.uploadPaymentProof(buffer, publicId);
     transactionStarted = true;
     return await paymentTransaction(async (session) => {
-      const course = await validatePurchase(userId, courseId, code, session);
+      const course = await validatePurchase(userId, courseId, session);
+      let quote = await calculateCheckout({ userId, courseId, paymentMethodId, promoCode: code, session });
+      if (Number(courseMutationVersion) !== quote.coursePrice.mutationVersion || Number(paymentMethodMutationVersion) !== quote.paymentMethod.mutationVersion) throw paymentError(409, "Payment details changed. Review the current quote before submitting.");
       let promo;
       let redemption;
       let discountAmount = 0;
@@ -51,6 +52,7 @@ async function submitManualPayment({ userId, courseId, code, buffer }) {
         // deletion, archival and other reservations. Retried transactions reread.
         promo = await PromoCode.findOneAndUpdate({ code }, { $inc: { mutationVersion: 1 } }, { session, returnDocument: "after" });
         await checkPromo(promo, courseId, userId, session);
+        quote = await calculateCheckout({ userId, courseId, paymentMethodId, promoCode: code, session });
         const now = new Date();
         const reserved = await PromoCode.updateOne({
           _id: promo._id, isActive: true, archivedAt: null,
@@ -62,12 +64,15 @@ async function submitManualPayment({ userId, courseId, code, buffer }) {
         }, { $inc: { usageCount: 1 } }, { session });
         if (!reserved.modifiedCount) throw paymentError(400, "This promo code is no longer available.");
         [redemption] = await Redemption.create([{ promoCode: promo._id, userId, paymentId, active: true }], { session });
-        discountAmount = calculatePromoDiscount(course.price, promo).discountAmount;
+        discountAmount = quote.discountAmount;
       }
+      const method = quote.paymentMethod;
       const [payment] = await Payment.create([{
         _id: paymentId, userId, courseId,
-        courseSnapshot: { title: course.title, description: course.description || "", thumbnail: course.thumbnail || "", price: course.price },
-        amount: Number(course.price) - discountAmount, originalAmount: course.price, discountAmount,
+        courseSnapshot: { title: course.title, description: course.description || "", thumbnail: course.thumbnail || "", price: quote.coursePrice.price, originalPrice: quote.coursePrice.originalPrice, currency: quote.currency },
+        currency: quote.currency, paymentMethodId: method.id,
+        paymentMethodSnapshot: { schemaVersion: 1, kind: "method", methodId: method.id, methodVersion: method.mutationVersion, name: method.name, currency: method.currency, type: method.type, provider: method.provider, instructions: method.instructions, recipient: method.recipient, qrImage: method.qrImage },
+        amount: quote.amount, originalAmount: quote.originalAmount, discountAmount,
         promoCode: promo?.code, promoRedemptionId: redemption?._id,
         paymentProofPublicId: publicId, paymentProofFormat: proof.format,
         paymentProofStorage: "authenticated", status: "pending",
