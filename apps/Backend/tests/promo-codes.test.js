@@ -8,7 +8,6 @@ const path = require("node:path");
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const { calculatePromoDiscount } = require("../services/promoCodePolicy");
-const { rollbackFailedPaymentCreation } = require("../controllers/paymentController");
 
 const backendDirectory = path.resolve(__dirname, "..");
 const jwtSecret = "promo-test-secret-only-not-for-production";
@@ -29,7 +28,8 @@ async function body(response) { return response.json(); }
 before(async () => {
   const mongoPort = await freePort(); const apiPort = await freePort();
   mongoDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "arun-thai-promo-test-")); mongoUri = `mongodb://127.0.0.1:${mongoPort}/promo_test`;
-  mongoProcess = spawn("mongod", ["--port", String(mongoPort), "--dbpath", mongoDirectory, "--bind_ip", "127.0.0.1", "--quiet"], { stdio: ["ignore", "pipe", "pipe"] }); await waitForOutput(mongoProcess, "Waiting for connections");
+  mongoProcess = spawn("mongod", ["--replSet", "paymentTests", "--port", String(mongoPort), "--dbpath", mongoDirectory, "--bind_ip", "127.0.0.1", "--quiet"], { stdio: ["ignore", "pipe", "pipe"] }); await waitForOutput(mongoProcess, "Waiting for connections");
+  await require("./helpers/replicaSet").initiateReplicaSet(mongoPort);
   apiBaseUrl = `http://127.0.0.1:${apiPort}`;
   apiProcess = spawn(process.execPath, ["server.js"], { cwd: backendDirectory, env: { ...process.env, NODE_ENV: "production", PORT: String(apiPort), MONGO_DB: mongoUri, JWT_SECRET: jwtSecret, BACKEND_URL: "https://api.example.test", FRONTEND_URL_PROD: "https://student.example.test", ADMIN_URL_PROD: "https://admin.example.test", TRUST_PROXY: "true" }, stdio: ["ignore", "pipe", "pipe"] }); await waitForOutput(apiProcess, "Example app listening");
   await mongoose.connect(mongoUri); User = require("../models/userModel"); Course = require("../models/courseModel"); Payment = require("../models/paymentModel"); PromoCode = require("../models/promoCodeModel"); PromoRedemption = require("../models/promoRedemptionModel");
@@ -92,15 +92,10 @@ test("duplicate user redemption is denied, while separate users cannot oversell 
 test("a rejected payment releases promo capacity; an approved payment retains its redemption", async () => {
   const admin = await user(`admin-review-${Date.now()}@example.test`, "admin"); const student = await user(`student-review-${Date.now()}@example.test`); const adminToken = await login(admin.email); const item = await promo({ usageLimit: 2, usageCount: 1 }); const itemCourse = await course(admin, 3000);
   const redemption = await PromoRedemption.create({ promoCode: item._id, userId: student._id }); const rejected = await Payment.create({ userId: student._id, courseId: itemCourse._id, amount: 2500, originalAmount: 3000, discountAmount: 500, promoCode: item.code, promoRedemptionId: redemption._id, status: "pending" }); await PromoRedemption.updateOne({ _id: redemption._id }, { paymentId: rejected._id });
-  let response = await request(`/payments/${rejected._id}/reject`, { method: "PATCH", token: adminToken, body: { adminPassword: password, rejectReason: "Receipt is not readable" } }); assert.equal(response.status, 200); assert.equal(await PromoRedemption.exists({ _id: redemption._id }), null); assert.equal((await PromoCode.findById(item._id)).usageCount, 0);
+  let response = await request(`/payments/${rejected._id}/reject`, { method: "PATCH", token: adminToken, body: { adminPassword: password, rejectReason: "Receipt is not readable" } }); assert.equal(response.status, 200); assert.equal((await PromoRedemption.findById(redemption._id)).active, false); assert.equal((await PromoCode.findById(item._id)).usageCount, 0);
   const retained = await PromoRedemption.create({ promoCode: item._id, userId: student._id }); const pending = await Payment.create({ userId: student._id, courseId: itemCourse._id, amount: 2500, originalAmount: 3000, discountAmount: 500, promoCode: item.code, promoRedemptionId: retained._id, status: "pending" }); response = await request(`/payments/${pending._id}/approve`, { method: "PATCH", token: adminToken, body: { adminPassword: password } }); assert.equal(response.status, 200); assert.ok(await PromoRedemption.exists({ _id: retained._id }));
 });
 
-test("payment persistence failure cleans up the uploaded proof and releases its promo reservation", async () => {
-  const student = await user(`student-rollback-${Date.now()}@example.test`); const item = await promo({ usageLimit: 2, usageCount: 1 }); const reservation = await PromoRedemption.create({ promoCode: item._id, userId: student._id }); let deletedProof;
-  await rollbackFailedPaymentCreation({ proofPublicId: "private-proof-id", redemptionId: reservation._id, promoId: item._id, deleteProof: async (publicId) => { deletedProof = publicId; } });
-  assert.equal(deletedProof, "private-proof-id"); assert.equal(await PromoRedemption.exists({ _id: reservation._id }), null); assert.equal((await PromoCode.findById(item._id)).usageCount, 0);
-});
 
 test("used promos are immutable financial history, archive instead of delete, and require admin authorization", async () => {
   const admin = await user(`admin-history-${Date.now()}@example.test`, "admin"); const student = await user(`student-history-${Date.now()}@example.test`); const adminToken = await login(admin.email); const studentToken = await login(student.email); const itemCourse = await course(admin, 3000); const item = await promo({ code: `HISTORY-${Date.now()}`, applicableCourses: [itemCourse._id] }); const payment = await Payment.create({ userId: student._id, courseId: itemCourse._id, amount: 2500, originalAmount: 3000, discountAmount: 500, promoCode: item.code, status: "approved" });

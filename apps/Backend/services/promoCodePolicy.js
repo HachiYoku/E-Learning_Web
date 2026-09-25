@@ -28,11 +28,10 @@ function calculatePromoDiscount(originalAmount, promo) {
   return { originalAmount: amount, discountAmount, finalAmount: Math.max(0, amount - discountAmount) };
 }
 
-async function hasPromoHistory(promo) {
-  const [redemption, payment] = await Promise.all([
-    PromoRedemption.exists({ promoCode: promo._id }),
-    Payment.exists({ promoCode: promo.code }),
-  ]);
+async function hasPromoHistory(promo, session = null) {
+  // Transaction operations must be sequential on a single session.
+  const redemption = await PromoRedemption.exists({ promoCode: promo._id }).session(session);
+  const payment = await Payment.exists({ promoCode: promo.code }).session(session);
   return Boolean(redemption || payment);
 }
 

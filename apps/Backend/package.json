@@ -11,7 +11,14 @@
     "test:xss-security": "node --test tests/xss-security.test.js",
     "test:notification-link-security": "node --test tests/notification-link-security.test.js",
     "test:realtime-notifications": "node --test tests/realtime-notifications.test.js",
-    "test:promo-codes": "node --test tests/promo-codes.test.js"
+    "test:promo-codes": "node --test tests/promo-codes.test.js",
+    "test:payment-integrity": "node --test tests/payment-integrity.test.js",
+    "test:payment-integrity-guard": "node --test tests/payment-integrity-database-guard.test.js",
+    "payments:migrate-integrity": "node scripts/migratePaymentIntegrity.js",
+    "payments:reconciliation-report": "node scripts/reportPaymentIntegrityReconciliation.js --read-only",
+    "payments:verify-integrity-migration": "node scripts/verifyPaymentIntegrityMigration.js --read-only",
+    "payments:cleanup-disposable-promo-tests": "node scripts/cleanupDisposablePromoTests.js",
+    "payments:cleanup-proofs": "node scripts/cleanupPaymentProofs.js"
   },
   "author": "",
   "license": "ISC",

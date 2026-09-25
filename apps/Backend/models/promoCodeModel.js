@@ -9,5 +9,6 @@ const promoCodeSchema = new mongoose.Schema({
   usageLimit: { type: Number, default: null, min: 1 }, usageCount: { type: Number, default: 0, min: 0 },
   isActive: { type: Boolean, default: true },
   archivedAt: { type: Date, default: null },
+  mutationVersion: { type: Number, default: 0, select: false },
 }, { timestamps: true });
 module.exports = mongoose.model("PromoCode", promoCodeSchema);
