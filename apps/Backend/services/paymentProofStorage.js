@@ -4,10 +4,11 @@ const { uploadStream } = require("./uploadStream");
 const PAYMENT_PROOF_FOLDER = "arun_thai/payment_proofs";
 const PRIVATE_PROOF_DOWNLOAD_TTL_SECONDS = 60;
 
-async function uploadPaymentProof(buffer) {
+async function uploadPaymentProof(buffer, publicId) {
   return uploadStream(buffer, PAYMENT_PROOF_FOLDER, {
     resource_type: "image",
     type: "authenticated",
+    ...(publicId ? { folder: "", public_id: publicId, overwrite: false } : {}),
   });
 }
 

@@ -1,16 +1,11 @@
-const Course = require("../models/courseModel");
-const Enrollment = require("../models/enrollmentModel");
 const Payment = require("../models/paymentModel");
-const PromoCode = require("../models/promoCodeModel");
-const PromoRedemption = require("../models/promoRedemptionModel");
 const User = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
 const { emitAdminEvent } = require("../realtime/socketServer");
-const { uploadStream } = require("../services/uploadStream");
 const sendEmail = require("../services/sendEmail");
 const { writeAuditLog } = require("../services/auditLogger");
-const { availabilityMessages, getPromoAvailability, calculatePromoDiscount } = require("../services/promoCodePolicy");
+const { submitManualPayment, reviewManualPayment } = require("../services/manualPayment");
 const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
 const { uploadPaymentProof, migrateLegacyPaymentProof, streamPaymentProof, deletePaymentProof } = require("../services/paymentProofStorage");
 const { PAYMENT_PROOF_ACCESS_TTL_SECONDS, issuePaymentProofAccessToken, verifyPaymentProofAccessToken } = require("../services/paymentProofAccess");
@@ -39,15 +34,10 @@ const serializePayment = (payment) => {
 
 const getPaymentProofRecord = (paymentId) => Payment.findById(paymentId).select(PAYMENT_PROOF_FIELDS);
 
-// Keeps receipt storage and the promo reservation in sync if persistence fails
-// after a receipt has already been uploaded.
-const rollbackFailedPaymentCreation = async ({ proofPublicId, redemptionId, promoId, deleteProof = deletePaymentProof }) => {
-  await deleteProof(proofPublicId).catch(() => undefined);
-  if (redemptionId) {
-    await PromoRedemption.deleteOne({ _id: redemptionId });
-    await PromoCode.updateOne({ _id: promoId, usageCount: { $gt: 0 } }, { $inc: { usageCount: -1 } });
-  }
-};
+// External delivery is outside transaction callbacks: callbacks may be retried.
+async function afterPaymentCommit(action) {
+  try { await action(); } catch (_error) { console.error("Payment follow-up delivery failed after commit."); }
+}
 
 const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason }) => {
   if (!user?.email) return;
@@ -142,90 +132,21 @@ const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason 
 
 const createPayment = async (req, res) => {
   try {
-    const { courseId } = req.params;
-    const promoCode = String(req.body.promoCode || "").trim().toUpperCase();
-
-    const course = await Course.findById(courseId);
-    if (!course) {
-      return res.status(404).json({ message: "Course not found" });
-    }
-
-    if (promoCode && Number(course.originalPrice ?? course.price) > Number(course.price)) {
-      return res.status(400).json({ message: "This course is already discounted, so a promo code cannot be applied." });
-    }
-
-    if (!req.file?.buffer) {
-      return res.status(400).json({ message: "Payment proof is required" });
-    }
-
-    const existingEnrollment = await Enrollment.findOne({
-      userId: req.user.id,
-      courseId,
+    if (!req.file?.buffer) return res.status(400).json({ message: "Payment proof is required" });
+    const { payment, course } = await submitManualPayment({
+      userId: req.user.id, courseId: req.params.courseId,
+      code: String(req.body.promoCode || "").trim().toUpperCase(), buffer: req.file.buffer,
     });
-    if (existingEnrollment) {
-      return res.status(400).json({ message: "You are already enrolled in this course" });
-    }
-
-    const existingPendingPayment = await Payment.findOne({
-      userId: req.user.id,
-      courseId,
-      status: "pending",
-    });
-    if (existingPendingPayment) {
-      return res.status(400).json({
-        message: "You already have a pending payment for this course",
-      });
-    }
-
-    // Reject an invalid promo before uploading a private receipt. The same
-    // checks are repeated after upload because another redemption or admin
-    // change may occur while the upload is in flight.
-    if (promoCode) {
-      const preflightPromo = await PromoCode.findOne({ code: promoCode });
-      const reason = getPromoAvailability(preflightPromo, course._id);
-      if (reason) return res.status(400).json({ message: availabilityMessages[reason] });
-      if (await PromoRedemption.exists({ promoCode: preflightPromo._id, userId: req.user.id })) return res.status(400).json({ message: availabilityMessages["already-used"] });
-    }
-
-    const uploadedProof = await uploadPaymentProof(req.file.buffer);
-
-    const originalAmount = Number(course.price || 0); let discountAmount = 0; let promo; let redemption;
-    if (promoCode) {
-      promo = await PromoCode.findOne({ code: promoCode }); const now = new Date();
-      const reason = getPromoAvailability(promo, course._id, now);
-      if (reason) { await deletePaymentProof(uploadedProof.public_id).catch(() => undefined); return res.status(400).json({ message: availabilityMessages[reason] }); }
-      try { redemption = await PromoRedemption.create({ promoCode: promo._id, userId: req.user.id }); }
-      catch (error) { await deletePaymentProof(uploadedProof.public_id).catch(() => undefined); if (error.code === 11000) return res.status(400).json({ message: availabilityMessages["already-used"] }); throw error; }
-      promo = await PromoCode.findOneAndUpdate({ _id: promo._id, isActive: true, $and: [{ $or: [{ startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ expiresAt: null }, { expiresAt: { $gte: now } }] }, { $or: [{ usageLimit: null }, { $expr: { $lt: ["$usageCount", "$usageLimit"] } }] }] }, { $inc: { usageCount: 1 } }, { new: true });
-      if (!promo) { await PromoRedemption.deleteOne({ _id: redemption._id }); await deletePaymentProof(uploadedProof.public_id).catch(() => undefined); return res.status(400).json({ message: "This promo code is no longer available." }); }
-      discountAmount = calculatePromoDiscount(originalAmount, promo).discountAmount;
-    }
-    let payment;
-    try {
-      payment = await Payment.create({ userId: req.user.id, courseId, courseSnapshot: { title: course.title, description: course.description || "", thumbnail: course.thumbnail || "", price: originalAmount }, amount: originalAmount - discountAmount, originalAmount, discountAmount, promoCode: promo?.code, promoRedemptionId: redemption?._id, paymentProofPublicId: uploadedProof.public_id, paymentProofFormat: uploadedProof.format, paymentProofStorage: "authenticated", status: "pending" });
-      emitAdminEvent("admin:payment-updated");
-      if (redemption) await PromoRedemption.updateOne({ _id: redemption._id }, { paymentId: payment._id });
-    } catch (error) {
-      await rollbackFailedPaymentCreation({ proofPublicId: uploadedProof.public_id, redemptionId: redemption?._id, promoId: promo?._id });
-      if (error.code === 11000) return res.status(400).json({ message: "You already have a pending payment for this course." }); throw error;
-    }
-
-    // The receipt and payment are already durable at this point. A transient
-    // notification failure must not make the student think their upload failed.
-    await createNotification({
-      userId: payment.userId,
-      courseId: course._id,
-      type: "payment",
+    await afterPaymentCommit(async () => emitAdminEvent("admin:payment-updated"));
+    await afterPaymentCommit(() => createNotification({
+      userId: payment.userId, courseId: course._id, type: "payment",
       title: "Payment proof submitted",
       message: `Your payment proof for ${course.title} is under review. We'll notify you once it has been approved or rejected.`,
       link: `/app/orders/${payment._id}`,
-    }).catch((notificationError) => {
-      console.warn("Failed to create payment-submission notification:", notificationError.message);
-    });
-
+    }));
     return res.status(201).json(serializePayment(payment));
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to submit payment" });
   }
 };
 
@@ -346,194 +267,48 @@ const getPendingPaymentCount = async (_req, res) => {
   }
 };
 
-const approvePayment = async (req, res) => {
+const reviewPayment = (status) => async (req, res) => {
   try {
-    const { paymentId } = req.params;
-    const { adminPassword } = req.body || {};
-
-    if (typeof adminPassword !== "string" || !adminPassword.trim()) {
-      return res.status(400).json({ message: "Admin password is required to approve a payment" });
-    }
-
-    const adminUser = await User.findById(req.user?.id).select("+password");
-    if (!adminUser) {
-      return res.status(403).json({ message: "Admin user not found" });
-    }
-
-    const isAdminPasswordValid = bcrypt.compareSync(adminPassword, adminUser.password);
-    if (!isAdminPasswordValid) {
-      return res.status(403).json({ message: "Invalid admin password" });
-    }
-
-    const payment = await Payment.findById(paymentId);
-    if (!payment) {
-      return res.status(404).json({ message: "Payment not found" });
-    }
-
-    if (payment.status !== "pending") {
-      return res.status(400).json({ message: "Only pending payments can be approved" });
-    }
-
-    const course = await Course.findById(payment.courseId).select("title price");
-    if (!course) {
-      return res.status(404).json({ message: "Course not found" });
-    }
-
-    if (payment.amount == null) {
-      payment.amount = Number(course.price || 0);
-    }
-
-    payment.status = "approved";
-    payment.reviewedBy = req.user.id;
-    payment.reviewedAt = new Date();
-    payment.rejectReason = undefined;
-    await payment.save();
-    emitAdminEvent("admin:payment-updated");
-
-    await writeAuditLog({
-      actorId: req.user.id,
-      action: "payment.approved",
-      targetType: "payment",
-      targetId: payment._id,
-      metadata: {
-        userId: payment.userId,
-        courseId: payment.courseId,
-        amount: payment.amount,
-      },
-    });
-
-    const enrollment = await Enrollment.findOneAndUpdate(
-      {
-        userId: payment.userId,
-        courseId: payment.courseId,
-      },
-      {
-        userId: payment.userId,
-        courseId: payment.courseId,
-        paymentId: payment._id,
-      },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true,
-      }
-    );
-
-    await createNotification({
-      userId: payment.userId,
-      courseId: payment.courseId,
-      type: "payment",
-      title: "Payment approved — course access is ready",
-      message: `Your payment for ${course?.title || "the course"} was approved. You can now start learning.`,
-      link: "/my-courses",
-    });
-
-    const user = await User.findById(payment.userId).select("name email").lean();
-    await sendPaymentReviewEmail({
-      user,
-      courseTitle: course.title,
-      status: "approved",
-    });
-
-    return res.status(200).json({
-      message: "Payment approved and enrollment created successfully",
-      payment: serializePayment(payment),
-      enrollment,
-    });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
-};
-
-const rejectPayment = async (req, res) => {
-  try {
-    const { paymentId } = req.params;
-    const { rejectReason, adminPassword } = req.body || {};
-
-    if (!rejectReason || !rejectReason.trim()) {
+    const { adminPassword, rejectReason } = req.body || {};
+    if (status === "rejected" && (typeof rejectReason !== "string" || !rejectReason.trim())) {
       return res.status(400).json({ message: "Reject reason is required" });
     }
-
     if (typeof adminPassword !== "string" || !adminPassword.trim()) {
-      return res.status(400).json({ message: "Admin password is required to deny a payment" });
+      return res.status(400).json({ message: "Admin password is required to review a payment" });
     }
-
-    const adminUser = await User.findById(req.user?.id).select("+password");
-    if (!adminUser) {
-      return res.status(403).json({ message: "Admin user not found" });
-    }
-
-    const isAdminPasswordValid = bcrypt.compareSync(adminPassword, adminUser.password);
-    if (!isAdminPasswordValid) {
-      return res.status(403).json({ message: "Invalid admin password" });
-    }
-
-    const payment = await Payment.findById(paymentId);
-    if (!payment) {
-      return res.status(404).json({ message: "Payment not found" });
-    }
-
-    if (payment.status !== "pending") {
-      return res.status(400).json({ message: "Only pending payments can be rejected" });
-    }
-
-    if (payment.amount == null) {
-      const course = await Course.findById(payment.courseId).select("price");
-      if (!course) {
-        return res.status(404).json({ message: "Course not found" });
-      }
-      payment.amount = Number(course.price || 0);
-    }
-
-    payment.status = "rejected";
-    payment.reviewedBy = req.user.id;
-    payment.reviewedAt = new Date();
-    payment.rejectReason = rejectReason.trim();
-    await payment.save();
-    emitAdminEvent("admin:payment-updated");
-
-    if (payment.promoRedemptionId) {
-      const redemption = await PromoRedemption.findByIdAndDelete(payment.promoRedemptionId);
-      if (redemption) await PromoCode.updateOne({ _id: redemption.promoCode, usageCount: { $gt: 0 } }, { $inc: { usageCount: -1 } });
-    }
-
-    await writeAuditLog({
-      actorId: req.user.id,
-      action: "payment.rejected",
-      targetType: "payment",
-      targetId: payment._id,
-      metadata: {
-        userId: payment.userId,
-        courseId: payment.courseId,
-        amount: payment.amount,
-        rejectReason: payment.rejectReason,
-      },
+    const admin = await User.findById(req.user.id).select("+password");
+    if (!admin || !bcrypt.compareSync(adminPassword, admin.password)) return res.status(403).json({ message: "Invalid admin password" });
+    const { payment, enrollment, course } = await reviewManualPayment({
+      paymentId: req.params.paymentId, adminId: req.user.id, status,
+      rejectReason: typeof rejectReason === "string" ? rejectReason.trim() : undefined,
     });
-
-    const course = await Course.findById(payment.courseId).select("title");
-
-    await createNotification({
-      userId: payment.userId,
-      courseId: payment.courseId,
-      type: "payment",
-      title: "Payment needs attention",
-      message: `We could not verify your payment for ${course?.title || "the course"}. Please review the reason and submit a new receipt.${payment.promoCode ? " Your promo code was released and can be applied again if it is still valid." : ""}`,
-      link: `/order-status/${payment._id}`,
+    await afterPaymentCommit(async () => emitAdminEvent("admin:payment-updated"));
+    await afterPaymentCommit(() => writeAuditLog({
+      actorId: req.user.id, action: `payment.${status}`, targetType: "payment", targetId: payment._id,
+      metadata: { userId: payment.userId, courseId: payment.courseId, amount: payment.amount, rejectReason: payment.rejectReason },
+    }));
+    await afterPaymentCommit(() => createNotification({
+      userId: payment.userId, courseId: payment.courseId, type: "payment",
+      title: status === "approved" ? "Payment approved — course access is ready" : "Payment needs attention",
+      message: status === "approved"
+        ? `Your payment for ${course?.title || "the course"} was approved. You can now start learning.`
+        : `We could not verify your payment for ${course?.title || "the course"}. Please review the reason and submit a new receipt.${payment.promoCode ? " Your promo code was released and can be applied again if it is still valid." : ""}`,
+      link: status === "approved" ? "/my-courses" : `/order-status/${payment._id}`,
+    }));
+    await afterPaymentCommit(async () => {
+      const user = await User.findById(payment.userId).select("name email").lean();
+      await sendPaymentReviewEmail({ user, courseTitle: course?.title, status, rejectReason: payment.rejectReason });
     });
-
-    const user = await User.findById(payment.userId).select("name email").lean();
-    await sendPaymentReviewEmail({
-      user,
-      courseTitle: course?.title,
-      status: "rejected",
-      rejectReason: payment.rejectReason,
+    return res.status(200).json({
+      message: status === "approved" ? "Payment approved and enrollment created successfully" : "Payment rejected successfully",
+      payment: serializePayment(payment), ...(enrollment ? { enrollment } : {}),
     });
-
-    return res.status(200).json({ message: "Payment rejected successfully", payment: serializePayment(payment) });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to review payment" });
   }
 };
+const approvePayment = reviewPayment("approved");
+const rejectPayment = reviewPayment("rejected");
 
 module.exports = {
   createPayment,
@@ -545,5 +320,4 @@ module.exports = {
   streamAuthorizedPaymentProof,
   approvePayment,
   rejectPayment,
-  rollbackFailedPaymentCreation,
 };

@@ -142,8 +142,9 @@ before(async () => {
   mongoDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "arun-thai-auth-test-"));
   mongoUri = `mongodb://127.0.0.1:${mongoPort}/auth_security_test`;
 
-  mongoProcess = spawn("mongod", ["--port", String(mongoPort), "--dbpath", mongoDirectory, "--bind_ip", "127.0.0.1", "--quiet"], { stdio: ["ignore", "pipe", "pipe"] });
+  mongoProcess = spawn("mongod", ["--replSet", "paymentTests", "--port", String(mongoPort), "--dbpath", mongoDirectory, "--bind_ip", "127.0.0.1", "--quiet"], { stdio: ["ignore", "pipe", "pipe"] });
   await waitForOutput(mongoProcess, "Waiting for connections");
+  await require("./helpers/replicaSet").initiateReplicaSet(mongoPort);
 
   apiBaseUrl = `http://127.0.0.1:${apiPort}`;
   apiProcess = spawn(process.execPath, ["server.js"], {

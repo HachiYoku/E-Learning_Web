@@ -165,8 +165,9 @@ before(async () => {
   const apiPort = await freePort();
   mongoDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "arun-thai-realtime-test-"));
   mongoUri = `mongodb://127.0.0.1:${mongoPort}/realtime_notifications_test`;
-  mongoProcess = spawn("mongod", ["--port", String(mongoPort), "--dbpath", mongoDirectory, "--bind_ip", "127.0.0.1", "--quiet"], { stdio: ["ignore", "pipe", "pipe"] });
+  mongoProcess = spawn("mongod", ["--replSet", "paymentTests", "--port", String(mongoPort), "--dbpath", mongoDirectory, "--bind_ip", "127.0.0.1", "--quiet"], { stdio: ["ignore", "pipe", "pipe"] });
   await waitForOutput(mongoProcess, "Waiting for connections");
+  await require("./helpers/replicaSet").initiateReplicaSet(mongoPort);
 
   apiBaseUrl = `http://127.0.0.1:${apiPort}`;
   apiProcess = spawn(process.execPath, ["server.js"], {
