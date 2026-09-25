@@ -1,8 +1,6 @@
 import { ArrowRight, CreditCard, Loader2, Maximize2, RotateCcw, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { fetchPaymentProofBlob } from '../services/paymentService'
-
-const formatAmount = (amount) => `${Number(amount || 0).toLocaleString()} บาท`
+import { fetchPaymentProofBlob, formatPaymentAmount } from '../services/paymentService'
 
 function Detail({ label, children, full = false }) {
   return (
@@ -114,8 +112,8 @@ export default function PaymentCard({ payment, onApprove, onDeny, status = 'revi
               </button>
 
               <div className="rounded-2xl border border-[#2D2E30]/10 bg-white p-4 sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#C97112]">Payment summary</p><h3 className="mt-1 text-lg font-bold text-[#2D2E30]">{payment.courseName}</h3></div><span className="shrink-0 rounded-full bg-[#FFF1CE] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#A86710]">Awaiting review</span></div>
-                <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2"><Detail label="Learner">{payment.userName}</Detail><Detail label="Email">{payment.userEmail || '—'}</Detail><Detail label="Course" full>{payment.courseName}</Detail><Detail label="Submitted">{payment.date || '—'}</Detail><Detail label="Promo code">{payment.promoCode ? <span className="font-bold text-[#C97112]">{payment.promoCode}</span> : <span className="font-medium text-[#9E887C]">No promo code applied</span>}</Detail></dl>
-                <div className="mt-4 flex items-end justify-between rounded-xl bg-[#2D2E30] px-4 py-3 text-white"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Amount due</p><p className="mt-1 text-sm text-white/75">Original price {formatAmount(payment.originalAmountValue)}</p></div><strong className="text-xl text-[#FFD37F]">{payment.amount}</strong></div>
+                <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2"><Detail label="Learner">{payment.userName}</Detail><Detail label="Email">{payment.userEmail || '—'}</Detail><Detail label="Course" full>{payment.courseName}</Detail><Detail label="Payment method">{payment.paymentMethod}{payment.paymentMethodType ? ` · ${payment.paymentMethodType}` : ''}</Detail><Detail label="Submitted">{payment.date || '—'}</Detail><Detail label="Promo code">{payment.promoCode ? <span className="font-bold text-[#C97112]">{payment.promoCode}</span> : <span className="font-medium text-[#9E887C]">No promo code applied</span>}</Detail></dl>
+                <div className="mt-4 flex items-end justify-between rounded-xl bg-[#2D2E30] px-4 py-3 text-white"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Amount due</p><p className="mt-1 text-sm text-white/75">Original price {formatPaymentAmount(payment.originalAmountValue, payment.currency)}</p></div><strong className="text-xl text-[#FFD37F]">{payment.amount}</strong></div>
               </div>
             </div>
 

@@ -1,38 +1,6 @@
 import { apiClient } from "../api/client";
-
-function normalizePayment(payment) {
-  if (!payment) {
-    return null;
-  }
-
-  return {
-    id: payment._id,
-    userName: payment.userId?.name || "Unknown user",
-    userEmail: payment.userId?.email || "",
-    userAvatar:
-      payment.userId?.avatar ||
-      `https://ui-avatars.com/api/?background=f8b2c0&color=111827&name=${encodeURIComponent(payment.userId?.name || "User")}`,
-    userDate: payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : "",
-    courseName: payment.courseId?.title || "Unknown course",
-    amountValue: Number(payment.amount ?? payment.courseId?.price ?? 0),
-    originalAmountValue: Number(payment.originalAmount ?? payment.courseId?.price ?? payment.amount ?? 0),
-    discountAmount: Number(payment.discountAmount || 0),
-    promoCode: payment.promoCode || "",
-    feeValue: Number(payment.fee || 0),
-    refundValue: Number(payment.refundAmount || 0),
-    coursePrice: `${Number(payment.amount ?? payment.courseId?.price ?? 0).toLocaleString()} บาท`,
-    amount: `${Number(payment.amount ?? payment.courseId?.price ?? 0).toLocaleString()} ฿`,
-    date: payment.status === "approved" && payment.reviewedAt
-      ? new Date(payment.reviewedAt).toLocaleString()
-      : payment.createdAt ? new Date(payment.createdAt).toLocaleString() : "",
-    paymentMethod: "Uploaded transfer slip",
-    cardInfo: payment.userId?.email || "",
-    status: payment.status,
-    denialReason: payment.rejectReason || "",
-    hasPaymentProof: Boolean(payment.hasPaymentProof),
-    proofStorage: payment.proofStorage || null,
-  };
-}
+export { formatPaymentAmount, normalizePayment } from "./paymentDisplay";
+import { normalizePayment } from "./paymentDisplay";
 
 export async function fetchAllPayments() {
   const payments = await apiClient.get("/payments");

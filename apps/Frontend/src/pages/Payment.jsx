@@ -18,6 +18,7 @@ import { useToast } from "../contexts/ToastContext";
 import { fetchCourseById } from "../services/courseService";
 import { createPayment, fetchMyPayments, fetchPaymentMethods, quotePayment } from "../services/paymentService";
 import { validateFileSize } from "../utils/fileValidation";
+import { hasDiscountedCoursePrice, reconcilePromoForQuote } from "../utils/paymentPromo";
 
 const paymentSteps = ["Payment", "Upload Receipt", "Verification"];
 
@@ -98,16 +99,34 @@ function Payment() {
   };
 
   const promoLocked = hasSubmittedProof || currentStep === 3;
+  const coursePriceIsDiscounted = hasDiscountedCoursePrice(quote);
   const promoLockedMessage = "A promo code cannot be changed after your payment proof has been submitted.";
 
   const refreshQuote = async (methodId = selectedMethodId, code = promoInput) => {
     if (!methodId) return;
     const next = await quotePayment(courseId, methodId, code.trim());
-    setQuote(next); setPromo(next.promo); setPromoMessage("");
+    const promoState = reconcilePromoForQuote(next, promoInput);
+    setQuote(next);
+    if (!promoState.showPromoInput) {
+      // The selected currency already has a server-calculated course discount.
+      // Never leave an old promo attached to this checkout state.
+      setPromoInput(promoState.promoInput); setPromo(promoState.promo); setPromoMessage("");
+    } else {
+      setPromo(promoState.promo); setPromoMessage("");
+    }
+    return next;
   };
   const selectMethod = async (methodId) => {
     setSelectedMethodId(methodId); setQuote(null); setPromo(null); setCurrentStep(1);
-    try { await refreshQuote(methodId, promoInput); } catch (err) { setError(err.message); }
+    const previousPromoCode = promoInput.trim();
+    try {
+      // Quote the newly selected currency without the old code first. A
+      // discounted currency rejects promos, so this establishes UI state.
+      const next = await refreshQuote(methodId, "");
+      if (!hasDiscountedCoursePrice(next) && previousPromoCode) {
+        await refreshQuote(methodId, previousPromoCode);
+      }
+    } catch (err) { setError(err.message); }
   };
   const applyPromo = async () => {
     if (promoLocked) return setPromoMessage(promoLockedMessage);
@@ -294,7 +313,7 @@ function Payment() {
               </div>
 
               <div className="px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6 md:px-8 md:pb-8">
-              {!promoLocked && <div className="mb-5 space-y-4"><div className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Choose payment method</p>{methods.length ? <div className="mt-3 grid gap-2">{methods.map((method) => <button type="button" key={method.id} onClick={() => selectMethod(method.id)} className={`rounded-xl border p-3 text-left text-sm transition ${selectedMethodId === method.id ? "border-[#E58C1A] bg-white" : "border-[#2D2E30]/10 bg-white hover:border-[#E58C1A]/50"}`}><strong>{method.name}</strong><span className="ml-2 text-[#765F55]">{method.type} · {method.currency}</span></button>)}</div> : <p className="mt-2 text-sm text-[#A34D45]">No active payment method is available for this course.</p>}</div><div className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setQuote(null); setPromoMessage(""); }} placeholder="Enter promo code" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div></div>}
+              {!promoLocked && <div className="mb-5 space-y-4"><div className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Choose payment method</p>{methods.length ? <div className="mt-3 grid gap-2">{methods.map((method) => <button type="button" key={method.id} onClick={() => selectMethod(method.id)} className={`rounded-xl border p-3 text-left text-sm transition ${selectedMethodId === method.id ? "border-[#E58C1A] bg-white" : "border-[#2D2E30]/10 bg-white hover:border-[#E58C1A]/50"}`}><strong>{method.name}</strong><span className="ml-2 text-[#765F55]">{method.type} · {method.currency}</span></button>)}</div> : <p className="mt-2 text-sm text-[#A34D45]">No active payment method is available for this course.</p>}</div>{!coursePriceIsDiscounted && <div className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setQuote(null); setPromoMessage(""); }} placeholder="Enter promo code" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div>}</div>}
               {/* Step 1 — QR Code */}
               {currentStep === 1 ? (
                 <div className="space-y-4 sm:space-y-5 md:space-y-6">
