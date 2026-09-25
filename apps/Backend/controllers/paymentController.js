@@ -6,6 +6,7 @@ const { emitAdminEvent } = require("../realtime/socketServer");
 const sendEmail = require("../services/sendEmail");
 const { writeAuditLog } = require("../services/auditLogger");
 const { submitManualPayment, reviewManualPayment } = require("../services/manualPayment");
+const { calculateCheckout, listAvailablePaymentMethods } = require("../services/checkoutCalculation");
 const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
 const { uploadPaymentProof, migrateLegacyPaymentProof, streamPaymentProof, deletePaymentProof } = require("../services/paymentProofStorage");
 const { PAYMENT_PROOF_ACCESS_TTL_SECONDS, issuePaymentProofAccessToken, verifyPaymentProofAccessToken } = require("../services/paymentProofAccess");
@@ -147,6 +148,29 @@ const createPayment = async (req, res) => {
     return res.status(201).json(serializePayment(payment));
   } catch (error) {
     return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to submit payment" });
+  }
+};
+
+// Informational only: no proof upload, Payment, PromoRedemption, capacity
+// reservation, or enrollment is created by this endpoint.
+const quoteCheckout = async (req, res) => {
+  try {
+    const quote = await calculateCheckout({
+      userId: req.user.id, courseId: req.params.courseId,
+      paymentMethodId: req.body?.paymentMethodId, promoCode: req.body?.promoCode,
+    });
+    return res.status(200).json(quote);
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to calculate checkout quote" });
+  }
+};
+
+const getCheckoutPaymentMethods = async (req, res) => {
+  try {
+    const paymentMethods = await listAvailablePaymentMethods({ courseId: req.params.courseId, isAdmin: req.user.role === "admin" });
+    return res.status(200).json(paymentMethods);
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to load payment methods" });
   }
 };
 
@@ -312,6 +336,8 @@ const rejectPayment = reviewPayment("rejected");
 
 module.exports = {
   createPayment,
+  quoteCheckout,
+  getCheckoutPaymentMethods,
   getMyPayments,
   getAllPayments,
   getPendingPaymentCount,

@@ -13,6 +13,8 @@ function EditCourse() {
     description: '',
     price: '',
     discountPrice: '',
+    mmkPrice: '',
+    mmkOriginalPrice: '',
     rating: 4,
     learnings: [''],
     image: '',
@@ -39,8 +41,10 @@ function EditCourse() {
         const loadedFormData = {
           title: course.title,
           description: course.description,
-          price: String(course.originalPriceValue),
-          discountPrice: course.hasDiscount ? String(course.priceValue) : '',
+          price: course.prices?.THB ? String(course.prices.THB.originalPrice) : (course.originalPriceValue === undefined ? '' : String(course.originalPriceValue)),
+          discountPrice: course.prices?.THB && course.prices.THB.price !== course.prices.THB.originalPrice ? String(course.prices.THB.price) : '',
+          mmkPrice: course.prices?.MMK ? String(course.prices.MMK.price) : '',
+          mmkOriginalPrice: course.prices?.MMK ? String(course.prices.MMK.originalPrice) : '',
           rating: course.rating,
           learnings: course.learnings.length ? course.learnings : [''],
           image: course.image,
@@ -133,8 +137,8 @@ function EditCourse() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!formData.title || !formData.price) {
-      setError('Please fill in all required fields.')
+    if (!formData.title) {
+      setError('Please provide a course title.')
       return
     }
 
@@ -142,17 +146,30 @@ function EditCourse() {
       setSaving(true)
       setError('')
 
-      const originalPrice = Number(formData.price)
-      const discountedPrice = formData.discountPrice === '' ? originalPrice : Number(formData.discountPrice)
-      if (!Number.isFinite(discountedPrice) || discountedPrice < 0 || discountedPrice > originalPrice) {
-        setError('Discounted price must be lower than or equal to the original price.')
+      const prices = {}
+      const addPrice = (currency, sellingValue, originalValue) => {
+        if (sellingValue === '' && originalValue === '') return true
+        const price = Number(sellingValue)
+        const originalPrice = originalValue === '' ? price : Number(originalValue)
+        if (!Number.isFinite(price) || !Number.isFinite(originalPrice) || price < 0 || originalPrice < price) return false
+        prices[currency] = { price, originalPrice }
+        return true
+      }
+      if (!addPrice('THB', formData.discountPrice === '' ? formData.price : formData.discountPrice, formData.price)
+        || !addPrice('MMK', formData.mmkPrice, formData.mmkOriginalPrice)) {
+        setError('Each available currency needs a non-negative price and an original price at least as high as its price.')
         return
       }
+      if (!Object.keys(prices).length && formData.isPublished) {
+        setError('A published course must have at least one available currency price.')
+        return
+      }
+      const thb = prices.THB
 
       await updateCourse(id, {
         ...formData,
-        price: discountedPrice,
-        originalPrice,
+        ...(thb ? { price: thb.price, originalPrice: thb.originalPrice } : {}),
+        prices,
       })
 
       initialFormRef.current = getFormSnapshot(formData)
@@ -282,7 +299,7 @@ function EditCourse() {
             <section className="rounded-2xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)] sm:p-6"><div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <label className="mb-2 block text-xs font-bold text-[#2D2E30] sm:text-sm">
-                  Original price
+                  THB original price <span className="font-medium text-[#765F55]">(leave both THB fields blank to make THB unavailable)</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -299,7 +316,7 @@ function EditCourse() {
 
               <div>
                 <label className="mb-2 block text-xs font-bold text-[#2D2E30] sm:text-sm">
-                  Discounted price <span className="font-medium text-[#765F55]">(optional)</span>
+                  THB selling price <span className="font-medium text-[#765F55]">(optional; defaults to original)</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -342,6 +359,17 @@ function EditCourse() {
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-5 border-t pt-5 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-xs font-bold text-[#2D2E30] sm:text-sm">MMK selling price <span className="font-medium text-[#765F55]">(leave both MMK fields blank to make MMK unavailable)</span></label>
+                <input type="number" name="mmkPrice" value={formData.mmkPrice} onChange={handleInputChange} min="0" className="w-full rounded-xl border border-[#2D2E30]/15 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="mb-2 block text-xs font-bold text-[#2D2E30] sm:text-sm">MMK original price <span className="font-medium text-[#765F55]">(optional; defaults to selling price)</span></label>
+                <input type="number" name="mmkOriginalPrice" value={formData.mmkOriginalPrice} onChange={handleInputChange} min="0" className="w-full rounded-xl border border-[#2D2E30]/15 px-3 py-2.5 text-sm" />
               </div>
             </div>
 

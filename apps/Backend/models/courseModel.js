@@ -28,7 +28,6 @@ const courseSchema = new mongoose.Schema(
     ],
     price: {
       type: Number,
-      required: true,
       min: 0,
     },
     originalPrice: {
@@ -41,6 +40,9 @@ const courseSchema = new mongoose.Schema(
       THB: { type: currencyPriceSchema, default: undefined },
       MMK: { type: currencyPriceSchema, default: undefined },
     },
+    // Checkout quotes expose this only as an observation. A later submission
+    // must reread authoritative course state and never trust a prior quote.
+    mutationVersion: { type: Number, default: 0, min: 0 },
     rating: {
       type: Number,
       default: 0,

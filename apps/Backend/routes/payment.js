@@ -4,6 +4,8 @@ const requireAdmin = require("../middleware/adminMiddleware");
 const { createImageUpload, validateImageFileContent } = require("../middleware/uploadValidation");
 const {
   createPayment,
+  quoteCheckout,
+  getCheckoutPaymentMethods,
   getMyPayments,
   getAllPayments,
   getPendingPaymentCount,
@@ -18,6 +20,8 @@ const router = express.Router();
 const upload = createImageUpload();
 
 router.get("/my", validateToken, getMyPayments);
+router.get("/course/:courseId/methods", validateToken, getCheckoutPaymentMethods);
+router.post("/course/:courseId/quote", validateToken, quoteCheckout);
 router.get("/pending-count", validateToken, requireAdmin, getPendingPaymentCount);
 router.get("/", validateToken, requireAdmin, getAllPayments);
 router.post("/course/:courseId", validateToken, upload.single("paymentProof"), validateImageFileContent, createPayment);

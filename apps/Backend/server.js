@@ -190,6 +190,8 @@ app.use('/payments', paymentRoutes)
 
 const paymentSettingsRoutes = require('./routes/paymentSettings')
 app.use('/payment-settings', paymentSettingsRoutes)
+const paymentMethodRoutes = require('./routes/paymentMethod')
+app.use('/payment-methods', paymentMethodRoutes)
 
 const enrollmentRoutes = require('./routes/enrollment')
 app.use('/enrollments', enrollmentRoutes)

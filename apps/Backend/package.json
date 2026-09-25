@@ -16,6 +16,8 @@
     "test:payment-integrity-guard": "node --test tests/payment-integrity-database-guard.test.js",
     "test:multi-currency-payment-inspection": "node --test tests/multi-currency-payment-inspection.test.js",
     "test:multi-currency-data-models": "node --test tests/multi-currency-data-models.test.js",
+    "test:checkout-calculation": "node --test tests/checkout-calculation.test.js",
+    "test:admin-multi-currency-management": "node --test tests/admin-multi-currency-management.test.js",
     "payments:migrate-integrity": "node scripts/migratePaymentIntegrity.js",
     "payments:inspect-multi-currency": "node scripts/inspectMultiCurrencyPaymentReadiness.js",
     "payments:migrate-multi-currency-local": "node scripts/migrateMultiCurrencyPaymentLocal.js",

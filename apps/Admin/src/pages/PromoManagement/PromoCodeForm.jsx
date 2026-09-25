@@ -44,14 +44,15 @@ export default function PromoCodeForm({ form, courses, change, saving, onSubmit,
               <fieldset><legend className="mb-2 text-sm font-semibold">Discount type</legend>
                 <div className="promo-options">
                   <Option name="discount-type" checked={form.discountType === "percent"} onChange={() => change("discountType", "percent")}>Percentage (%)</Option>
-                  <Option name="discount-type" checked={form.discountType === "fixed"} onChange={() => change("discountType", "fixed")}>Fixed amount (฿)</Option>
+                  <Option name="discount-type" checked={form.discountType === "fixed"} onChange={() => change("discountType", "fixed")}>Fixed currency amounts</Option>
                 </div>
               </fieldset>
             </div>
-              <label className="block text-sm font-semibold">{form.discountType === "percent" ? "Percentage off" : "Amount off (THB)"}
+              <label className="block text-sm font-semibold">{form.discountType === "percent" ? "Percentage off" : "Legacy display amount"}
                 <input required type="number" min="0.01" step="0.01" max={form.discountType === "percent" ? 100 : undefined} value={form.discountValue} onChange={(e) => change("discountValue", e.target.value)} placeholder={form.discountType === "percent" ? "20" : "500"} className={input} />
               </label>
           </div>
+          {form.discountType === "fixed" ? <div className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">THB fixed amount<input type="number" min="0.01" step="0.01" value={form.fixedAmounts?.THB || ""} onChange={(e) => change("fixedAmounts", { ...form.fixedAmounts, THB: e.target.value })} className={input} /></label><label className="text-sm font-semibold">MMK fixed amount<input type="number" min="1" step="1" value={form.fixedAmounts?.MMK || ""} onChange={(e) => change("fixedAmounts", { ...form.fixedAmounts, MMK: e.target.value })} className={input} /></label></div> : null}
         </fieldset>
 
         <fieldset disabled={locked || saving} className="min-w-0 border-t border-[#2D2E30]/10 pt-5">

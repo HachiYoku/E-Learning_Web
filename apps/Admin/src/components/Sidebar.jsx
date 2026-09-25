@@ -42,7 +42,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
     { key: 'learning', label: 'Learning', items: [{ label: 'Courses', path: '/courses', icon: BookOpen }, { label: 'Quizzes', path: '/quizzes', icon: ListChecks }, { label: 'Flashcards', path: '/flashcards', icon: GalleryVerticalEnd }, { label: 'Blog', path: '/blog', icon: FileText }] },
     { key: 'people', label: 'People', items: [{ label: 'Users', path: '/users', icon: Users }, { label: 'Verifications', path: '/pending-verifications', icon: MailCheck }, { label: 'Support', path: '/support', icon: Headphones, badge: actionBadges.support }] },
     { key: 'communication', label: 'Communication', items: [{ label: 'Enquiries', path: '/contacts', icon: Mail, badge: badges.contacts }, { label: 'Email', path: '/campaigns', icon: Send }, { label: 'Announcements', path: '/announcements', icon: BellRing }] },
-    { key: 'sales', label: 'Sales', items: [{ label: 'Payments', path: '/review-payment', icon: CreditCard, badge: actionBadges.payments }, { label: 'Promo codes', path: '/promo-codes', icon: BadgePercent }] },
+    { key: 'sales', label: 'Sales', items: [{ label: 'Payments', path: '/review-payment', icon: CreditCard, badge: actionBadges.payments }, { label: 'Payment methods', path: '/payment-methods', icon: CreditCard }, { label: 'Promo codes', path: '/promo-codes', icon: BadgePercent }] },
   ]
   const standaloneItems = [{ label: 'Analytics', path: '/analytics', icon: BarChart3 }, { label: 'Settings', path: '/settings', icon: Settings }]
   const activeGroupKey = navigationGroups.find((group) => group.items.some((item) => isActive(item.path)))?.key
