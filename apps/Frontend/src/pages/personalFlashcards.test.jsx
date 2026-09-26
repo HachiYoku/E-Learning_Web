@@ -37,11 +37,12 @@ describe("My Flashcards deck manager", () => {
   it("loads decks and shows the empty state", async () => {
     service.fetchPersonalFlashcardDecks.mockResolvedValueOnce([deck]);
     const mounted = render(<MemoryRouter><MyFlashcards /></MemoryRouter>);
+    expect(screen.getByRole("link", { name: /back to flashcards/i }).getAttribute("href")).toBe("/app/practice/flashcards");
     expect(await screen.findByText("Work Vocabulary")).toBeTruthy();
     mounted.unmount();
     service.fetchPersonalFlashcardDecks.mockResolvedValueOnce([]);
     render(<MemoryRouter><MyFlashcards /></MemoryRouter>);
-    expect(await screen.findByText(/no flashcard decks yet/i)).toBeTruthy();
+    expect(await screen.findByText(/no flashcard sets yet/i)).toBeTruthy();
   });
 
   it("creates a deck and surfaces duplicate-name errors", async () => {
@@ -49,16 +50,16 @@ describe("My Flashcards deck manager", () => {
     service.fetchPersonalFlashcardDecks.mockResolvedValue([]);
     service.createPersonalFlashcardDeck.mockResolvedValue({ ...deck, cardCount: 0 });
     render(<MemoryRouter><MyFlashcards /></MemoryRouter>);
-    await screen.findByText(/no flashcard decks yet/i);
-    await user.click(screen.getByRole("button", { name: /create your first deck/i }));
-    await user.type(screen.getByLabelText(/deck name/i), "Work Vocabulary");
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^create deck$/i }));
+    await screen.findByText(/no flashcard sets yet/i);
+    await user.click(screen.getByRole("button", { name: /create your first set/i }));
+    await user.type(screen.getByLabelText(/set name/i), "Work Vocabulary");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^create$/i }));
     expect(await screen.findByText("Work Vocabulary")).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /create deck/i }));
+    await user.click(screen.getByRole("button", { name: /create a set/i }));
     service.createPersonalFlashcardDeck.mockRejectedValueOnce(new Error("You already have a flashcard deck with that name."));
-    await user.type(screen.getByLabelText(/deck name/i), "Work Vocabulary");
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^create deck$/i }));
+    await user.type(screen.getByLabelText(/set name/i), "Work Vocabulary");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^create$/i }));
     expect((await screen.findByRole("alert")).textContent).toContain("already have");
   });
 
@@ -67,16 +68,16 @@ describe("My Flashcards deck manager", () => {
     service.updatePersonalFlashcardDeck.mockResolvedValue({ ...deck, name: "Office words" });
     render(<MemoryRouter><MyFlashcards /></MemoryRouter>);
     await screen.findByText("Work Vocabulary");
-    await user.click(screen.getByRole("button", { name: /rename work vocabulary/i }));
-    const input = screen.getByLabelText(/deck name/i);
+    await user.click(screen.getByRole("button", { name: /rename set work vocabulary/i }));
+    const input = screen.getByLabelText(/set name/i);
     await user.clear(input); await user.type(input, "Office words");
     await user.click(screen.getByRole("button", { name: /save changes/i }));
     expect(await screen.findByText("Office words")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: /delete office words/i }));
-    expect(screen.getByText(/permanently delete this deck/i)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /delete set office words/i }));
+    expect(screen.getByText(/permanently delete this flashcard set/i)).toBeTruthy();
     expect(service.deletePersonalFlashcardDeck).not.toHaveBeenCalled();
     service.deletePersonalFlashcardDeck.mockResolvedValue({ deletedCardCount: 1 });
-    await user.click(screen.getByRole("button", { name: /delete deck/i }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^delete set$/i }));
     await waitFor(() => expect(service.deletePersonalFlashcardDeck).toHaveBeenCalledWith("deck-1"));
   });
 

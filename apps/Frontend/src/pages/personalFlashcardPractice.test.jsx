@@ -52,7 +52,7 @@ describe("personal flashcard practice", () => {
 
     personalService.fetchPersonalFlashcardDecks.mockResolvedValueOnce([]);
     renderPractice();
-    expect(await screen.findByText("Flashcard deck not found.")).toBeTruthy();
+    expect(await screen.findByText("Flashcard set not found.")).toBeTruthy();
   });
 
   it("retries a private API failure and returns to the deck manager", async () => {
@@ -63,6 +63,6 @@ describe("personal flashcard practice", () => {
     personalService.fetchPersonalFlashcards.mockResolvedValueOnce(cards);
     await user.click(screen.getByRole("button", { name: /try again/i }));
     expect(await screen.findByText("Card 1 of 2")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /back to deck/i }).getAttribute("href")).toBe("/app/practice/flashcards/mine/deck-1");
+    expect(screen.getByRole("link", { name: /back to flashcards/i }).getAttribute("href")).toBe("/app/practice/flashcards/mine/deck-1");
   });
 });
