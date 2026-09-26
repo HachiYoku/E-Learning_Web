@@ -73,6 +73,18 @@ export function normalizeCourse(course) {
     originalPrice: `${Number(course.originalPrice ?? course.price ?? 0).toLocaleString()} ฿`,
     originalPriceValue: Number(course.originalPrice ?? course.price ?? 0),
     hasDiscount: Number(course.originalPrice ?? course.price ?? 0) > Number(course.price || 0),
+    // Retain legacy THB values only for courses created before prices.THB.
+    // Catalogue rendering selects an explicit currency from this raw map.
+    legacyPriceValue: course.price == null ? null : Number(course.price),
+    legacyOriginalPriceValue: course.originalPrice == null ? Number(course.price) : Number(course.originalPrice),
+    prices: Object.fromEntries(
+      ["THB", "MMK"].flatMap((currency) => {
+        const price = course.prices?.[currency]
+        return price?.price != null && Number.isFinite(Number(price.price))
+          ? [[currency, { price: Number(price.price), originalPrice: price.originalPrice != null && Number.isFinite(Number(price.originalPrice)) ? Number(price.originalPrice) : Number(price.price) }]]
+          : []
+      }),
+    ),
     rating: Number(course.rating || 0),
     reviews: Number(course.reviews || 0),
     lessons: Number(course.lessonCount || 0),

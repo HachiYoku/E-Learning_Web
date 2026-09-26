@@ -1,15 +1,24 @@
 import { useNavigate } from 'react-router-dom'
+import { useCatalogueCurrency } from '../contexts/useCatalogueCurrency'
+import { getCataloguePrice } from '../utils/catalogueCurrency'
 
-function CourseCard({ id, image, title, description, price, originalPrice, hasDiscount = false, rating, isEnrolled = false }) {
+function CourseCard({ course, id, image, title, description, price, originalPrice, hasDiscount = false, priceAvailable = true, currency = 'THB', rating, isEnrolled = false }) {
   const navigate = useNavigate()
+  const { currency: selectedCurrency } = useCatalogueCurrency()
+  const displayPrice = course ? getCataloguePrice(course, selectedCurrency) : { price, originalPrice, hasDiscount, available: priceAvailable, currency }
+  const courseId = course?.id || id
+  const courseTitle = course?.title || title
+  const courseImage = course?.image || image
+  const courseDescription = course?.description || description
+  const courseRating = course?.rating ?? rating
 
   const handleViewDetails = () => {
-    navigate(`/courses/${id}`)
+    navigate(`/courses/${courseId}`)
   }
 
-  const resolvedImage = image && image.startsWith('/src/assets')
-    ? new URL(image.replace('/src/assets/', '../assets/'), import.meta.url).href
-    : image
+  const resolvedImage = courseImage && courseImage.startsWith('/src/assets')
+    ? new URL(courseImage.replace('/src/assets/', '../assets/'), import.meta.url).href
+    : courseImage
 
   return (
     <article className="group relative flex flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-[#FFFDF8] p-3 shadow-[0_18px_45px_-32px_rgba(80,48,19,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_26px_55px_-32px_rgba(80,48,19,0.45)] md:flex-row md:gap-5 md:p-4">
@@ -19,7 +28,7 @@ function CourseCard({ id, image, title, description, price, originalPrice, hasDi
         {resolvedImage ? (
           <img 
             src={resolvedImage} 
-            alt={title} 
+            alt={courseTitle}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
@@ -33,27 +42,27 @@ function CourseCard({ id, image, title, description, price, originalPrice, hasDi
       <div className="flex min-w-0 flex-1 flex-col justify-between py-1 md:py-2">
         {/* Title as Badge */}
         <div className="mb-5 flex w-full shrink-0 justify-center rounded-full border border-[#E58C1A]/20 bg-[#FFF4D8] px-4 py-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">
-          {title}
+          {courseTitle}
         </div>
 
         {/* Description */}
         <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-[#765F55] md:text-sm">
-          {description}
+          {courseDescription}
         </p>
 
         {/* Price */}
-        <div className="mb-3"><p className="text-lg font-bold text-[#C97112] md:text-xl">{price}</p>{hasDiscount ? <p className="mt-0.5 text-xs font-medium text-[#9B867C] line-through">{originalPrice}</p> : null}</div>
+        <div className="mb-3">{displayPrice.available ? <><p className="text-lg font-bold text-[#C97112] md:text-xl">{displayPrice.price}</p>{displayPrice.hasDiscount ? <p className="mt-0.5 text-xs font-medium text-[#9B867C] line-through">{displayPrice.originalPrice}</p> : null}</> : <p className="text-sm font-semibold text-[#765F55]">Not available in {displayPrice.currency}</p>}</div>
 
         {/* Rating */}
         <div className="mb-4 flex items-center gap-1.5">
           <div className="flex gap-0.5">
             {[...Array(5)].map((_, i) => (
-              <span key={i} className={i < Math.floor(rating) ? "text-[#F4B63F] text-xs" : "text-[#E7DCCE] text-xs"}>
+              <span key={i} className={i < Math.floor(courseRating) ? "text-[#F4B63F] text-xs" : "text-[#E7DCCE] text-xs"}>
                 ★
               </span>
             ))}
           </div>
-          <span className="text-xs text-[#765F55]">({rating}/5)</span>
+          <span className="text-xs text-[#765F55]">({courseRating}/5)</span>
         </div>
 
         {/* Buttons */}
@@ -67,7 +76,7 @@ function CourseCard({ id, image, title, description, price, originalPrice, hasDi
             </button>
           )}
           <button 
-            onClick={() => navigate(isEnrolled ? `/app/learn/${id}` : `/enroll/${id}`)}
+            onClick={() => navigate(isEnrolled ? `/app/learn/${courseId}` : `/enroll/${courseId}`)}
             className="flex-1 rounded-xl bg-[#2D2E30] px-3 py-2.5 text-xs font-semibold text-white shadow-md shadow-[#2D2E30]/15 transition-colors hover:bg-[#E58C1A] md:text-sm"
           >
             {isEnrolled ? 'Learn Now' : 'Enroll Now'}

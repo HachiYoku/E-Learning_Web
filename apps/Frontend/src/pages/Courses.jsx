@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, BookOpen, PlayCircle, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, RefreshCw } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import CourseCard from '../components/CourseCard'
 import TestimonialVideo from '../components/TestimonialVideo'
@@ -12,6 +12,8 @@ import image1 from '../assets/courses/IELTS speaking.jpg'
 import image2 from '../assets/courses/daily english.jpg'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Seo from '../components/Seo'
+import CatalogueCurrencySelector from '../components/CatalogueCurrencySelector'
+import { useCatalogueCurrency } from '../contexts/useCatalogueCurrency'
 
 const COURSES_PER_PAGE = 6
 
@@ -24,6 +26,7 @@ function Courses() {
   const [enrolledCourseIds, setEnrolledCourseIds] = useState(() => new Set())
   const coursesSectionRef = useRef(null)
   const { isAuthenticated } = useAuth()
+  const { currency, setCurrency } = useCatalogueCurrency()
 
   useEffect(() => {
     async function loadCourses() {
@@ -44,7 +47,7 @@ function Courses() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setEnrolledCourseIds(new Set())
+      Promise.resolve().then(() => setEnrolledCourseIds(new Set()))
       return
     }
 
@@ -95,34 +98,14 @@ function Courses() {
       <Seo title="Thai Language Courses" description="Explore self-paced online Thai courses for practical speaking, grammar, and everyday communication." path="/courses" />
       <Navbar />
       
-      <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-12 sm:px-6 sm:py-16 md:px-10 md:py-18">
-        <div className="absolute -left-24 top-0 -z-10 h-72 w-72 rounded-full bg-[#F8C56A]/25 blur-3xl" aria-hidden="true" />
-        <div className="absolute -bottom-36 right-0 -z-10 h-96 w-96 rounded-full bg-[#E9A9A0]/25 blur-3xl" aria-hidden="true" />
-        <div className="mx-auto max-w-4xl text-center">
-          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#E58C1A]/25 bg-white/75 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-[#C97112] shadow-sm">
-            Learn Thai your way
-          </div>
-          <h1 className="mt-5 text-4xl font-bold leading-[1.05] tracking-tight text-[#2D2E30] sm:text-5xl md:text-6xl">
-            Courses made for <span className="text-[#E58C1A]">real Thai.</span>
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg">
-            Choose a self-paced video course that makes speaking, grammar, and everyday communication feel clear, practical, and enjoyable.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3 text-sm font-semibold text-[#765F55]">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 shadow-sm"><BookOpen className="h-4 w-4 text-[#E58C1A]" aria-hidden="true" /> Learn at your pace</span>
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 shadow-sm"><PlayCircle className="h-4 w-4 text-[#E58C1A]" aria-hidden="true" /> Watch anywhere</span>
-          </div>
-        </div>
-      </section>
-
-      <section ref={coursesSectionRef} className="scroll-mt-20 bg-[#FFFDF8] px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
+      <section ref={coursesSectionRef} className="scroll-mt-20 bg-[#FFFDF8] px-4 py-10 sm:px-6 sm:py-12 md:px-10 md:py-16">
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8 flex flex-col gap-3 border-b border-[#2D2E30]/10 pb-6 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+          <div className="mb-8 flex flex-col gap-4 border-b border-[#2D2E30]/10 pb-6 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Find your next lesson</p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">Explore all courses</h2>
             </div>
-            {!loading && courses.length > 0 ? <p className="text-sm font-medium text-[#765F55]">{courses.length} {courses.length === 1 ? 'course' : 'courses'} available</p> : null}
+            <div className="flex flex-wrap items-center gap-3 sm:justify-end"><CatalogueCurrencySelector currency={currency} onChange={setCurrency} />{!loading && courses.length > 0 ? <p className="text-sm font-medium text-[#765F55]">{courses.length} {courses.length === 1 ? 'course' : 'courses'} available</p> : null}</div>
           </div>
           {error ? (
             <div className="mx-auto flex max-w-xl flex-col items-center rounded-[2rem] border border-[#2D2E30]/10 bg-white px-6 py-12 text-center shadow-[0_20px_50px_-36px_rgba(80,48,19,0.4)] sm:px-10">
@@ -146,21 +129,13 @@ function Courses() {
           ) : (
             <>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
-                {currentCourses.map((course) => (
-                  <CourseCard
+                {currentCourses.map((course) => {
+                  return <CourseCard
                     key={course.id}
-                    id={course.id}
-                    image={course.image}
-                    title={course.title}
-                    description={course.description}
-                    price={course.price}
-                    originalPrice={course.originalPrice}
-                    hasDiscount={course.hasDiscount}
-                    rating={course.rating}
-                    reviews={course.reviews}
+                    course={course}
                     isEnrolled={enrolledCourseIds.has(course.id)}
                   />
-                ))}
+                })}
               </div>
 
               {courses.length > COURSES_PER_PAGE ? (
