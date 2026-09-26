@@ -286,6 +286,34 @@ const streamAuthorizedPaymentProof = async (req, res) => {
   }
 };
 
+// Rejected receipts are immutable historical evidence. This owner-only route
+// intentionally streams bytes through the API; it never discloses a
+// Cloudinary URL, public ID, storage type, or format to the student.
+const streamStudentRejectedPaymentProof = async (req, res) => {
+  try {
+    const payment = await Payment.findOne({
+      _id: req.params.paymentId,
+      userId: req.user.id,
+      status: "rejected",
+    }).select(PAYMENT_PROOF_FIELDS);
+    if (!payment || payment.paymentProofStorage !== "authenticated" || !payment.paymentProofPublicId) {
+      return res.status(404).json({ message: "Payment proof not found" });
+    }
+    const proof = await streamPaymentProof(payment.paymentProofPublicId, payment.paymentProofFormat);
+    res.status(200).set({
+      "Content-Type": proof.headers.get("content-type") || "application/octet-stream",
+      "Cache-Control": "private, no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff",
+    });
+    return res.send(Buffer.from(await proof.arrayBuffer()));
+  } catch (error) {
+    if (error.name === "CastError") return res.status(404).json({ message: "Payment proof not found" });
+    const safeMessage = String(error.message || "unknown error").replace(/https?:\/\/\S+/gi, "[redacted-url]");
+    console.error("Student payment-proof delivery failed", { name: error.name, message: safeMessage });
+    return res.status(502).json({ message: "Payment proof is temporarily unavailable" });
+  }
+};
+
 const getPendingPaymentCount = async (_req, res) => {
   try {
     return res.status(200).json({ count: await Payment.countDocuments({ status: "pending" }) });
@@ -347,6 +375,7 @@ module.exports = {
   replacePaymentProof,
   getPaymentProofAccess,
   streamAuthorizedPaymentProof,
+  streamStudentRejectedPaymentProof,
   approvePayment,
   rejectPayment,
 };

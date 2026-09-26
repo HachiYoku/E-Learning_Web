@@ -1,4 +1,5 @@
 import { apiClient } from "../api/client";
+import { formatSavedPaymentAmount } from "../utils/paymentDisplay";
 
 function normalizePayment(payment) {
   if (!payment) {
@@ -6,13 +7,12 @@ function normalizePayment(payment) {
   }
 
   const currency = payment.currency || payment.courseSnapshot?.currency || "THB";
-  const symbol = currency === "MMK" ? "Ks" : "฿";
   const savedPrice = payment.amount ?? payment.courseSnapshot?.price ?? payment.originalAmount;
   const course = {
     id: payment.courseId?._id || null,
     title: payment.courseSnapshot?.title || payment.courseId?.title || "Removed course",
     description: payment.courseSnapshot?.description || payment.courseId?.description || "This course is no longer available.",
-    price: savedPrice == null ? "Amount unavailable" : `${symbol}${Number(savedPrice).toLocaleString()}`,
+    price: savedPrice == null ? "Amount unavailable" : formatSavedPaymentAmount(savedPrice, currency),
     priceValue: savedPrice == null ? null : Number(savedPrice),
     image: payment.courseSnapshot?.thumbnail || payment.courseId?.thumbnail || "",
   };
@@ -46,6 +46,7 @@ export async function createPayment(courseId, file, paymentMethodId, promoCode =
 
 export const fetchPaymentMethods = (courseId) => apiClient.get(`/payments/course/${courseId}/methods`);
 export const quotePayment = (courseId, paymentMethodId, promoCode = "") => apiClient.post(`/payments/course/${courseId}/quote`, { paymentMethodId, promoCode });
+export const fetchRejectedPaymentProofBlob = (paymentId) => apiClient.getBlob(`/payments/${paymentId}/student-proof`);
 
 export async function fetchMyPayments() {
   const payments = await apiClient.get("/payments/my");

@@ -85,7 +85,7 @@ function CourseLessons() {
 
       <main className="flex-1 bg-[#FFF9EA] px-4 pb-14 pt-8 sm:px-6 sm:pb-16 md:px-10 md:pb-20">
         <div className="mx-auto max-w-7xl">
-          <div className="mx-auto mb-8 max-w-3xl text-center sm:mb-10 md:mb-12"><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Your classroom</p><h1 className="mt-3 text-[clamp(1.85rem,5vw,3rem)] font-bold leading-[1.1] tracking-tight text-[#2D2E30]">Keep learning, <span className="font-serif font-normal italic text-[#B96128]">one lesson at a time.</span></h1></div>
+          <div className="mx-auto mb-8 max-w-3xl text-center sm:mb-10 md:mb-12"><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Your classroom</p><h1 className="mt-3 text-[clamp(1.85rem,5vw,3rem)] font-bold leading-[1.1] tracking-tight text-[#2D2E30]">Keep learning, <span className="text-[#B96128]">one lesson at a time.</span></h1></div>
           {error ? <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
           <div className="grid grid-cols-1 items-start gap-6 md:gap-8 lg:grid-cols-5">

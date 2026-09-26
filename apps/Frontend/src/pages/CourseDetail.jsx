@@ -315,7 +315,7 @@ function CourseDetail() {
               <div className="lg:sticky lg:top-28">
                 <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C97112]">The Arun Thai difference</p>
                 <h2 className="mt-4 text-4xl font-bold leading-[1.02] tracking-tight text-[#2D2E30] sm:text-5xl">
-                  Learn the Thai you’ll <span className="font-serif font-normal italic text-[#B96128]">actually use.</span>
+                  Learn the Thai you’ll <span className="text-[#B96128]">actually use.</span>
                 </h2>
                 <p className="mt-5 max-w-md text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg">
                   Arun Thai is made for steady progress: clear guidance, useful practice, and the confidence to take Thai beyond the screen.

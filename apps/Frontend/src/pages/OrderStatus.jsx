@@ -1,114 +1,58 @@
-import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import { ArrowLeft, CalendarDays, Check, CircleCheck, Clock3, ReceiptText, XCircle } from 'lucide-react'
-import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
-import LoadingSpinner from '../components/LoadingSpinner'
-import { fetchMyPayments } from '../services/paymentService'
-
-const orderSteps = ['Payment', 'Receipt uploaded', 'Verification']
+import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, Check, CircleCheck, Clock3, Maximize2, X, XCircle } from "lucide-react";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
+import LoadingSpinner from "../components/LoadingSpinner";
+import { fetchMyPayments, fetchRejectedPaymentProofBlob } from "../services/paymentService";
+import { orderStatusView, rejectedPaymentResubmissionPath, savedPaymentDetails } from "../utils/orderStatusView";
+import { createProofObjectUrl, proofRequestKey, rejectedProofDisplayState, revokeProofObjectUrl, shouldFetchProof, shouldShowRejectedProof } from "../utils/studentProofViewer";
 
 function OrderStatus() {
-  const { orderId } = useParams()
-  const navigate = useNavigate()
-  const [payment, setPayment] = useState(null)
-  const [resolvedByNewerPayment, setResolvedByNewerPayment] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    async function loadPayment() {
-      try {
-        setLoading(true)
-        setError('')
-        const payments = await fetchMyPayments()
-        const matchedPayment = payments.find((item) => item.id === orderId)
-        if (!matchedPayment) throw new Error('Order not found')
-        const approvedReplacement = matchedPayment.status === 'rejected'
-          ? payments.find((item) => item.course?.id === matchedPayment.course?.id && item.status === 'approved')
-          : null
-        setPayment(approvedReplacement || matchedPayment)
-        setResolvedByNewerPayment(Boolean(approvedReplacement))
-      } catch (loadError) {
-        setError(loadError.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadPayment()
-  }, [orderId])
-
-  if (loading) {
-    return <div className="min-h-screen bg-[#FFFDF8]"><Navbar /><div className="flex h-screen items-center justify-center bg-[#FFF9EA]"><LoadingSpinner message="Loading order..." /></div></div>
-  }
-
-  if (!payment || !payment.course) {
-    return <div className="min-h-screen bg-[#FFFDF8]"><Navbar /><div className="flex h-screen items-center justify-center bg-[#FFF9EA] px-4 text-center"><p className="text-lg text-[#765F55] sm:text-2xl">{error || 'Order not found'}</p></div></div>
-  }
-
-  const course = payment.course
-  const isApproved = payment.status === 'approved'
-  const isRejected = payment.status === 'rejected'
-  const status = isApproved
-    ? { eyebrow: resolvedByNewerPayment ? 'Resolved' : 'Verified payment', title: resolvedByNewerPayment ? 'Your updated payment was approved' : 'Enrollment confirmed', description: resolvedByNewerPayment ? 'Your previous receipt needed correction. Your latest payment was approved and you can now access this course.' : 'Your payment has been verified and your course is ready to explore.', Icon: CircleCheck, iconClasses: 'bg-[#E9F4EA] text-[#4D7C57]', buttonLabel: 'Start learning', onClick: () => navigate(`/app/learn/${course.id}`), buttonClasses: 'bg-[#F8C56A] text-[#2D2E30] hover:bg-[#E58C1A]' }
-    : isRejected
-      ? { eyebrow: 'Action needed', title: 'Payment needs attention', description: payment.rejectReason || 'We could not verify this receipt. Please upload a new one to continue.', Icon: XCircle, iconClasses: 'bg-[#FFF0EE] text-[#A34D45]', buttonLabel: 'Resubmit receipt', onClick: () => navigate(`/payment/${course.id}`), buttonClasses: 'bg-[#2D2E30] text-white hover:bg-[#E58C1A]' }
-      : { eyebrow: 'Verification in progress', title: 'Payment under review', description: 'Your receipt was submitted successfully. Our team is reviewing it now.', Icon: Clock3, iconClasses: 'bg-[#FFF4D8] text-[#C97112]', buttonLabel: 'Back to orders', onClick: () => navigate('/app/orders'), buttonClasses: 'bg-[#2D2E30] text-white hover:bg-[#E58C1A]' }
-  const StatusIcon = status.Icon
-
-  const stepState = (index) => {
-    if (index < 2) return 'complete'
-    if (isApproved) return 'complete'
-    if (isRejected) return 'rejected'
-    return 'active'
-  }
-
-  return (
-    <div className="flex min-h-screen flex-col bg-[#FFFDF8]">
-      <Navbar />
-
-      <div className="bg-[#FFF9EA] px-4 pt-6 sm:px-6 sm:pt-8 md:px-10">
-        <div className="mx-auto max-w-7xl"><button onClick={() => navigate('/app/orders')} className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to orders</button></div>
-      </div>
-
-      <main className="flex-1 bg-[#FFF9EA] px-4 pb-14 pt-8 sm:px-6 sm:pb-16 md:px-10 md:pb-20">
-        <div className="mx-auto max-w-7xl">
-          <div className="mx-auto mb-8 max-w-3xl text-center sm:mb-10 md:mb-12"><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Order status</p><h1 className="mt-3 text-[clamp(1.85rem,5vw,3rem)] font-bold leading-[1.1] tracking-tight text-[#2D2E30]">Follow your <span className="font-serif font-normal italic text-[#B96128]">enrollment.</span></h1><p className="mt-4 text-sm leading-relaxed text-[#765F55] sm:text-base">We’ll keep this page updated as your payment moves through verification.</p></div>
-
-          <div className="grid grid-cols-1 items-start gap-6 md:gap-8 lg:grid-cols-5">
-            <aside className="lg:col-span-2"><div className="overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-4 shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] sm:p-6 lg:sticky lg:top-20">
-              <div className="h-48 overflow-hidden rounded-[1.3rem] bg-[#E7DCCE] sm:h-56 md:h-64">{course.image ? <img src={course.image} alt={course.title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-[#765F55]">No image</div>}</div>
-              <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Your course</p><h2 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30]">{course.title}</h2><p className="mt-3 line-clamp-3 text-sm leading-relaxed text-[#765F55]">{course.description}</p>
-              <div className="mt-5 flex items-center justify-between border-t border-[#2D2E30]/10 pt-4"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#765F55]">Amount paid</p><p className="mt-1 text-xl font-bold text-[#B96128]">{course.price}</p></div><div className="flex items-center gap-2 text-xs font-semibold text-[#765F55]"><CalendarDays className="h-4 w-4 text-[#C97112]" aria-hidden="true" />{new Date(payment.createdAt).toLocaleDateString()}</div></div>
-            </div></aside>
-
-            <section className="overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] lg:col-span-3">
-              <div className="bg-[#2D2E30] px-5 py-6 sm:px-7 sm:py-8 md:px-8"><div className="flex items-start gap-4"><div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${status.iconClasses}`}><StatusIcon className="h-6 w-6" aria-hidden="true" /></div><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#F8C56A]">{status.eyebrow}</p><h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">{status.title}</h2>{!isRejected ? <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/65">{status.description}</p> : null}</div></div></div>
-
-              <div className="p-5 sm:p-7 md:p-8">
-                <div className="rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-2"><div className="grid grid-cols-3 gap-2">{orderSteps.map((step, index) => {
-                  const state = stepState(index)
-                  const stateClasses = state === 'complete' ? 'bg-[#FFF1CE] text-[#9A5816]' : state === 'rejected' ? 'bg-[#FFF0EE] text-[#A34D45]' : state === 'active' ? 'bg-[#2D2E30] text-white shadow-[0_8px_18px_-10px_rgba(45,46,48,0.8)]' : 'bg-white text-[#9A8775]'
-                  return <div key={step} className={`rounded-xl px-2 py-3 text-center sm:px-3 ${stateClasses}`}><div className={`mx-auto mb-2 flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${state === 'complete' ? 'bg-[#E58C1A] text-white' : state === 'rejected' ? 'bg-[#A34D45] text-white' : state === 'active' ? 'bg-[#F8C56A] text-[#2D2E30]' : 'bg-[#F1E8DC] text-[#9A8775]'}`}>{state === 'complete' ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : state === 'rejected' ? '!' : index + 1}</div><p className="text-[10px] font-bold leading-tight sm:text-xs">{step}</p></div>
-                })}</div></div>
-
-                {isRejected ? (
-                  <div className="mt-6 rounded-2xl border border-[#D78A86]/35 bg-[#FFF3F1] p-4 sm:p-5">
-                    <div className="flex items-center gap-2 text-sm font-bold text-[#8E4039]"><XCircle className="h-4 w-4" aria-hidden="true" />Reason from our team</div>
-                    <p className="mt-2 text-sm leading-relaxed text-[#7D514C]">{payment.rejectReason || 'Please upload a clear payment receipt or contact support for assistance.'}</p>
-                  </div>
-                ) : null}
-
-                <div className="mt-6 rounded-2xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-4 sm:p-5"><div className="flex items-center gap-2 text-sm font-bold text-[#2D2E30]"><ReceiptText className="h-4 w-4 text-[#C97112]" aria-hidden="true" />Payment receipt</div><p className="mt-2 text-xs leading-relaxed text-[#765F55]">{isApproved ? 'Payment confirmed. You can begin learning now.' : isRejected ? 'Your receipt needs to be replaced before your enrollment can be approved.' : 'Your receipt is safely submitted and waiting for verification.'}</p></div>
-                <button onClick={status.onClick} className={`mt-6 w-full rounded-xl px-4 py-3 text-sm font-bold transition sm:text-base ${status.buttonClasses}`}>{status.buttonLabel}</button>
-              </div>
-            </section>
-          </div>
-        </div>
-      </main>
-      <Footer />
-    </div>
-  )
+  const { orderId } = useParams(); const navigate = useNavigate();
+  const [payment, setPayment] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  useEffect(() => { (async () => { try { setLoading(true); setError(""); const next = (await fetchMyPayments()).find((item) => item.id === orderId); if (!next) throw new Error("Order not found"); setPayment(next); } catch (loadError) { setError(loadError.message); } finally { setLoading(false); } })(); }, [orderId]);
+  if (loading) return <Page><div className="flex h-screen items-center justify-center"><LoadingSpinner message="Loading payment status..." /></div></Page>;
+  if (!payment || !payment.course) return <Page><div className="flex h-screen items-center justify-center px-4 text-center"><p className="text-lg text-[#765F55] sm:text-2xl">{error || "Order not found"}</p></div></Page>;
+  const view = orderStatusView(payment); const details = savedPaymentDetails(payment); const course = payment.course;
+  const submittedAt = payment.createdAt ? new Date(payment.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "Date unavailable";
+  const isRejected = view.kind === "rejected"; const isApproved = view.kind === "approved";
+  return <Page><main className="flex-1 bg-[#FFF9EA] px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10"><div className="mx-auto max-w-3xl">
+    <button onClick={() => navigate("/app/orders")} className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"><ArrowLeft className="h-4 w-4" />Course orders</button>
+    {isRejected ? <RejectedExperience payment={payment} course={course} details={details} submittedAt={submittedAt} onSubmit={() => navigate(rejectedPaymentResubmissionPath(course.id))} /> : isApproved ? <ApprovedExperience course={course} details={details} submittedAt={submittedAt} onStart={() => navigate(`/app/learn/${course.id}`)} /> : <PendingExperience course={course} details={details} submittedAt={submittedAt} />}
+  </div></main></Page>;
 }
 
-export default OrderStatus
+function Page({ children }) { return <div className="flex min-h-screen flex-col bg-[#FFFDF8]"><Navbar />{children}<Footer /></div>; }
+
+function PendingExperience({ course, details, submittedAt }) { return <><section className="max-w-2xl pb-8 pt-10 sm:pb-10 sm:pt-14"><p className="text-xs font-bold uppercase tracking-[.2em] text-[#C97112]">Payment status</p><div className="mt-5 flex items-start gap-4"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#FFF1CE] text-[#C97112]"><Clock3 className="h-5 w-5" /></span><div><h1 className="text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">Waiting for review</h1><p className="mt-2 max-w-md text-sm leading-6 text-[#765F55] sm:text-base">We’ve received your payment. No action is needed right now.</p></div></div><ProgressTracker left /></section><ReceiptContext course={course} details={details} submittedAt={submittedAt} /></>; }
+
+function ApprovedExperience({ course, details, submittedAt, onStart }) { return <><section className="pb-8 pt-10 text-center sm:pb-10 sm:pt-14"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E9F4EA] text-[#4D7C57]"><CircleCheck className="h-6 w-6" /></span><p className="mt-6 text-xs font-bold uppercase tracking-[.2em] text-[#4D7C57]">Enrollment complete</p><h1 className="mt-3 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">You’re enrolled!</h1><p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#765F55] sm:text-base"><strong className="text-[#2D2E30]">{course.title}</strong> is ready. You can start learning now.</p><button onClick={onStart} className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-[#F8C56A] px-5 py-3.5 text-sm font-bold text-[#2D2E30] shadow-[0_12px_24px_-18px_rgba(185,97,40,.75)] transition hover:bg-[#E58C1A] sm:w-auto">Start learning <span className="ml-2">→</span></button></section><ReceiptContext course={course} details={details} submittedAt={submittedAt} subdued /></>; }
+
+function RejectedExperience({ payment, course, details, submittedAt, onSubmit }) { return <><section className="max-w-2xl pb-7 pt-10 sm:pt-14"><p className="text-xs font-bold uppercase tracking-[.2em] text-[#A34D45]">Action needed</p><div className="mt-5 flex items-start gap-4"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#FFF0EE] text-[#A34D45]"><XCircle className="h-5 w-5" /></span><div><h1 className="text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">Payment needs attention</h1><p className="mt-2 text-sm leading-6 text-[#765F55] sm:text-base">We couldn’t approve this payment.</p></div></div><RejectedContent payment={payment} onSubmit={onSubmit} /></section><ReceiptContext course={course} details={details} submittedAt={submittedAt} subdued /></>; }
+
+function ProgressTracker({ left = false }) { const align = left ? "mx-0" : "mx-auto"; return <div className={`${align} mt-8 max-w-md`}><div className="flex items-start"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#4D7C57] text-white"><Check className="h-4 w-4" /></span><span className="mt-3 h-px flex-1 bg-[#7EAF85]" /><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F8C56A] text-xs font-bold text-[#2D2E30] ring-4 ring-[#FFF4D8]">2</span><span className="mt-3 h-px flex-1 bg-[#D9CEBE]" /><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#D9CEBE] bg-[#FFFDF8] text-xs font-bold text-[#9A8775]">3</span></div><div className="mt-3 grid grid-cols-3 text-[11px] font-bold leading-4"><span className="text-left text-[#765F55]">Submitted</span><span className="text-center text-[#2D2E30]">Review</span><span className="text-right text-[#9A8775]">Access</span></div></div>; }
+
+function RejectedContent({ payment, onSubmit }) { return <div className="mt-7 border-t border-[#D78A86]/30 pt-6"><div className="border-l-4 border-[#D78A86] pl-4"><p className="text-sm font-bold text-[#8E4039]">Reason from our team</p><p className="mt-2 text-sm leading-6 text-[#7D514C]">{payment.rejectReason || "Please submit a clear payment slip to continue."}</p></div>{shouldShowRejectedProof(payment) && <RejectedProofPreview paymentId={payment.id} />}<p className="mt-6 text-sm leading-6 text-[#765F55]">Submit a new payment to continue your enrollment. This creates a new payment; the rejected payment remains in your order history.</p><button onClick={onSubmit} className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-[#2D2E30] px-5 py-3.5 text-sm font-bold text-white transition hover:bg-[#C97112] sm:w-auto">Submit a new payment</button></div>; }
+
+function ReceiptContext({ course, details, submittedAt, subdued }) { return <section className={`border-y py-5 sm:py-6 ${subdued ? "border-[#2D2E30]/10" : "border-[#CDBEAA]"}`}><div className="flex items-center gap-3"><div className="h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-xl bg-[#E7DCCE]">{course.image ? <img src={course.image} alt="" className="h-full w-full object-cover" /> : null}</div><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#C97112]">Your course</p><h2 className="mt-1 text-sm font-bold leading-5 text-[#2D2E30]">{course.title}</h2></div></div><div className="mt-5 border-t border-[#2D2E30]/10 pt-5 sm:flex sm:items-end sm:justify-between sm:gap-8"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#9A8775]">Amount paid</p><p className="mt-1 text-2xl font-bold tracking-tight text-[#B96128]">{details.amount}</p></div><dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:mt-0 sm:min-w-[18rem]"><ReceiptDetail label="Payment method" value={details.method} /><ReceiptDetail label="Currency" value={details.currency} /><ReceiptDetail label="Submitted" value={submittedAt} /></dl></div></section>; }
+
+function ReceiptDetail({ label, value }) { return <div><dt className="text-[10px] font-bold uppercase tracking-[.14em] text-[#9A8775]">{label}</dt><dd className="mt-1 text-sm font-semibold text-[#2D2E30]">{value}</dd></div>; }
+
+function RejectedProofPreview({ paymentId }) {
+  const [loading, setLoading] = useState(true); const [failed, setFailed] = useState(false); const [proofBlob, setProofBlob] = useState(null); const [thumbnailUrl, setThumbnailUrl] = useState(""); const [modalUrl, setModalUrl] = useState(""); const [retryCount, setRetryCount] = useState(0);
+  const cache = useRef(new Map()); const loadedRequestKey = useRef("");
+  useEffect(() => {
+    const requestKey = proofRequestKey(paymentId, retryCount);
+    if (!shouldFetchProof({ paymentId, retryCount, loadedRequestKey: loadedRequestKey.current })) return undefined;
+    let active = true; let nextUrl = "";
+    const showProof = (blob) => { nextUrl = createProofObjectUrl(blob); if (!active) return revokeProofObjectUrl(nextUrl); setProofBlob(blob); setThumbnailUrl(nextUrl); setFailed(false); loadedRequestKey.current = requestKey; };
+    (async () => { setLoading(true); setFailed(false); try { const blob = cache.current.get(paymentId) || await fetchRejectedPaymentProofBlob(paymentId); cache.current.set(paymentId, blob); showProof(blob); } catch { if (active) { setFailed(true); setThumbnailUrl(""); setProofBlob(null); } } finally { if (active) setLoading(false); } })();
+    return () => { active = false; revokeProofObjectUrl(nextUrl); };
+  }, [paymentId, retryCount]);
+  useEffect(() => () => revokeProofObjectUrl(modalUrl), [modalUrl]);
+  const state = rejectedProofDisplayState({ loading, failed, thumbnailUrl }); const open = () => proofBlob && setModalUrl(createProofObjectUrl(proofBlob)); const retry = () => setRetryCount((count) => count + 1);
+  return <section className="mt-5"><p className="text-sm font-bold text-[#2D2E30]">Your submitted payment slip</p>{state === "loading" ? <div className="mt-3 flex w-full items-center gap-3 border-y border-[#2D2E30]/10 py-3"><div className="h-20 w-24 shrink-0 animate-pulse rounded-lg bg-[#F3E9D9]" /><p className="text-sm font-medium text-[#765F55]">Loading payment slip…</p></div> : state === "failed" ? <div className="mt-3 flex min-h-20 items-center justify-between gap-3 border-y border-[#2D2E30]/10 py-3"><p className="text-sm text-[#765F55]">Payment slip couldn&apos;t be loaded.</p><button type="button" onClick={retry} className="shrink-0 rounded-lg px-3 py-2 text-xs font-bold text-[#C97112] transition hover:bg-[#FFF4D8]">Try again</button></div> : <><button type="button" onClick={open} className="group mt-3 flex w-full items-center gap-3 border-y border-[#2D2E30]/10 py-3 text-left"><img src={thumbnailUrl} alt="Your submitted payment slip" className="h-20 w-24 rounded-lg object-cover transition-opacity duration-200" /><span><span className="block text-sm font-bold text-[#2D2E30]">Submitted payment slip</span><span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-[#C97112]">View larger <Maximize2 size={13} /></span></span></button>{modalUrl && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#252527]/75 p-4 backdrop-blur-sm"><section className="relative w-full max-w-2xl rounded-2xl bg-[#FFFDF8] p-4 shadow-2xl"><button type="button" onClick={() => setModalUrl("")} className="absolute right-3 top-3 rounded-lg bg-white p-2 text-[#765F55] shadow-sm hover:bg-[#FFF4D8]" aria-label="Close payment slip"><X size={20} /></button><p className="mb-3 text-sm font-bold text-[#2D2E30]">Your submitted payment slip</p><img src={modalUrl} alt="Your submitted payment slip, enlarged" className="max-h-[75dvh] w-full rounded-xl object-contain" /></section></div>}</>}</section>;
+}
+
+export default OrderStatus;

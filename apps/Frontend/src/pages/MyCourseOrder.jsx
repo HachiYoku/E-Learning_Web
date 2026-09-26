@@ -40,7 +40,7 @@ function MyCourseOrder() {
       <div className="hidden bg-[#FFF9EA] px-4 pb-12 pt-10 sm:px-6 sm:pb-14 sm:pt-12 md:block md:px-10 md:pb-16 md:pt-14">
         <div className="mx-auto max-w-7xl text-center">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Payment centre</p>
-          <h1 className="mt-3 text-[clamp(2rem,6vw,3.3rem)] font-bold leading-[1.08] tracking-tight text-[#2D2E30]">Your course <span className="font-serif font-normal italic text-[#B96128]">orders.</span></h1>
+          <h1 className="mt-3 text-[clamp(2rem,6vw,3.3rem)] font-bold leading-[1.08] tracking-tight text-[#2D2E30]">Your course <span className="text-[#B96128]">orders.</span></h1>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-[#765F55] sm:text-base">Keep track of each payment and see when your course access is ready.</p>
         </div>
       </div>

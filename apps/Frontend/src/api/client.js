@@ -92,6 +92,37 @@ async function request(path, options = {}) {
   return data;
 }
 
+// Private images must be fetched with the same authenticated session as JSON
+// API requests. Keeping this here prevents a feature from accidentally using
+// an unauthenticated or permanent asset URL.
+async function requestBlob(path, options = {}) {
+  const requestToken = options.token === undefined ? getToken() : options.token;
+  const headers = new Headers(options.headers || {});
+  headers.set("X-Auth-Portal", "student");
+  if (requestToken) headers.set("Authorization", `Bearer ${requestToken}`);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, credentials: "include" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    if (response.status === 401 && requestToken && !options.skipRefresh) {
+      try {
+        const freshToken = await refreshAccessToken();
+        return requestBlob(path, { ...options, token: freshToken, skipRefresh: true });
+      } catch {
+        // The common expiry/deactivation path is handled below.
+      }
+    }
+    if (response.status === 401 && requestToken) {
+      clearToken();
+      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { message: getFriendlyErrorMessage(response.status, data?.message) } }));
+    }
+    const error = new Error(getFriendlyErrorMessage(response.status, data?.message));
+    error.status = response.status;
+    throw error;
+  }
+  return response.blob();
+}
+
 export const apiClient = {
   get: (path) => request(path),
   post: (path, body) =>
@@ -113,4 +144,5 @@ export const apiClient = {
     request(path, {
       method: "DELETE",
     }),
+  getBlob: (path) => requestBlob(path),
 };

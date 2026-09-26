@@ -12,7 +12,7 @@ const payment = (overrides = {}) => ({
 test('payment normalization preserves saved THB currency and symbol', () => {
   const normalized = normalizePayment(payment({ currency: 'THB' }))
   assert.equal(normalized.currency, 'THB')
-  assert.equal(normalized.amount, '3,900 ฿')
+  assert.equal(normalized.amount, '฿3,900')
 })
 
 test('payment normalization preserves saved MMK currency and never labels it as THB', () => {
@@ -35,7 +35,23 @@ test('historical review prefers the saved payment-method snapshot', () => {
 
 test('legacy payments without a saved currency retain THB-compatible formatting', () => {
   const normalized = normalizePayment(payment({ currency: undefined, paymentMethodSnapshot: undefined }))
-  assert.equal(normalized.currency, null)
-  assert.equal(normalized.amount, '3,900 ฿')
+  assert.equal(normalized.currency, 'THB')
+  assert.equal(normalized.amount, '฿3,900')
   assert.equal(normalized.paymentMethod, 'Uploaded transfer slip')
+})
+
+test('historical review prefers saved course and financial snapshots', () => {
+  const normalized = normalizePayment(payment({
+    currency: 'MMK',
+    amount: 120000,
+    originalAmount: 130000,
+    discountAmount: 10000,
+    promoCode: 'SAVE10',
+    courseSnapshot: { title: 'Thai Writing at purchase', price: 130000, originalPrice: 130000 },
+    courseId: { title: 'Renamed course', price: 999 },
+  }))
+  assert.equal(normalized.courseName, 'Thai Writing at purchase')
+  assert.equal(normalized.originalAmountValue, 130000)
+  assert.equal(normalized.discountAmount, 10000)
+  assert.equal(normalized.promoCode, 'SAVE10')
 })
