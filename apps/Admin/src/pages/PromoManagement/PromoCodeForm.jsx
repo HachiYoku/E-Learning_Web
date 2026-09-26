@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, LockKeyhole, Search, X } from "lucide-react";
 import "./PromoCodeForm.css";
+import { explicitFixedAmounts } from "./promoFormState";
 
 const input = "mt-2 block min-w-0 w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] px-3.5 py-3 text-sm text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -15,6 +16,17 @@ export default function PromoCodeForm({ form, courses, change, saving, onSubmit,
     if (scope === "selected" && !form.applicableCourses.length) {
       setError("Select at least one course, or choose All courses.");
       return;
+    }
+    if (form.discountType === "fixed" && !locked) {
+      const amounts = explicitFixedAmounts(form.fixedAmounts);
+      if (!Object.keys(amounts).length) {
+        setError("Enter a fixed discount for THB, MMK, or both currencies.");
+        return;
+      }
+      if (Object.values(amounts).some((amount) => !Number.isFinite(amount) || amount <= 0)) {
+        setError("Fixed currency discounts must be greater than zero. Leave a currency blank when it is unavailable.");
+        return;
+      }
     }
     setError("");
     onSubmit(event);
@@ -44,14 +56,16 @@ export default function PromoCodeForm({ form, courses, change, saving, onSubmit,
               <fieldset><legend className="mb-2 text-sm font-semibold">Discount type</legend>
                 <div className="promo-options">
                   <Option name="discount-type" checked={form.discountType === "percent"} onChange={() => change("discountType", "percent")}>Percentage (%)</Option>
-                  <Option name="discount-type" checked={form.discountType === "fixed"} onChange={() => change("discountType", "fixed")}>Fixed amount (฿)</Option>
+                  <Option name="discount-type" checked={form.discountType === "fixed"} onChange={() => change("discountType", "fixed")}>Fixed currency amounts</Option>
                 </div>
               </fieldset>
             </div>
-              <label className="block text-sm font-semibold">{form.discountType === "percent" ? "Percentage off" : "Amount off (THB)"}
-                <input required type="number" min="0.01" step="0.01" max={form.discountType === "percent" ? 100 : undefined} value={form.discountValue} onChange={(e) => change("discountValue", e.target.value)} placeholder={form.discountType === "percent" ? "20" : "500"} className={input} />
-              </label>
+              {form.discountType === "percent" ? <label className="block text-sm font-semibold">Percentage
+                <div className="relative"><input required type="number" min="0.01" step="0.01" max="100" value={form.discountValue} onChange={(e) => change("discountValue", e.target.value)} placeholder="10" className={`${input} pr-10`} /><span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-[#C97112]">%</span></div>
+                <span className="mt-2 block text-xs font-normal leading-5 text-[#765F55]">Applies automatically to the learner’s selected THB or MMK course price. Do not enter separate currency values.</span>
+              </label> : <div className="rounded-xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-3 text-sm leading-5 text-[#765F55]"><strong className="block text-[#2D2E30]">Fixed amount</strong>Set a separate amount for each currency where this promo should be available. We never convert between THB and MMK.</div>}
           </div>
+          {form.discountType === "fixed" ? <div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFFDF8] p-4 text-sm font-semibold">THB discount<div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-[#C97112]">฿</span><input type="number" min="0.01" step="0.01" value={form.fixedAmounts?.THB || ""} onChange={(e) => change("fixedAmounts", { ...form.fixedAmounts, THB: e.target.value })} placeholder="300" className={`${input} pl-8`} /></div><span className="mt-2 block text-xs font-normal text-[#765F55]">Blank means this fixed promo is unavailable in THB.</span></label><label className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFFDF8] p-4 text-sm font-semibold">MMK discount<div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-[#C97112]">Ks</span><input type="number" min="1" step="1" value={form.fixedAmounts?.MMK || ""} onChange={(e) => change("fixedAmounts", { ...form.fixedAmounts, MMK: e.target.value })} placeholder="10000" className={`${input} pl-10`} /></div><span className="mt-2 block text-xs font-normal text-[#765F55]">Blank means this fixed promo is unavailable in MMK.</span></label></div> : null}
         </fieldset>
 
         <fieldset disabled={locked || saving} className="min-w-0 border-t border-[#2D2E30]/10 pt-5">

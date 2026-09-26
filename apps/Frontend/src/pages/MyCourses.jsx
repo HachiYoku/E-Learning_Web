@@ -35,7 +35,7 @@ function MyCourses() {
         <div className="mx-auto max-w-7xl text-center">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Your learning space</p>
           <h1 className="mt-3 text-[clamp(2rem,6vw,3.3rem)] font-bold leading-[1.08] tracking-tight text-[#2D2E30]">
-            Continue your <span className="font-serif font-normal italic text-[#B96128]">journey.</span>
+            Continue your <span className="text-[#B96128]">journey.</span>
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-[#765F55] sm:text-base">
             Everything you have unlocked, ready whenever you are.

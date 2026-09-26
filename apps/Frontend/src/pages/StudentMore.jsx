@@ -1,18 +1,17 @@
-import { Bell, BookOpen, ChevronRight, Headphones, ReceiptText } from "lucide-react"
+import { BookOpen, ChevronRight, Headphones, Newspaper, ReceiptText } from "lucide-react"
+import { createElement } from "react"
 import { Link } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
-import { useNotification } from "../contexts/NotificationContext"
 
 const destinations = [
   { title: "Explore courses", description: "Browse every Arun Thai course", to: "/app/explore", icon: BookOpen, color: "bg-[#FFF1D0] text-[#C97112]" },
+  { title: "Blog", description: "Read Thai learning stories and tips", to: "/app/blog", icon: Newspaper, color: "bg-[#E8F3FA] text-[#367599]" },
   { title: "Course orders", description: "View payments and enrollment status", to: "/app/orders", icon: ReceiptText, color: "bg-[#E9F4EA] text-[#4D7C57]" },
   { title: "Help & support", description: "Send a question to the Arun Thai team", to: "/app/support", icon: Headphones, color: "bg-[#FFF1D0] text-[#C97112]" },
-  { title: "Notifications", description: "Course and payment updates", to: "/app/notifications", icon: Bell, color: "bg-[#F3EAFE] text-[#8055A6]" },
 ]
 
 function StudentMore() {
   const { user } = useAuth()
-  const { unreadCount } = useNotification()
   const profileImage = user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || "student"}`
 
   return (
@@ -25,11 +24,11 @@ function StudentMore() {
       </Link>
 
       <div className="mt-5 overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white">
-        {destinations.map(({ title, description, to, icon: Icon, color }, index) => (
+        {destinations.map(({ title, description, to, icon, color }, index) => (
           <Link key={to} to={to} className={`flex items-center gap-4 p-4 transition hover:bg-[#FFF9EA] ${index ? "border-t border-[#2D2E30]/10" : ""}`}>
-            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon className="h-5 w-5" /></span>
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${color}`}>{createElement(icon, { className: "h-5 w-5" })}</span>
             <span className="min-w-0 flex-1"><span className="block font-bold text-[#2D2E30]">{title}</span><span className="block truncate text-sm text-[#765F55]">{description}</span></span>
-            {title === "Notifications" && unreadCount > 0 ? <span className="rounded-full bg-[#E58C1A] px-2 py-1 text-xs font-bold text-white">{unreadCount > 9 ? "9+" : unreadCount}</span> : <ChevronRight className="h-5 w-5 text-[#9A8775]" />}
+            <ChevronRight className="h-5 w-5 text-[#9A8775]" />
           </Link>
         ))}
       </div>

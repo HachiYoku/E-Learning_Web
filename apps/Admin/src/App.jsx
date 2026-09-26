@@ -18,6 +18,7 @@ import Blogs from './pages/BlogManagement/Blogs'
 import AddBlog from './pages/BlogManagement/AddBlog'
 import EditBlog from './pages/BlogManagement/EditBlog'
 import ReviewPayment from './pages/Payment/ReviewPayment'
+import PaymentMethods from './pages/Payment/PaymentMethods'
 import Instructors from './pages/InstructorManagement/Instructors'
 import Analytics from './pages/Reports/Analytics'
 import Settings from './pages/Settings/GeneralSettings'
@@ -79,6 +80,7 @@ function App() {
             <Route path="/blog/add" element={<AddBlog />} />
             <Route path="/blog/edit/:id" element={<EditBlog />} />
             <Route path="/review-payment" element={<ReviewPayment />} />
+            <Route path="/payment-methods" element={<PaymentMethods />} />
             <Route path="/instructors" element={<Instructors />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />

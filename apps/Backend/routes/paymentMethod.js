@@ -1,0 +1,13 @@
+const express = require("express");
+const validateToken = require("../middleware/authMiddleware");
+const requireAdmin = require("../middleware/adminMiddleware");
+const { createImageUpload, validateImageFileContent } = require("../middleware/uploadValidation");
+const controller = require("../controllers/paymentMethodController");
+const router = express.Router();
+const upload = createImageUpload();
+router.get("/admin", validateToken, requireAdmin, controller.listPaymentMethods);
+router.post("/admin", validateToken, requireAdmin, upload.single("qrImage"), validateImageFileContent, controller.createPaymentMethod);
+router.put("/admin/:id", validateToken, requireAdmin, upload.single("qrImage"), validateImageFileContent, controller.updatePaymentMethod);
+router.patch("/admin/:id/active", validateToken, requireAdmin, controller.setPaymentMethodActive);
+router.delete("/admin/:id", validateToken, requireAdmin, controller.deletePaymentMethod);
+module.exports = router;

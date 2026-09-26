@@ -30,6 +30,7 @@ const proofs = new Set();
 const deleted = [];
 let uploadHook;
 let cleanupFails = false;
+let proofStreamHook;
 storage.uploadPaymentProof = async (_buffer, publicId) => {
   proofs.add(publicId);
   if (uploadHook) await uploadHook();
@@ -40,11 +41,16 @@ storage.deletePaymentProof = async (publicId) => {
   deleted.push(publicId);
   proofs.delete(publicId);
 };
+storage.streamPaymentProof = async (...args) => {
+  if (!proofStreamHook) throw new Error("No proof stream configured for this test");
+  return proofStreamHook(...args);
+};
 const User = require("../models/userModel");
 const Course = require("../models/courseModel");
 const Payment = require("../models/paymentModel");
 const Enrollment = require("../models/enrollmentModel");
 const Promo = require("../models/promoCodeModel");
+const PaymentMethod = require("../models/paymentMethodModel");
 const Redemption = require("../models/promoRedemptionModel");
 const Cleanup = require("../models/paymentProofCleanupModel");
 const { cleanFailedProof } = require("../services/paymentProofCleanup");
@@ -64,16 +70,23 @@ async function request(route, { method = "GET", body, access = adminToken } = {}
   });
   return { status: response.status, body: await response.json() };
 }
+async function requestRaw(route, { access } = {}) {
+  return fetch(base + route, { headers: access ? { Authorization: `Bearer ${access}` } : {} });
+}
 async function fixture({ withPromo = true, limit = 5 } = {}) {
   const student = await User.create({ name: "Student", email: `payment-${++serial}@example.test`, password: "unused", isActive: true, isVerified: true });
-  const course = await Course.create({ title: `Course ${serial}`, price: 3000, createdBy: admin._id });
-  const promo = withPromo ? await Promo.create({ code: `INTEGRITY-${serial}`, discountType: "fixed", discountValue: 500, usageLimit: limit }) : null;
-  return { student, course, promo };
+  const course = await Course.create({ title: `Course ${serial}`, price: 3000, originalPrice: 3000, prices: { THB: { price: 3000, originalPrice: 3000 } }, createdBy: admin._id });
+  const method = await PaymentMethod.create({ name: `THB method ${serial}`, currency: "THB", type: "qr", provider: "manual", isActive: true, createdBy: admin._id, updatedBy: admin._id });
+  const promo = withPromo ? await Promo.create({ code: `INTEGRITY-${serial}`, discountType: "fixed", discountValue: 500, fixedAmounts: { THB: 500 }, usageLimit: limit }) : null;
+  return { student, course, method, promo };
 }
 async function submit(f) {
   const body = new FormData();
   body.append("paymentProof", new Blob([Buffer.from("89504e470d0a1a0a00000000", "hex")], { type: "image/png" }), "proof.png");
   if (f.promo) body.append("promoCode", f.promo.code);
+  body.append("paymentMethodId", String(f.method._id));
+  body.append("courseMutationVersion", "0");
+  body.append("paymentMethodMutationVersion", "0");
   body.append("amount", "1"); // Must be ignored.
   return request(`/payments/course/${f.course._id}`, { method: "POST", access: token(f.student), body });
 }
@@ -117,7 +130,7 @@ before(async () => {
   await new Promise((resolve) => server.once("listening", resolve));
   base = `http://127.0.0.1:${server.address().port}`;
 });
-afterEach(() => { mock.restoreAll(); uploadHook = undefined; cleanupFails = false; });
+afterEach(() => { mock.restoreAll(); uploadHook = undefined; cleanupFails = false; proofStreamHook = undefined; });
 after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
   await mongoose.disconnect();
@@ -141,6 +154,42 @@ test("real multipart submission creates linked records and approval commits enro
   assert.equal((await Payment.findById(payment._id)).status, "approved");
   assert.ok(await Enrollment.exists({ userId: f.student._id, courseId: f.course._id, paymentId: payment._id }));
   assert.equal((await Redemption.findById(redemption._id)).active, true);
+});
+
+test("a rejected owner can stream their private proof without exposing storage details", async () => {
+  const f = await fixture({ withPromo: false });
+  const payment = await Payment.create({ userId: f.student._id, courseId: f.course._id, amount: 3000, status: "rejected", paymentProofPublicId: "arun_thai/payment_proofs/rejected-owner", paymentProofFormat: "png", paymentProofStorage: "authenticated" });
+  proofStreamHook = async () => new Response(Buffer.from("proof-image"), { headers: { "content-type": "image/png" } });
+  const response = await requestRaw(`/payments/${payment._id}/student-proof`, { access: token(f.student) });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/png");
+  assert.equal(response.headers.get("cache-control"), "private, no-store, max-age=0");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(Buffer.from(await response.arrayBuffer()).toString(), "proof-image");
+});
+
+test("student proof streaming rejects unauthenticated, non-owner, and non-rejected payments", async () => {
+  const f = await fixture({ withPromo: false });
+  const other = await User.create({ name: "Other student", email: `other-proof-${++serial}@example.test`, password: "unused", isActive: true, isVerified: true });
+  const rejected = await Payment.create({ userId: f.student._id, courseId: f.course._id, amount: 3000, status: "rejected", paymentProofPublicId: "arun_thai/payment_proofs/rejected-private", paymentProofFormat: "png", paymentProofStorage: "authenticated" });
+  const pending = await Payment.create({ userId: f.student._id, courseId: new mongoose.Types.ObjectId(), amount: 3000, status: "pending", paymentProofPublicId: "arun_thai/payment_proofs/pending-private", paymentProofFormat: "png", paymentProofStorage: "authenticated" });
+  const approved = await Payment.create({ userId: f.student._id, courseId: new mongoose.Types.ObjectId(), amount: 3000, status: "approved", paymentProofPublicId: "arun_thai/payment_proofs/approved-private", paymentProofFormat: "png", paymentProofStorage: "authenticated" });
+  assert.equal((await requestRaw(`/payments/${rejected._id}/student-proof`)).status, 401);
+  assert.equal((await requestRaw(`/payments/${rejected._id}/student-proof`, { access: token(other) })).status, 404);
+  assert.equal((await requestRaw(`/payments/${pending._id}/student-proof`, { access: token(f.student) })).status, 404);
+  assert.equal((await requestRaw(`/payments/${approved._id}/student-proof`, { access: token(f.student) })).status, 404);
+});
+
+test("student proof streaming safely hides missing and legacy rejected proofs and payment history still omits proof identifiers", async () => {
+  const f = await fixture({ withPromo: false });
+  const legacy = await Payment.create({ userId: f.student._id, courseId: f.course._id, amount: 3000, status: "rejected", paymentImage: "https://res.cloudinary.com/example/image/upload/legacy.png", paymentProofStorage: "legacy" });
+  const missing = await Payment.create({ userId: f.student._id, courseId: new mongoose.Types.ObjectId(), amount: 3000, status: "rejected" });
+  assert.equal((await requestRaw(`/payments/${legacy._id}/student-proof`, { access: token(f.student) })).status, 404);
+  assert.equal((await requestRaw(`/payments/${missing._id}/student-proof`, { access: token(f.student) })).status, 404);
+  const history = await request("/payments/my", { access: token(f.student) });
+  assert.equal(history.status, 200);
+  assert.equal(JSON.stringify(history.body).includes("paymentProofPublicId"), false);
+  assert.equal(JSON.stringify(history.body).includes("rejected-private"), false);
 });
 
 test("enrollment failure after its database write rolls back approval and enrollment", async () => {
@@ -282,7 +331,7 @@ test("promo edit racing first use cannot repurpose a redeemed offer", async () =
   assert.equal(results[0].status, 201);
   const saved = await Promo.findById(f.promo._id);
   const payment = await Payment.findById(results[0].body._id);
-  assert.equal(payment.discountAmount, saved.discountValue);
+  assert.equal(payment.discountAmount, saved.fixedAmounts?.THB ?? saved.discountValue);
   assert.ok([200, 400].includes(results[1].status));
 });
 

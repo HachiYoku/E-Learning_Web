@@ -8,8 +8,18 @@ const availabilityMessages = {
   exhausted: "This promo code has reached its usage limit.",
   "wrong-course": "This promo code is not available for this course.",
   "already-used": "You have already used this promo code.",
+  "unsupported-currency": "This fixed promo code is not available for the selected payment currency.",
   unavailable: "This promo code is not available.",
 };
+
+const currencyFractionDigits = Object.freeze({ THB: 2, MMK: 0 });
+
+function roundCurrency(amount, currency) {
+  const digits = currencyFractionDigits[currency];
+  if (digits === undefined) throw new Error("Unsupported currency.");
+  const factor = 10 ** digits;
+  return Math.round((Number(amount) + Number.EPSILON) * factor) / factor;
+}
 
 function getPromoAvailability(promo, courseId, now = new Date()) {
   if (!promo || promo.archivedAt) return "unavailable";
@@ -21,11 +31,21 @@ function getPromoAvailability(promo, courseId, now = new Date()) {
   return null;
 }
 
-function calculatePromoDiscount(originalAmount, promo) {
-  const amount = Math.max(0, Number(originalAmount) || 0);
-  const rawDiscount = promo.discountType === "percent" ? amount * Number(promo.discountValue) / 100 : Number(promo.discountValue);
-  const discountAmount = Math.min(amount, Math.max(0, rawDiscount || 0));
-  return { originalAmount: amount, discountAmount, finalAmount: Math.max(0, amount - discountAmount) };
+function getPromoCurrencyAvailability(promo, currency) {
+  if (promo?.discountType === "fixed" && (!promo.fixedAmounts || promo.fixedAmounts[currency] === undefined || promo.fixedAmounts[currency] === null)) {
+    return "unsupported-currency";
+  }
+  return null;
+}
+
+function calculatePromoDiscount(originalAmount, promo, currency = null) {
+  const amount = currency ? roundCurrency(Math.max(0, Number(originalAmount) || 0), currency) : Math.max(0, Number(originalAmount) || 0);
+  const fixedAmount = currency ? promo.fixedAmounts?.[currency] : promo.discountValue;
+  const rawDiscount = promo.discountType === "percent" ? amount * Number(promo.discountValue) / 100 : Number(fixedAmount);
+  const roundedDiscount = currency ? roundCurrency(rawDiscount, currency) : rawDiscount;
+  const discountAmount = Math.min(amount, Math.max(0, roundedDiscount || 0));
+  const finalAmount = Math.max(0, currency ? roundCurrency(amount - discountAmount, currency) : amount - discountAmount);
+  return { originalAmount: amount, discountAmount, finalAmount };
 }
 
 async function hasPromoHistory(promo, session = null) {
@@ -35,4 +55,4 @@ async function hasPromoHistory(promo, session = null) {
   return Boolean(redemption || payment);
 }
 
-module.exports = { availabilityMessages, getPromoAvailability, calculatePromoDiscount, hasPromoHistory };
+module.exports = { availabilityMessages, currencyFractionDigits, roundCurrency, getPromoAvailability, getPromoCurrencyAvailability, calculatePromoDiscount, hasPromoHistory };

@@ -15,21 +15,37 @@ const validateFields = (body) => {
   const code = cleanCode(body.code);
   const discountType = body.discountType;
   const discountValue = Number(body.discountValue);
+  const fixedAmountsWasSupplied = body.fixedAmounts !== undefined;
+  let fixedAmounts = body.fixedAmounts;
+  if (typeof fixedAmounts === "string") { try { fixedAmounts = JSON.parse(fixedAmounts || "{}"); } catch (_error) { throw new Error("Fixed currency amounts must be valid."); } }
+  fixedAmounts = fixedAmounts && typeof fixedAmounts === "object" ? fixedAmounts : {};
+  const normalizedFixedAmounts = {};
+  for (const currency of ["THB", "MMK"]) {
+    if (fixedAmounts[currency] === undefined || fixedAmounts[currency] === null || fixedAmounts[currency] === "") continue;
+    const amount = Number(fixedAmounts[currency]);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error(`Enter a valid fixed ${currency} amount.`);
+    normalizedFixedAmounts[currency] = amount;
+  }
   if (!/^[A-Z0-9-]{3,40}$/.test(code)) throw new Error("Use 3-40 letters, numbers, or hyphens for the code.");
   if (!["percent", "fixed"].includes(discountType) || !Number.isFinite(discountValue) || discountValue <= 0 || (discountType === "percent" && discountValue > 100)) throw new Error("Enter a valid discount.");
+  // Compatibility only for existing API callers during the rollout. The new
+  // admin form always supplies explicit values; old fixed promos remain THB.
+  if (discountType === "fixed" && !Object.keys(normalizedFixedAmounts).length && !fixedAmountsWasSupplied) normalizedFixedAmounts.THB = discountValue;
+  if (discountType === "fixed" && !Object.keys(normalizedFixedAmounts).length) throw new Error("Configure at least one fixed currency amount.");
   const startsAt = asDate(body.startsAt);
   const expiresAt = asDate(body.expiresAt);
   const usageLimit = body.usageLimit ? Number(body.usageLimit) : null;
   const applicableCourses = Array.isArray(body.applicableCourses) ? body.applicableCourses.map(String) : [];
   if ((startsAt && Number.isNaN(startsAt.getTime())) || (expiresAt && Number.isNaN(expiresAt.getTime())) || (startsAt && expiresAt && expiresAt < startsAt)) throw new Error("Enter valid dates, with expiry after the start date.");
   if (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit < 1)) throw new Error("Usage limit must be a whole number of at least 1.");
-  return { code, discountType, discountValue, applicableCourses, startsAt, expiresAt, usageLimit, isActive: body.isActive !== false };
+  return { code, discountType, discountValue, fixedAmounts: discountType === "fixed" ? normalizedFixedAmounts : {}, applicableCourses, startsAt, expiresAt, usageLimit, isActive: body.isActive !== false };
 };
 
 const changedUsedFields = (promo, fields) => (
   promo.code !== fields.code
   || promo.discountType !== fields.discountType
   || Number(promo.discountValue) !== fields.discountValue
+  || JSON.stringify(promo.fixedAmounts?.toObject?.() || promo.fixedAmounts || {}) !== JSON.stringify(fields.fixedAmounts || {})
   || Number(promo.usageLimit || 0) !== Number(fields.usageLimit || 0)
   || !sameDate(promo.startsAt, fields.startsAt)
   || !sameDate(promo.expiresAt, fields.expiresAt)

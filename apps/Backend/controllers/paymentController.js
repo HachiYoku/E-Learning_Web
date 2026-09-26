@@ -1,4 +1,5 @@
 const Payment = require("../models/paymentModel");
+const Enrollment = require("../models/enrollmentModel");
 const User = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
@@ -6,9 +7,11 @@ const { emitAdminEvent } = require("../realtime/socketServer");
 const sendEmail = require("../services/sendEmail");
 const { writeAuditLog } = require("../services/auditLogger");
 const { submitManualPayment, reviewManualPayment } = require("../services/manualPayment");
+const { calculateCheckout, listAvailablePaymentMethods } = require("../services/checkoutCalculation");
 const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
 const { uploadPaymentProof, migrateLegacyPaymentProof, streamPaymentProof, deletePaymentProof } = require("../services/paymentProofStorage");
 const { PAYMENT_PROOF_ACCESS_TTL_SECONDS, issuePaymentProofAccessToken, verifyPaymentProofAccessToken } = require("../services/paymentProofAccess");
+const { courseKey, deriveCoursePaymentStates } = require("../services/paymentCourseState");
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -20,7 +23,7 @@ const escapeHtml = (value = "") =>
 
 const PAYMENT_PROOF_FIELDS = "+paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage";
 
-const serializePayment = (payment) => {
+const serializePayment = (payment, coursePaymentState = null) => {
   const value = typeof payment.toObject === "function" ? payment.toObject() : { ...payment };
   const hasPaymentProof = Boolean(value.paymentProofPublicId || value.paymentImagePublicId || value.paymentImage);
   const proofStorage = value.paymentProofStorage || (hasPaymentProof ? "legacy" : null);
@@ -29,7 +32,7 @@ const serializePayment = (payment) => {
   delete value.paymentProofPublicId;
   delete value.paymentProofFormat;
   delete value.paymentProofStorage;
-  return { ...value, hasPaymentProof, proofStorage };
+  return { ...value, hasPaymentProof, proofStorage, ...(coursePaymentState ? { coursePaymentState } : {}) };
 };
 
 const getPaymentProofRecord = (paymentId) => Payment.findById(paymentId).select(PAYMENT_PROOF_FIELDS);
@@ -135,6 +138,9 @@ const createPayment = async (req, res) => {
     if (!req.file?.buffer) return res.status(400).json({ message: "Payment proof is required" });
     const { payment, course } = await submitManualPayment({
       userId: req.user.id, courseId: req.params.courseId,
+      paymentMethodId: req.body.paymentMethodId,
+      courseMutationVersion: req.body.courseMutationVersion,
+      paymentMethodMutationVersion: req.body.paymentMethodMutationVersion,
       code: String(req.body.promoCode || "").trim().toUpperCase(), buffer: req.file.buffer,
     });
     await afterPaymentCommit(async () => emitAdminEvent("admin:payment-updated"));
@@ -150,13 +156,46 @@ const createPayment = async (req, res) => {
   }
 };
 
+// Informational only: no proof upload, Payment, PromoRedemption, capacity
+// reservation, or enrollment is created by this endpoint.
+const quoteCheckout = async (req, res) => {
+  try {
+    const quote = await calculateCheckout({
+      userId: req.user.id, courseId: req.params.courseId,
+      paymentMethodId: req.body?.paymentMethodId, promoCode: req.body?.promoCode,
+    });
+    return res.status(200).json(quote);
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to calculate checkout quote" });
+  }
+};
+
+const getCheckoutPaymentMethods = async (req, res) => {
+  try {
+    const paymentMethods = await listAvailablePaymentMethods({ courseId: req.params.courseId, isAdmin: req.user.role === "admin" });
+    return res.status(200).json(paymentMethods);
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to load payment methods" });
+  }
+};
+
 const getMyPayments = async (req, res) => {
   try {
     const payments = await Payment.find({ userId: req.user.id }).select(PAYMENT_PROOF_FIELDS)
-      .populate("courseId", "title price thumbnail")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1, _id: -1 });
+    // Preserve the stored reference before population so a deleted Course can
+    // still be grouped with its historical payment attempts.
+    const paymentCourseKeys = new Map(payments.map((payment) => [String(payment._id), courseKey(payment)]));
+    const courseIds = [...new Set([...paymentCourseKeys.values()].filter(Boolean))];
+    const enrollments = courseIds.length
+      ? await Enrollment.find({ userId: req.user.id, courseId: { $in: courseIds } }).select("courseId").lean()
+      : [];
+    const enrolledCourseIds = new Set(enrollments.map((enrollment) => String(enrollment.courseId)));
+    const stateInputs = payments.map((payment) => ({ ...payment.toObject(), courseKey: paymentCourseKeys.get(String(payment._id)) }));
+    const states = deriveCoursePaymentStates(stateInputs, enrolledCourseIds);
+    await Payment.populate(payments, { path: "courseId", select: "title price thumbnail" });
 
-    return res.status(200).json(payments.map(serializePayment));
+    return res.status(200).json(payments.map((payment) => serializePayment(payment, states.get(String(payment._id)) || null)));
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -259,6 +298,34 @@ const streamAuthorizedPaymentProof = async (req, res) => {
   }
 };
 
+// Rejected receipts are immutable historical evidence. This owner-only route
+// intentionally streams bytes through the API; it never discloses a
+// Cloudinary URL, public ID, storage type, or format to the student.
+const streamStudentRejectedPaymentProof = async (req, res) => {
+  try {
+    const payment = await Payment.findOne({
+      _id: req.params.paymentId,
+      userId: req.user.id,
+      status: "rejected",
+    }).select(PAYMENT_PROOF_FIELDS);
+    if (!payment || payment.paymentProofStorage !== "authenticated" || !payment.paymentProofPublicId) {
+      return res.status(404).json({ message: "Payment proof not found" });
+    }
+    const proof = await streamPaymentProof(payment.paymentProofPublicId, payment.paymentProofFormat);
+    res.status(200).set({
+      "Content-Type": proof.headers.get("content-type") || "application/octet-stream",
+      "Cache-Control": "private, no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff",
+    });
+    return res.send(Buffer.from(await proof.arrayBuffer()));
+  } catch (error) {
+    if (error.name === "CastError") return res.status(404).json({ message: "Payment proof not found" });
+    const safeMessage = String(error.message || "unknown error").replace(/https?:\/\/\S+/gi, "[redacted-url]");
+    console.error("Student payment-proof delivery failed", { name: error.name, message: safeMessage });
+    return res.status(502).json({ message: "Payment proof is temporarily unavailable" });
+  }
+};
+
 const getPendingPaymentCount = async (_req, res) => {
   try {
     return res.status(200).json({ count: await Payment.countDocuments({ status: "pending" }) });
@@ -312,12 +379,15 @@ const rejectPayment = reviewPayment("rejected");
 
 module.exports = {
   createPayment,
+  quoteCheckout,
+  getCheckoutPaymentMethods,
   getMyPayments,
   getAllPayments,
   getPendingPaymentCount,
   replacePaymentProof,
   getPaymentProofAccess,
   streamAuthorizedPaymentProof,
+  streamStudentRejectedPaymentProof,
   approvePayment,
   rejectPayment,
 };

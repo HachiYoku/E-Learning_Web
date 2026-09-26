@@ -1,466 +1,54 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import {
-  ArrowLeft,
-  CircleCheck,
-  CreditCard,
-  LockKeyhole,
-  Maximize2,
-  Star,
-  TvMinimalPlay,
-  Upload,
-  X,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, CircleCheck, CreditCard, Landmark, Maximize2, Upload, X } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useToast } from "../contexts/ToastContext";
 import { fetchCourseById } from "../services/courseService";
-import { createPayment, fetchMyPayments } from "../services/paymentService";
-import { fetchPaymentSettings } from "../services/paymentSettingsService";
+import { createPayment, fetchMyPayments, fetchPaymentMethods, quotePayment } from "../services/paymentService";
 import { validateFileSize } from "../utils/fileValidation";
-import { validatePromoCode } from "../services/promoCodeService";
+import { appliedPromoDetails, hasDiscountedCoursePrice, promoErrorMessage, reconcilePromoForQuote } from "../utils/paymentPromo";
 
-const paymentSteps = ["Payment", "Upload Receipt", "Verification"];
+const steps = ["Choose payment method", "Review amount", "Make payment", "Upload proof"];
+const money = (amount, currency) => `${currency === "MMK" ? "Ks " : "฿"}${Number(amount || 0).toLocaleString()}`;
 
-function Payment() {
-  const { courseId } = useParams();
-  const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [course, setCourse] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [paymentQr, setPaymentQr] = useState("");
-  const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
-  const [receiptFile, setReceiptFile] = useState(null);
-  const [receiptName, setReceiptName] = useState("");
-  const [receiptPreview, setReceiptPreview] = useState("");
-  const [promoInput, setPromoInput] = useState("");
-  const [promo, setPromo] = useState(null);
-  const [promoMessage, setPromoMessage] = useState("");
-  const [promoLoading, setPromoLoading] = useState(false);
-  const [hasSubmittedProof, setHasSubmittedProof] = useState(false);
-  const { showToast } = useToast();
+export default function Payment() {
+  const { courseId } = useParams(); const navigate = useNavigate(); const { showToast } = useToast();
+  const [course, setCourse] = useState(null); const [methods, setMethods] = useState([]); const [loading, setLoading] = useState(true);
+  const [methodId, setMethodId] = useState(""); const [quote, setQuote] = useState(null); const [promoInput, setPromoInput] = useState(""); const [promo, setPromo] = useState(null); const [promoMessage, setPromoMessage] = useState(""); const [promoLoading, setPromoLoading] = useState(false);
+  const [receiptFile, setReceiptFile] = useState(null); const [receiptPreview, setReceiptPreview] = useState(""); const [error, setError] = useState(""); const [submitting, setSubmitting] = useState(false); const [submitted, setSubmitted] = useState(false); const [detailsChanged, setDetailsChanged] = useState(false); const [qrOpen, setQrOpen] = useState(false);
+  const receiptInputRef = useRef(null);
+  const method = quote?.paymentMethod; const recipient = method?.recipient || {}; const paymentQr = method?.qrImage?.url || ""; const courseDiscounted = hasDiscountedCoursePrice(quote); const appliedPromo = appliedPromoDetails(quote);
 
-  useEffect(() => {
-    async function loadCourse() {
-      try {
-        setLoading(true);
-        setError("");
-        const [loadedCourse, paymentSettings, payments] = await Promise.all([
-          fetchCourseById(courseId),
-          fetchPaymentSettings(),
-          fetchMyPayments(),
-        ]);
-        setCourse(loadedCourse);
-        setPaymentQr(loadedCourse.paymentQr || paymentSettings.paymentQr || "");
-        const hasPendingProof = payments.some((payment) =>
-          payment.status === "pending" && String(payment.course?.id) === String(courseId)
-        );
-        setHasSubmittedProof(hasPendingProof);
-        if (hasPendingProof) setCurrentStep(3);
-      } catch (loadError) {
-        setError(loadError.message);
-      } finally {
-        setLoading(false);
-      }
-    }
+  useEffect(() => { (async () => { try { const [loadedCourse, loadedMethods, payments] = await Promise.all([fetchCourseById(courseId), fetchPaymentMethods(courseId), fetchMyPayments()]); setCourse(loadedCourse); setMethods(loadedMethods); setSubmitted(payments.some((payment) => payment.status === "pending" && String(payment.course?.id) === String(courseId))); } catch (loadError) { setError(loadError.message); } finally { setLoading(false); } })(); }, [courseId]);
+  useEffect(() => () => { if (receiptPreview) URL.revokeObjectURL(receiptPreview); }, [receiptPreview]);
 
-    loadCourse();
-  }, [courseId]);
+  const applyQuote = (next, previousCode = promoInput) => { const state = reconcilePromoForQuote(next, previousCode); setQuote(next); setPromo(state.promo); setPromoMessage(""); if (!state.showPromoInput) setPromoInput(""); return next; };
+  const getQuote = async (selectedId = methodId, code = promoInput) => applyQuote(await quotePayment(courseId, selectedId, code.trim()), code);
+  const selectMethod = async (selectedId) => { const oldCode = promoInput.trim(); setMethodId(selectedId); setQuote(null); setPromo(null); setDetailsChanged(false); setError(""); try { const next = await getQuote(selectedId, ""); if (!hasDiscountedCoursePrice(next) && oldCode) await getQuote(selectedId, oldCode); } catch (requestError) { setError(requestError.message); } };
+  const applyPromo = async () => { if (!methodId) return setPromoMessage("Choose a payment method first."); if (!promoInput.trim()) return setPromoMessage("Enter a promo code first."); try { setPromoLoading(true); setPromoMessage(""); await getQuote(methodId, promoInput); } catch (requestError) { setPromo(null); setPromoMessage(promoErrorMessage(requestError, quote?.currency)); } finally { setPromoLoading(false); } };
+  const removePromo = async () => { try { setPromoLoading(true); setPromoMessage(""); setPromoInput(""); await getQuote(methodId, ""); } catch (requestError) { setPromoMessage(promoErrorMessage(requestError, quote?.currency)); } finally { setPromoLoading(false); } };
+  const changeReceipt = (event) => { const file = event.target.files?.[0]; const invalid = validateFileSize(file, "Payment slip"); if (invalid) { setError(invalid); event.target.value = ""; return; } if (receiptPreview) URL.revokeObjectURL(receiptPreview); setReceiptFile(file || null); setReceiptPreview(file ? URL.createObjectURL(file) : ""); setError(""); };
+  const refreshAfterChange = async () => { try { await getQuote(methodId, ""); setDetailsChanged(true); } catch (requestError) { setError(requestError.message); } };
+  const submit = async () => { if (!quote) return setError("Choose a payment method and review the amount first."); if (!receiptFile) return setError("Upload a clear payment slip before submitting."); if (detailsChanged) return setError("Review the updated payment details before submitting your slip."); try { setSubmitting(true); setError(""); await createPayment(courseId, receiptFile, methodId, promo?.code, quote); setSubmitted(true); showToast({ title: "Payment submitted", message: "Your payment slip is waiting for verification.", type: "success" }); } catch (submitError) { if (submitError.status === 409) { setError("Payment details changed. The latest amount and instructions have been loaded below."); await refreshAfterChange(); } else { setError(submitError.message); showToast({ title: "Could not submit payment", message: submitError.message, type: "error" }); } } finally { setSubmitting(false); } };
 
-  useEffect(() => {
-    return () => {
-      if (receiptPreview) URL.revokeObjectURL(receiptPreview);
-    };
-  }, [receiptPreview]);
+  if (loading) return <div className="min-h-screen bg-[#FFF9EA]"><Navbar /><div className="flex h-screen items-center justify-center"><LoadingSpinner message="Loading checkout…" /></div></div>;
+  if (!course) return <div className="min-h-screen bg-[#FFF9EA]"><Navbar /><div className="flex h-screen items-center justify-center px-4 text-center text-[#765F55]">{error || "Course not found"}</div></div>;
+  if (submitted) return <StatusScreen course={course} navigate={navigate} />;
 
-  const handleReceiptChange = (e) => {
-    const file = e.target.files?.[0];
-    const sizeError = validateFileSize(file, "Receipt image");
-
-    if (sizeError) {
-      setReceiptFile(null);
-      setReceiptName("");
-      setReceiptPreview("");
-      setError(sizeError);
-      e.target.value = "";
-      return;
-    }
-
-    setReceiptFile(file || null);
-    setReceiptName(file?.name || "");
-    setReceiptPreview(file ? URL.createObjectURL(file) : "");
-    setError("");
-  };
-
-  const promoLocked = hasSubmittedProof || currentStep === 3;
-  const promoLockedMessage = "A promo code cannot be changed after your payment proof has been submitted.";
-
-  const applyPromo = async () => {
-    if (promoLocked) return setPromoMessage(promoLockedMessage);
-    if (course?.hasDiscount) return setPromoMessage("This course is already discounted, so a promo code cannot be applied.");
-    if (!promoInput.trim()) return setPromoMessage("Enter a promo code first.");
-    try { setPromoLoading(true); setPromoMessage(""); const result = await validatePromoCode(promoInput, courseId); setPromo(result); setPromoInput(result.code); }
-    catch (err) { setPromo(null); setPromoMessage(err.message); } finally { setPromoLoading(false); }
-  };
-
-  const handleUploadReceipt = async () => {
-    if (!receiptFile) {
-      setError("Please upload your payment receipt first.");
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      setError("");
-      await createPayment(courseId, receiptFile, promo?.code);
-      showToast({
-        title: "Payment submitted",
-        message: "Your receipt has been uploaded and is pending review.",
-        type: "success",
-      });
-      setHasSubmittedProof(true);
-      setCurrentStep(3);
-    } catch (submitError) {
-      setError(submitError.message);
-      showToast({
-        title: "Upload failed",
-        message: submitError.message,
-        type: "error",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-white">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <LoadingSpinner message="Loading course..." />
-        </div>
-      </div>
-    );
-  }
-
-  if (!course) {
-    return (
-      <div className="min-h-screen bg-white">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <p className="text-2xl text-gray-600">
-            {error || "Course not found"}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[#FFFDF8] text-[#2D2E30]">
-      <Navbar />
-
-      <div className="bg-[#FFF9EA] px-4 pt-6 sm:px-6 sm:pt-8 md:px-10">
-        <div className="max-w-7xl mx-auto">
-          <button
-            onClick={() => navigate(`/enroll/${courseId}`)}
-            className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to order summary
-          </button>
-        </div>
-      </div>
-
-      <main className="bg-[#FFF9EA] px-4 pb-14 pt-8 sm:px-6 sm:pb-16 md:px-10 md:pb-20">
-        <div className="max-w-7xl mx-auto">
-          <div className="mx-auto mb-8 max-w-3xl text-center sm:mb-10 md:mb-12">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Secure checkout</p>
-            <h1 className="mt-3 text-[clamp(1.65rem,5vw,2.65rem)] font-bold leading-[1.15] tracking-tight text-[#2D2E30]">
-              Complete your <span className="font-serif font-normal italic text-[#B96128]">enrollment.</span>
-            </h1>
-            <p className="mt-4 text-sm leading-relaxed text-[#765F55] sm:text-base">Pay securely, upload your receipt, and we’ll take care of the verification.</p>
-          </div>
-
-          <div className="grid grid-cols-1 items-start gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
-            <aside className="md:col-span-1 lg:col-span-2">
-              <div className="overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-4 shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] sm:p-6 md:p-8 lg:sticky lg:top-20">
-                <div className="mb-5 overflow-hidden rounded-[1.3rem] bg-[#F3E9D9] sm:mb-6">
-                {course.image ? (
-                  <img
-                    src={course.image}
-                    alt={course.title}
-                    className="h-48 w-full object-cover sm:h-56 md:h-64"
-                  />
-                ) : (
-                  <div className="flex h-48 w-full items-center justify-center text-sm text-[#765F55] sm:h-56 md:h-64">
-                    No image
-                  </div>
-                )}
-              </div>
-
-                <span className="inline-block rounded-full border border-[#E58C1A]/20 bg-[#FFF4D8] px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Your selected course</span>
-                <h2 className="mt-3 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl">{course.title}</h2>
-                <div className="mt-4 flex flex-col gap-3 border-y border-[#2D2E30]/10 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5">
-                    <div className="flex items-center gap-2">
-                      <TvMinimalPlay
-                        className="h-5 w-5 text-[#E58C1A]"
-                        strokeWidth={2}
-                        aria-hidden="true"
-                      />
-                      <span className="text-[#2D2E30] font-semibold text-sm sm:text-base">
-                        {course.lessons} lessons
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Star className="h-4 w-4 fill-[#F4B63F] text-[#F4B63F]" aria-hidden="true" />
-                      <span className="text-[#2D2E30] font-semibold text-sm sm:text-base">
-                        ({course.rating.toFixed(1)}/5)
-                      </span>
-                    </div>
-                </div>
-                <div className="mt-5 flex items-end justify-between gap-4">
-                  <div className="w-full"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">{promo ? "Payment summary" : "Total"}</p>{promo ? <div className="mt-2 max-w-sm space-y-1 text-sm text-[#765F55]"><div className="flex justify-between gap-6"><span>Course price</span><span>฿{promo.originalAmount.toLocaleString()}</span></div><div className="flex justify-between gap-6 text-[#246B35]"><span>Promo {promo.code}</span><span>-฿{promo.discountAmount.toLocaleString()}</span></div><div className="border-t border-[#2D2E30]/10 pt-2 text-base font-bold text-[#2D2E30]"><div className="flex justify-between gap-6"><span>Total</span><span className="text-[#B96128]">฿{promo.finalAmount.toLocaleString()}</span></div></div></div> : <><p className="mt-1 text-2xl font-bold text-[#B96128]">{course.price}</p>{course.hasDiscount ? <p className="mt-1 text-sm text-[#9B867C]">Course discount included (was {course.originalPrice})</p> : null}</>}</div>
-                  <CreditCard className="h-6 w-6 text-[#E58C1A]" aria-hidden="true" />
-                </div>
-              </div>
-            </aside>
-
-            <section className="overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] md:col-span-1 lg:col-span-1">
-              <div className="relative overflow-hidden bg-[#2D2E30] px-5 py-6 sm:px-6 sm:py-7 md:px-8">
-                <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-[#F8C56A]/15" aria-hidden="true" />
-                <div className="absolute -bottom-20 right-24 h-32 w-32 rounded-full border border-white/10" aria-hidden="true" />
-                <div className="relative flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 text-[#F8C56A]"><span className="h-1.5 w-1.5 rounded-full bg-[#F8C56A]" /><p className="text-xs font-bold uppercase tracking-[0.18em]">Secure payment</p></div>
-                    <h2 className="mt-3 text-xl font-bold tracking-tight text-white sm:text-2xl">Finish your payment</h2>
-                    <p className="mt-2 max-w-md text-xs leading-relaxed text-white/65 sm:text-sm">Scan, pay, then upload your receipt. Your course access will be ready once it’s verified.</p>
-                  </div>
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-[#F8C56A] sm:h-12 sm:w-12"><LockKeyhole className="h-5 w-5" aria-hidden="true" /></div>
-                </div>
-              </div>
-
-              <div className="mx-5 mt-5 rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-2 sm:mx-6 sm:mt-6 md:mx-8">
-                <div className="grid grid-cols-3 gap-2">
-                  {paymentSteps.map((label, index) => {
-                    const stepNumber = index + 1;
-                    const isCompleted = currentStep > stepNumber;
-                    const isActive = currentStep === stepNumber;
-
-                    return (
-                      <div
-                        key={label}
-                        className={`rounded-xl px-2 py-3 text-center transition-all sm:px-3 ${
-                          isActive
-                            ? "bg-[#2D2E30] text-white shadow-[0_8px_18px_-10px_rgba(45,46,48,0.8)]"
-                            : isCompleted
-                              ? "bg-[#FFF1CE] text-[#9A5816]"
-                              : "bg-white text-[#9A8775]"
-                        }`}
-                      >
-                        <div className={`mx-auto mb-2 flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${
-                          isActive
-                            ? "bg-[#F8C56A] text-[#2D2E30]"
-                            : isCompleted
-                              ? "bg-[#E58C1A] text-white"
-                              : "bg-[#F1E8DC] text-[#9A8775]"
-                        }`}>
-                          {isCompleted ? "✓" : stepNumber}
-                        </div>
-                        <p className="text-[10px] font-bold leading-tight sm:text-xs">{label}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6 md:px-8 md:pb-8">
-              {course.hasDiscount ? <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Course discount applied</p><p className="mt-1 text-sm leading-5 text-[#765F55]">Promo codes cannot be combined with this course discount.</p></div> : promoLocked ? null : <div className="mb-5 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4"><p className="text-sm font-bold text-[#2D2E30]">Promo code</p><div className="mt-2 flex gap-2"><input value={promoInput} onChange={(event) => { setPromoInput(event.target.value.toUpperCase()); setPromo(null); setPromoMessage(""); }} placeholder="Enter promo code" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "..." : "Apply"}</button></div>{promo ? <div className="mt-3 rounded-xl border border-[#7EAF85]/30 bg-white px-3 py-2 text-sm text-[#246B35]"><strong>{promo.code} applied.</strong> The payment summary shows the server-validated total.</div> : promoMessage ? <p className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p> : null}</div>}
-              {/* Step 1 — QR Code */}
-              {currentStep === 1 ? (
-                <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#FFF4D8] text-xs font-bold text-[#C97112]">1</span>
-                    <div><p className="font-semibold text-sm text-[#2D2E30] sm:text-base mb-2">
-                      Step 1. Scan the QR code to complete your payment.
-                    </p>
-                    <p className="text-xs sm:text-sm text-[#765F55]">
-                      Next step: Upload your payment receipt.
-                    </p></div>
-                  </div>
-
-                  <div className="rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-4 sm:p-6 flex items-center justify-center">
-                    {paymentQr ? (
-                      <button
-                        type="button"
-                        onClick={() => setQrPreviewOpen(true)}
-                        className="group relative rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E58C1A] focus:ring-offset-2"
-                        aria-label="Open payment QR preview"
-                      >
-                        <img
-                          src={paymentQr}
-                          alt="Bank QR code for payment"
-                          className="h-40 w-40 object-contain transition-transform group-hover:scale-[1.02] sm:h-56 sm:w-56"
-                        />
-                        <div className="absolute top-2 right-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                          <div className="rounded-lg bg-[#2D2E30] p-1.5 text-white shadow-sm">
-                            <Maximize2 size={12} />
-                          </div>
-                        </div>
-                      </button>
-                    ) : (
-                      <div className="flex h-40 w-40 items-center justify-center px-3 text-center text-xs text-[#765F55] sm:h-56 sm:w-56 sm:text-sm">
-                        Payment QR is not available yet. Please contact support.
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button
-                      onClick={() => navigate(`/courses/${courseId}`)}
-                      className="flex-1 rounded-xl border border-[#2D2E30]/20 px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#FFF9EA] sm:text-base"
-                    >
-                      Go Back
-                    </button>
-                    <button
-                      onClick={() => {
-                        setCurrentStep(2);
-                        setError(""); // Clear error when moving to step 2
-                      }}
-                      className="flex-1 rounded-xl bg-[#F8C56A] px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] sm:text-base"
-                    >
-                      Upload Receipt
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Step 2 — Upload Receipt */}
-              {currentStep === 2 ? (
-                <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#FFF4D8] text-xs font-bold text-[#C97112]">2</span>
-                    <div><p className="font-semibold text-sm text-[#2D2E30] sm:text-base mb-2">
-                      Step 2. Upload your payment receipt.
-                    </p>
-                    <p className="text-xs sm:text-sm text-[#765F55]">
-                      Please upload a clear image or screenshot of your payment
-                      confirmation.
-                    </p></div>
-                  </div>
-
-                  <label className={`block cursor-pointer rounded-2xl border-2 border-dashed p-4 text-center transition sm:p-5 ${
-                    receiptFile
-                      ? "border-[#7EAF85] bg-[#F4FAF4]"
-                      : "border-[#D9CEBE] bg-[#FFFDF8] hover:border-[#E58C1A] hover:bg-[#FFF9EA]"
-                  }`}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleReceiptChange}
-                      className="hidden"
-                    />
-                    {receiptFile && receiptPreview ? (
-                      <div className="flex items-center gap-3 text-left">
-                        <img src={receiptPreview} alt="Selected payment receipt preview" className="h-16 w-16 shrink-0 rounded-xl border border-[#7EAF85]/30 bg-white object-cover sm:h-20 sm:w-20" />
-                        <div className="min-w-0 flex-1">
-                          <div className="mb-1 flex items-center gap-1.5 text-[#4D7C57]"><CircleCheck className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="text-xs font-bold uppercase tracking-[0.1em]">Receipt ready</span></div>
-                          <p className="truncate text-sm font-bold text-[#2D2E30]">{receiptName}</p>
-                          <p className="mt-1 text-xs text-[#4D7C57]">{(receiptFile.size / 1024 / 1024).toFixed(2)} MB · Tap to replace</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF4D8] text-[#C97112]"><Upload className="h-5 w-5" aria-hidden="true" /></div>
-                        <p className="mb-1 text-sm font-semibold text-[#2D2E30] sm:text-base">Click to upload receipt</p>
-                        <p className="text-xs text-[#765F55] sm:text-sm">PNG or JPG, max 5 MB</p>
-                      </>
-                    )}
-                  </label>
-
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button
-                      onClick={() => {
-                        setCurrentStep(1);
-                        setError(""); // Clear error when going back to step 1
-                      }}
-                      className="flex-1 rounded-xl border border-[#2D2E30]/20 px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#FFF9EA] sm:text-base"
-                    >
-                      Back
-                    </button>
-                    <button
-                      onClick={handleUploadReceipt}
-                      disabled={submitting}
-                      className="flex-1 rounded-xl bg-[#F8C56A] px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] sm:text-base disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {submitting ? "Submitting..." : "Submit Payment"}
-                    </button>
-                  </div>
-
-                  {/* Error message under submit button */}
-                  {error ? (
-                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                      {error}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {/* Step 3 — Confirmation */}
-              {currentStep === 3 ? (
-                <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                  <div>
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E9F4EA] text-[#4D7C57]"><CircleCheck className="h-6 w-6" aria-hidden="true" /></div>
-                    <h4 className="text-lg sm:text-xl font-bold text-[#2D2E30] mb-2 sm:mb-3">
-                      Payment under review
-                    </h4>
-                    <p className="text-xs sm:text-sm text-[#765F55] leading-relaxed">
-                      Your payment has been submitted successfully. You will be
-                      notified once your enrollment is approved.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => navigate("/app/orders")}
-                    className="w-full rounded-xl bg-[#F8C56A] px-4 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] sm:text-base"
-                  >
-                    View My Course Orders
-                  </button>
-                </div>
-              ) : null}
-              </div>
-            </section>
-          </div>
-        </div>
-      </main>
-
-      {qrPreviewOpen && paymentQr ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="relative w-full max-w-md rounded-3xl bg-white p-4 shadow-2xl sm:p-5">
-            <button
-              type="button"
-              onClick={() => setQrPreviewOpen(false)}
-              className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-              aria-label="Close QR preview"
-            >
-              <X size={20} />
-            </button>
-
-            <img
-              src={paymentQr}
-              alt="Enlarged bank QR code for payment"
-              className="mx-auto mt-6 max-h-[70vh] w-full rounded-2xl object-contain"
-            />
-          </div>
-        </div>
-      ) : null}
-
-      <Footer />
-    </div>
-  );
+  return <div className="min-h-screen bg-[#FFFDF8] text-[#2D2E30]"><Navbar /><main className="bg-[#FFF9EA] px-4 pb-28 pt-6 sm:px-6 md:px-10 lg:pb-16"><div className="mx-auto max-w-7xl"><button onClick={() => navigate(`/enroll/${courseId}`)} className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] hover:text-[#C97112]"><ArrowLeft size={16} />Back to enrollment</button><div className="mb-8 mt-7 max-w-2xl"><p className="text-xs font-bold uppercase tracking-[.2em] text-[#C97112]">Secure checkout</p><h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Complete your <span className="text-[#B96128]">enrollment.</span></h1><p className="mt-3 text-sm leading-6 text-[#765F55]">Choose how you would like to pay. Your selection sets the currency and exact amount.</p></div>{error && <Notice>{error}</Notice>}
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8"><div className="order-2 overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white px-5 shadow-[0_22px_55px_-40px_rgba(80,48,19,.35)] sm:px-7 lg:order-1">
+      <Stage n="1" title="Choose payment method" text="Select the account or wallet you will pay with. This sets your payment currency."><div className="grid gap-3 sm:grid-cols-2">{methods.map((item) => <button type="button" key={item.id} onClick={() => selectMethod(item.id)} className={`rounded-2xl border p-4 text-left transition ${methodId === item.id ? "border-[#E58C1A] bg-[#FFF9EA] shadow-sm" : "border-[#2D2E30]/10 bg-white hover:border-[#E58C1A]/45"}`}><div className="flex items-start justify-between gap-3"><div><strong className="block text-sm">{item.name}</strong><span className="mt-1 block text-xs capitalize text-[#765F55]">{item.type.replace("_", " ")}</span></div><span className="rounded-lg bg-[#FFF1CE] px-2 py-1 text-xs font-bold text-[#9A5816]">{item.currency}</span></div></button>)}</div>{!methods.length && <p className="rounded-xl bg-[#FFF0EE] p-3 text-sm text-[#A34D45]">No payment option is currently available. Please contact support.</p>}</Stage>
+      <Stage n="2" title="Review amount" text={quote ? `This is the exact ${quote.currency} amount for the method you selected.` : "Choose a payment method to load your exact amount."} muted={!quote}>{quote && <><div className="rounded-2xl bg-[#2D2E30] p-5 text-white sm:p-6"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#F8C56A]">Amount to pay</p><div className="mt-2 flex items-end justify-between gap-4"><div><p className="text-3xl font-bold tracking-tight sm:text-4xl">{money(quote.amount, quote.currency)}</p><p className="mt-2 text-sm text-white/65">{method.name} · {quote.currency}</p></div><CreditCard className="h-8 w-8 text-[#F8C56A]" /></div></div><div className="mt-5 space-y-2 px-1 text-sm"><Row label="Course price" value={money(quote.originalAmount, quote.currency)} />{courseDiscounted ? <><Row label="Course discount" value={`-${money(quote.discountAmount, quote.currency)}`} green /><p className="inline-flex items-center gap-2 pt-1 text-xs font-semibold text-[#4D7C57]"><CircleCheck size={15} />Course discount applied</p></> : appliedPromo ? <Row label="Promo discount" value={`-${money(appliedPromo.discountAmount, appliedPromo.currency)}`} green /> : null}<div className="border-t border-[#2D2E30]/15 pt-3"><Row label="Amount to pay" value={money(quote.amount, quote.currency)} strong /></div></div>{!courseDiscounted && <div className="mt-5 border-t border-[#2D2E30]/10 pt-5">{appliedPromo ? <div className="flex items-start justify-between gap-4 rounded-2xl bg-[#F4FAF4] px-4 py-3.5"><div className="flex min-w-0 gap-2.5"><CircleCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#4D7C57]" /><div><p className="text-sm font-bold text-[#246B35]">{appliedPromo.code} applied</p><p className="mt-1 text-xs text-[#4D7C57]">You saved {money(appliedPromo.discountAmount, appliedPromo.currency)}</p></div></div><button type="button" onClick={removePromo} disabled={promoLoading} className="shrink-0 text-xs font-bold text-[#4D7C57] underline-offset-2 hover:underline disabled:opacity-60">Remove</button></div> : <><div className="flex items-center justify-between gap-3"><label className="text-sm font-bold">Have a promo code?</label><span className="text-xs text-[#9A8775]">Optional</span></div><div className="mt-3 flex gap-2"><input value={promoInput} onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoMessage(""); }} placeholder="Enter code" className="min-w-0 flex-1 rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] px-3 py-2.5 text-sm font-semibold outline-none focus:border-[#E58C1A]" /><button type="button" onClick={applyPromo} disabled={promoLoading} className="rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{promoLoading ? "Applying…" : "Apply"}</button></div>{promoMessage && <p role="alert" className="mt-2 text-sm text-[#A34D45]">{promoMessage}</p>}</>}</div>}</>}</Stage>
+      <Stage n="3" title="Make payment" text={quote ? "Pay the exact amount shown above using these details." : "Payment details appear after you choose a method."} muted={!quote}>{quote && <><div className="rounded-2xl border border-[#2D2E30]/10 bg-white p-4 sm:p-5"><div className="flex items-center gap-2"><Landmark className="h-5 w-5 text-[#C97112]" /><h3 className="font-bold">{method.name}</h3><span className="rounded-lg bg-[#FFF1CE] px-2 py-1 text-xs font-bold text-[#9A5816]">{quote.currency}</span></div><Recipient data={recipient} />{method.instructions && <div className="mt-4 rounded-xl bg-[#FFF9EA] p-3"><p className="text-xs font-bold uppercase tracking-[.14em] text-[#C97112]">Instructions</p><p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#765F55]">{method.instructions}</p></div>}</div>{paymentQr ? <div className="mt-4 rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-4 text-center sm:p-6"><p className="text-sm font-bold">Scan to pay {money(quote.amount, quote.currency)}</p><button type="button" onClick={() => setQrOpen(true)} className="relative mx-auto mt-4 rounded-2xl bg-white p-3 shadow-sm focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/15"><img src={paymentQr} alt={`QR code for ${method.name}`} className="h-52 w-52 object-contain sm:h-60 sm:w-60" /><span className="absolute right-3 top-3 rounded-lg bg-[#2D2E30] p-1.5 text-white"><Maximize2 size={14} /></span></button></div> : <p className="mt-4 rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-4 text-sm leading-6 text-[#765F55]">Use the account details and instructions above. This payment option does not use a QR code.</p>}</>}</Stage>
+      <Stage n="4" title="Upload proof" text={quote ? "After paying, upload a clear image or screenshot of your payment slip." : "Choose a method and review the amount before uploading."} muted={!quote}>{quote && <><label className={`block cursor-pointer rounded-2xl border-2 border-dashed p-5 transition sm:p-6 ${receiptFile ? "border-[#7EAF85] bg-[#F4FAF4]" : "border-[#D9CEBE] bg-[#FFFDF8] hover:border-[#E58C1A] hover:bg-[#FFF9EA]"}`}><input ref={receiptInputRef} type="file" accept="image/*" onChange={changeReceipt} className="hidden" />{receiptFile && receiptPreview ? <div className="flex items-center gap-3"><img src={receiptPreview} alt="Selected payment slip preview" className="h-16 w-16 shrink-0 rounded-xl border border-[#7EAF85]/30 object-cover sm:h-20 sm:w-20" /><div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-[.1em] text-[#4D7C57]">Slip selected</p><p className="mt-1 truncate text-sm font-bold">{receiptFile.name}</p><p className="mt-1 text-xs text-[#4D7C57]">{(receiptFile.size / 1024 / 1024).toFixed(2)} MB · Tap anywhere here to replace</p></div><CircleCheck className="h-6 w-6 shrink-0 text-[#4D7C57]" /></div> : <div className="text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF4D8] text-[#C97112]"><Upload size={20} /></span><p className="mt-3 text-sm font-bold">Upload payment slip</p><p className="mt-1 text-sm text-[#765F55]">Drag a screenshot here or choose from your device</p><p className="mt-2 text-xs text-[#9A8775]">JPG, PNG, WEBP or GIF · up to 5 MB</p></div>}</label>{receiptFile && <div className="mt-3 flex gap-2"><button type="button" onClick={() => receiptInputRef.current?.click()} className="rounded-xl border border-[#2D2E30]/15 bg-white px-3 py-2 text-sm font-bold text-[#2D2E30] hover:border-[#E58C1A]">Replace slip</button><button type="button" onClick={() => { if (receiptPreview) URL.revokeObjectURL(receiptPreview); setReceiptFile(null); setReceiptPreview(""); if (receiptInputRef.current) receiptInputRef.current.value = ""; }} className="rounded-xl px-3 py-2 text-sm font-bold text-[#765F55] hover:bg-[#FFF0EE] hover:text-[#A34D45]">Remove</button></div>}{detailsChanged && <div className="mt-4 rounded-2xl border border-[#E7B85E]/30 bg-[#FFF8E8] p-4"><p className="text-sm font-bold text-[#9A5816]">Payment details changed</p><p className="mt-1 text-sm leading-6 text-[#765F55]">The latest amount and instructions are shown above. Your selected slip is still here—review the details before submitting.</p><button type="button" onClick={() => setDetailsChanged(false)} className="mt-3 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#E58C1A]">I’ve reviewed the details</button></div>}<button type="button" onClick={submit} disabled={submitting || detailsChanged} className="mt-5 w-full rounded-xl bg-[#F8C56A] px-4 py-3.5 text-sm font-bold text-[#2D2E30] shadow-[0_12px_24px_-16px_rgba(185,97,40,.8)] transition hover:bg-[#E58C1A] disabled:opacity-60">{submitting ? "Submitting payment…" : "Submit payment slip"}</button></>}</Stage>
+    </div><aside className="order-1 lg:order-2 lg:sticky lg:top-20"><div className="overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white shadow-[0_22px_55px_-40px_rgba(80,48,19,.45)]"><div className="hidden h-40 bg-[#E7DCCE] sm:block">{course.image && <img src={course.image} alt="" className="h-full w-full object-cover" />}</div><div className="p-5"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#C97112]">Order summary</p><h2 className="mt-2 text-xl font-bold tracking-tight">{course.title}</h2><p className="mt-2 text-sm text-[#765F55]">{course.lessons} lessons · {course.rating.toFixed(1)}/5</p><div className="mt-5 rounded-2xl bg-[#2D2E30] p-4 text-white">{quote ? <><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#F8C56A]">Amount to pay</p><p className="mt-2 text-3xl font-bold">{money(quote.amount, quote.currency)}</p><p className="mt-2 text-sm text-white/65">{method.name} · {quote.currency}</p></> : <><p className="text-sm font-bold">Choose a payment method</p><p className="mt-1 text-sm leading-5 text-white/65">Your exact amount appears here after you choose how to pay.</p></>}</div><p className="mt-5 text-xs leading-5 text-[#765F55]">Your payment slip is verified manually before course access is unlocked.</p><ol className="mt-5 space-y-3 border-t border-[#2D2E30]/10 pt-5">{steps.map((label, index) => <li key={label} className="flex items-center gap-3 text-sm"><span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${quote || index === 0 ? "bg-[#FFF1CE] text-[#9A5816]" : "bg-[#F3E9D9] text-[#9A8775]"}`}>{index + 1}</span>{label}</li>)}</ol></div></div></aside></div></div></main>{quote && <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#2D2E30]/10 bg-white/95 px-4 py-3 shadow-[0_-12px_30px_-22px_rgba(45,46,48,.45)] backdrop-blur lg:hidden"><div className="mx-auto flex max-w-lg items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#765F55]">Amount to pay</p><p className="text-lg font-bold text-[#B96128]">{money(quote.amount, quote.currency)}</p></div><button type="button" onClick={submit} disabled={!receiptFile || submitting || detailsChanged} className="rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{submitting ? "Submitting…" : "Submit"}</button></div></div>}{qrOpen && paymentQr && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D2E30]/70 p-4"><div className="relative w-full max-w-md rounded-3xl bg-white p-4 shadow-2xl"><button type="button" onClick={() => setQrOpen(false)} className="absolute right-3 top-3 rounded-full bg-white p-2 text-[#765F55] hover:bg-[#FFF1CE]"><X size={20} /></button><img src={paymentQr} alt={`Large QR code for ${method.name}`} className="mx-auto mt-6 max-h-[70vh] w-full rounded-2xl object-contain" /></div></div>}<Footer /></div>;
 }
 
-export default Payment;
+function Stage({ n, title, text, children, muted }) { return <section className={`border-t border-[#2D2E30]/10 py-7 first:border-t-0 first:pt-6 sm:py-8 ${muted ? "opacity-60" : ""}`}><div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FFF1CE] text-sm font-bold text-[#9A5816]">{n}</span><div><h2 className="text-lg font-bold">{title}</h2><p className="mt-1 text-sm leading-5 text-[#765F55]">{text}</p></div></div><div className="mt-5">{children}</div></section>; }
+function Row({ label, value, green, strong }) { return <div className={`flex justify-between gap-4 ${strong ? "text-base font-bold text-[#2D2E30]" : "text-[#765F55]"}`}><span>{label}</span><span className={green ? "font-semibold text-[#246B35]" : "shrink-0"}>{value}</span></div>; }
+function Notice({ children }) { return <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{children}</div>; }
+function Recipient({ data }) { const rows = [["Account name", data.accountName], ["Account number", data.accountNumber], ["Bank", data.bankName], ["Phone", data.phoneNumber], ["Reference", data.referenceHint]].filter(([, value]) => value); return rows.length ? <dl className="mt-4 grid gap-2 border-t border-[#2D2E30]/10 pt-4 sm:grid-cols-2">{rows.map(([label, value]) => <RecipientRow key={label} label={label} value={value} />)}</dl> : null; }
+function RecipientRow({ label, value }) { const [copied, setCopied] = useState(false); const copy = async () => { try { await navigator.clipboard.writeText(value); setCopied(true); window.setTimeout(() => setCopied(false), 1500); } catch { /* Clipboard access can be unavailable in embedded browsers. */ } }; return <div className="rounded-xl bg-[#FFF9EA] px-3 py-2.5"><dt className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9A8775]">{label}</dt><dd className="mt-1 flex items-start justify-between gap-2"><span className="break-words text-sm font-semibold">{value}</span><button type="button" onClick={copy} className="shrink-0 rounded-lg border border-[#2D2E30]/10 bg-white px-2 py-1 text-[11px] font-bold text-[#765F55] hover:border-[#E58C1A] hover:text-[#C97112]">{copied ? "Copied" : "Copy"}</button></dd></div>; }
+function StatusScreen({ course, navigate }) { return <div className="min-h-screen bg-[#FFFDF8]"><Navbar /><main className="bg-[#FFF9EA] px-4 py-12 sm:px-6 md:py-20"><div className="mx-auto max-w-xl rounded-[1.75rem] border border-[#7EAF85]/25 bg-white p-6 text-center shadow-[0_22px_55px_-40px_rgba(80,48,19,.45)] sm:p-9"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E9F4EA] text-[#4D7C57]"><CircleCheck size={28} /></span><p className="mt-5 text-xs font-bold uppercase tracking-[.18em] text-[#4D7C57]">Payment submitted</p><h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">Waiting for verification</h1><p className="mt-3 text-sm leading-6 text-[#765F55]">Your payment slip for <strong className="text-[#2D2E30]">{course.title}</strong> is safely submitted. We’ll notify you when access is ready.</p><button onClick={() => navigate("/app/orders")} className="mt-7 w-full rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white hover:bg-[#E58C1A]">View payment status</button></div></main><Footer /></div>; }

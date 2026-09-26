@@ -35,7 +35,7 @@ function Courses() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setEnrolledCourseIds(new Set())
+      Promise.resolve().then(() => setEnrolledCourseIds(new Set()))
       return
     }
 
@@ -103,21 +103,13 @@ function Courses() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
-            {courses.map((course) => (
-              <CourseCard
+            {courses.map((course) => {
+              return <CourseCard
                 key={course.id}
-                id={course.id}
-                image={course.image}
-                title={course.title}
-                description={course.description}
-                price={course.price}
-                originalPrice={course.originalPrice}
-                hasDiscount={course.hasDiscount}
-                rating={course.rating}
-                reviews={course.reviews}
+                course={course}
                 isEnrolled={enrolledCourseIds.has(course.id)}
               />
-            ))}
+            })}
           </div>
         )}
 

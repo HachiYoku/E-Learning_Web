@@ -1,5 +1,14 @@
 const mongoose = require("mongoose");
 
+const currencyPriceSchema = new mongoose.Schema({
+  price: { type: Number, required: true, min: 0 },
+  originalPrice: { type: Number, required: true, min: 0 },
+}, { _id: false });
+
+currencyPriceSchema.pre("validate", function validateOriginalPrice() {
+  if (this.originalPrice < this.price) throw new Error("Currency originalPrice must not be lower than price.");
+});
+
 const courseSchema = new mongoose.Schema(
   {
     title: {
@@ -19,13 +28,21 @@ const courseSchema = new mongoose.Schema(
     ],
     price: {
       type: Number,
-      required: true,
       min: 0,
     },
     originalPrice: {
       type: Number,
       min: 0,
     },
+    // Legacy price fields remain in place during the compatibility rollout.
+    // New checkout behavior is deliberately not enabled in this phase.
+    prices: {
+      THB: { type: currencyPriceSchema, default: undefined },
+      MMK: { type: currencyPriceSchema, default: undefined },
+    },
+    // Checkout quotes expose this only as an observation. A later submission
+    // must reread authoritative course state and never trust a prior quote.
+    mutationVersion: { type: Number, default: 0, min: 0 },
     rating: {
       type: Number,
       default: 0,
