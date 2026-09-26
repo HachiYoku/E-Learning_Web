@@ -33,6 +33,21 @@ h6 {
   font-family: var(--font-heading);
 }
 
+.flashcard-flip-inner {
+  transition: transform 500ms ease;
+  transform: rotateY(0deg);
+}
+
+.flashcard-flip-inner--flipped {
+  transform: rotateY(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flashcard-flip-inner {
+    transition: none;
+  }
+}
+
 .benefits-snap-scroll {
   scrollbar-width: none;
 }
