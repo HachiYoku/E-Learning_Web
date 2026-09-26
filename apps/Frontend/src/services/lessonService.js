@@ -11,6 +11,14 @@ export function normalizeLesson(lesson) {
     videoUrl: lesson.videoUrl,
     order: Number(lesson.order || 0),
     courseId: lesson.course,
+    keyVocabulary: Array.isArray(lesson.keyVocabulary)
+      ? lesson.keyVocabulary.map((entry) => ({
+        ...(entry?._id ? { _id: entry._id } : {}),
+        thai: entry?.thai,
+        translation: entry?.translation,
+        transliteration: entry?.transliteration,
+      }))
+      : [],
   };
 }
 

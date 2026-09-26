@@ -71,6 +71,20 @@ describe("SaveFlashcardModal", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("provides the exact created card to an optional post-save callback", async () => {
+    const user = userEvent.setup();
+    const savedCard = { _id: 'card-exact', prompt: 'สวัสดี', answer: 'Hello' };
+    const onCardSaved = vi.fn();
+    service.createPersonalFlashcard.mockResolvedValue(savedCard);
+    renderModal({ onCardSaved });
+    await waitForSets(user);
+    await fillCard(user);
+    await chooseSet(user);
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(onCardSaved).toHaveBeenCalledWith(workSet, savedCard));
+  });
+
   it("creates a new set and then saves the card", async () => {
     const user = userEvent.setup();
     const newSet = { _id: "set-travel", name: "Travel Thai", cardCount: 0 };
@@ -136,6 +150,32 @@ describe("SaveFlashcardModal", () => {
     await chooseSet(user);
     await user.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(service.createPersonalFlashcard).toHaveBeenCalled());
+    rerender(<SaveFlashcardModal isOpen={false} onClose={vi.fn()} onSaved={vi.fn()} />);
+    rerender(<SaveFlashcardModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+    await waitForSets(user);
+    expect(screen.getByLabelText(/^front$/i).value).toBe("");
+    expect(screen.getByLabelText(/^back$/i).value).toBe("");
+  });
+
+  it("uses optional vocabulary values only for a newly opened composer and keeps edits while open", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderModal({ initialFront: "สวัสดี", initialBack: "Hello" });
+    await waitForSets(user);
+    expect(screen.getByLabelText(/^front$/i).value).toBe("สวัสดี");
+    expect(screen.getByLabelText(/^back$/i).value).toBe("Hello");
+
+    await user.clear(screen.getByLabelText(/^front$/i));
+    await user.type(screen.getByLabelText(/^front$/i), "Edited greeting");
+    rerender(<SaveFlashcardModal isOpen initialFront="ขอบคุณ" initialBack="Thank you" onClose={vi.fn()} onSaved={vi.fn()} />);
+    expect(screen.getByLabelText(/^front$/i).value).toBe("Edited greeting");
+    expect(screen.getByLabelText(/^back$/i).value).toBe("Hello");
+
+    rerender(<SaveFlashcardModal isOpen={false} onClose={vi.fn()} onSaved={vi.fn()} />);
+    rerender(<SaveFlashcardModal isOpen initialFront="ขอบคุณ" initialBack="Thank you" onClose={vi.fn()} onSaved={vi.fn()} />);
+    await waitForSets(user);
+    expect(screen.getByLabelText(/^front$/i).value).toBe("ขอบคุณ");
+    expect(screen.getByLabelText(/^back$/i).value).toBe("Thank you");
+
     rerender(<SaveFlashcardModal isOpen={false} onClose={vi.fn()} onSaved={vi.fn()} />);
     rerender(<SaveFlashcardModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
     await waitForSets(user);

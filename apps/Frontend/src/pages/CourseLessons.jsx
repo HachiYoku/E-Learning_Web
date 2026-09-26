@@ -9,6 +9,10 @@ import { fetchLessonsByCourse } from '../services/lessonService'
 import { fetchCourseQuizzes } from '../services/quizService'
 import { fetchEnrollmentProgress, saveLastOpenedLesson, setLessonCompleted } from '../services/enrollmentService'
 import SaveFlashcardModal from '../components/SaveFlashcardModal'
+import LessonKeyVocabulary from '../components/LessonKeyVocabulary'
+import { deletePersonalFlashcard } from '../services/personalFlashcardService'
+
+const VOCABULARY_UNDO_WINDOW_MS = 5000
 
 function getEmbedUrl(src) {
   if (!src) return ''
@@ -46,10 +50,25 @@ function CourseLessons() {
   const [error, setError] = useState('')
   const [activeLesson, setActiveLesson] = useState(null)
   const [isSaveFlashcardOpen, setIsSaveFlashcardOpen] = useState(false)
+  const [flashcardInitialValues, setFlashcardInitialValues] = useState(null)
+  const [activeVocabularyForSave, setActiveVocabularyForSave] = useState(null)
+  const [savedVocabulary, setSavedVocabulary] = useState({})
   const [savedFlashcardMessage, setSavedFlashcardMessage] = useState('')
   const [progress, setProgress] = useState(null)
   const activeVideoUrl = useMemo(() => getEmbedUrl(activeLesson?.videoUrl), [activeLesson])
   const activeVideoIsGoogleDrive = useMemo(() => isGoogleDriveUrl(activeLesson?.videoUrl), [activeLesson])
+
+  useEffect(() => {
+    const timers = Object.entries(savedVocabulary)
+      .filter(([, state]) => state.undoExpiresAt)
+      .map(([vocabularyId, state]) => window.setTimeout(() => {
+        setSavedVocabulary((current) => {
+          if (current[vocabularyId]?.undoExpiresAt !== state.undoExpiresAt) return current
+          return { ...current, [vocabularyId]: { ...current[vocabularyId], undoExpiresAt: null } }
+        })
+      }, Math.max(0, state.undoExpiresAt - Date.now())))
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
+  }, [savedVocabulary])
 
   useEffect(() => {
     async function loadCourseLessons() {
@@ -66,12 +85,54 @@ function CourseLessons() {
     if (!lesson.videoUrl) return
     setActiveLesson(lesson)
     setSavedFlashcardMessage('')
+    setSavedVocabulary({})
     saveLastOpenedLesson(courseId, lesson.id).then(setProgress).catch(() => {})
   }
 
   const handleCompletionToggle = async (lesson) => {
     const isCompleted = progress?.completedLessonIds?.includes(lesson.id)
     try { setProgress(await setLessonCompleted(courseId, lesson.id, !isCompleted)) } catch (progressError) { setError(progressError.message) }
+  }
+
+  const openManualFlashcardComposer = () => {
+    setFlashcardInitialValues(null)
+    setActiveVocabularyForSave(null)
+    setIsSaveFlashcardOpen(true)
+  }
+
+  const openVocabularyFlashcardComposer = (vocabulary, vocabularyId) => {
+    setFlashcardInitialValues({
+      front: vocabulary.thai || '',
+      back: vocabulary.translation || '',
+    })
+    setActiveVocabularyForSave({ vocabularyId: vocabularyId || vocabulary._id })
+    setIsSaveFlashcardOpen(true)
+  }
+
+  const handleVocabularyCardSaved = (deck, card) => {
+    if (!activeVocabularyForSave?.vocabularyId || !deck?._id || !card?._id) return
+    const vocabularyId = activeVocabularyForSave.vocabularyId
+    setSavedVocabulary((current) => ({
+      ...current,
+      [vocabularyId]: { deckId: deck._id, cardId: card._id, undoExpiresAt: Date.now() + VOCABULARY_UNDO_WINDOW_MS, isUndoing: false, undoError: '' },
+    }))
+  }
+
+  const handleUndoVocabularySave = async (vocabularyId) => {
+    const saveState = savedVocabulary[vocabularyId]
+    if (!saveState || saveState.isUndoing) return
+    setSavedVocabulary((current) => ({ ...current, [vocabularyId]: { ...current[vocabularyId], isUndoing: true, undoError: '' } }))
+    try {
+      await deletePersonalFlashcard(saveState.deckId, saveState.cardId)
+      setSavedFlashcardMessage('')
+      setSavedVocabulary((current) => {
+        const next = { ...current }
+        delete next[vocabularyId]
+        return next
+      })
+    } catch {
+      setSavedVocabulary((current) => ({ ...current, [vocabularyId]: { ...current[vocabularyId], isUndoing: false, undoError: 'Could not undo this saved flashcard. Please try again.' } }))
+    }
   }
 
   if (loading) return <div className="min-h-screen bg-[#FFFDF8]"><Navbar /><div className="flex h-screen items-center justify-center bg-[#FFF9EA]"><LoadingSpinner message="Loading lessons..." /></div></div>
@@ -122,8 +183,30 @@ function CourseLessons() {
         </div>
       </main>
 
-      {activeLesson ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6" onClick={() => setActiveLesson(null)}><div className="relative w-full max-w-4xl overflow-hidden rounded-[1.75rem] bg-[#2D2E30] shadow-2xl" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setActiveLesson(null)} className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2D2E30] transition hover:bg-[#FFF4D8]" aria-label="Close video"><X className="h-5 w-5" /></button>{activeVideoIsGoogleDrive ? <div className="flex aspect-video flex-col items-center justify-center bg-[#FFF9EA] px-6 text-center"><p className="text-lg font-bold text-[#2D2E30]">Open this Google Drive lesson</p><p className="mt-2 max-w-md text-sm leading-6 text-[#765F55]">Google blocks sign-in pages from being embedded. Open the lesson directly in Google Drive to watch it securely.</p><a href={activeLesson.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-6 rounded-xl bg-[#E58C1A] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#C97112]">Open in Google Drive</a></div> : <div className="aspect-video w-full"><iframe src={activeVideoUrl || activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>}<div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold text-white">{activeLesson.title}</p>{savedFlashcardMessage ? <p role="status" className="mt-1 text-xs font-bold text-[#BDE8C1]">{savedFlashcardMessage}</p> : null}</div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => setIsSaveFlashcardOpen(true)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/25 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/15"><Plus size={16} />Add to My Flashcards</button><button type="button" onClick={() => navigate(`/app/learn/${courseId}/quiz/${activeLesson.id}`)} className="min-h-11 rounded-xl bg-[#F8C56A] px-4 py-2.5 text-xs font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]">Take lesson quiz</button></div></div></div></div> : null}
-      <SaveFlashcardModal isOpen={isSaveFlashcardOpen} onClose={() => setIsSaveFlashcardOpen(false)} onSaved={(deck) => { setSavedFlashcardMessage(`✓ Saved to ${deck.name}`); setIsSaveFlashcardOpen(false) }} />
+      {activeLesson ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6" onClick={() => setActiveLesson(null)}>
+          <div className={`relative w-full max-w-4xl rounded-[1.75rem] bg-[#2D2E30] shadow-2xl ${Array.isArray(activeLesson.keyVocabulary) && activeLesson.keyVocabulary.length > 0 ? 'flex h-[calc(100dvh-3rem)] flex-col overflow-hidden' : 'overflow-hidden'}`} onClick={(event) => event.stopPropagation()}>
+            <button type="button" onClick={() => setActiveLesson(null)} className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2D2E30] transition hover:bg-[#FFF4D8]" aria-label="Close video"><X className="h-5 w-5" /></button>
+            {activeVideoIsGoogleDrive ? (
+              <div className={`flex aspect-video flex-col items-center justify-center bg-[#FFF9EA] px-6 text-center ${activeLesson.keyVocabulary?.length ? 'h-[min(48vw,38vh)] shrink-0 overflow-y-auto' : ''}`}>
+                <p className="text-lg font-bold text-[#2D2E30]">Open this Google Drive lesson</p>
+                <p className="mt-2 max-w-md text-sm leading-6 text-[#765F55]">Google blocks sign-in pages from being embedded. Open the lesson directly in Google Drive to watch it securely.</p>
+                <a href={activeLesson.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-6 rounded-xl bg-[#E58C1A] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#C97112]">Open in Google Drive</a>
+              </div>
+            ) : (
+              <div className={`aspect-video w-full shrink-0 ${activeLesson.keyVocabulary?.length ? 'h-[min(48vw,38vh)]' : ''}`}><iframe src={activeVideoUrl || activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>
+            )}
+            <LessonKeyVocabulary vocabulary={activeLesson.keyVocabulary} onSave={openVocabularyFlashcardComposer} savedVocabulary={savedVocabulary} onUndo={handleUndoVocabularySave} />
+            <div className="shrink-0 border-t border-white/10 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-sm font-bold text-white">{activeLesson.title}</p>{savedFlashcardMessage ? <p role="status" className="mt-1 text-xs font-bold text-[#BDE8C1]">{savedFlashcardMessage}</p> : null}</div>
+              <div className="flex flex-wrap gap-2"><button type="button" onClick={openManualFlashcardComposer} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/25 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/15"><Plus size={16} />Add to My Flashcards</button><button type="button" onClick={() => navigate(`/app/learn/${courseId}/quiz/${activeLesson.id}`)} className="min-h-11 rounded-xl bg-[#F8C56A] px-4 py-2.5 text-xs font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]">Take lesson quiz</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <SaveFlashcardModal isOpen={isSaveFlashcardOpen} initialFront={flashcardInitialValues?.front} initialBack={flashcardInitialValues?.back} onClose={() => setIsSaveFlashcardOpen(false)} onSaved={(deck) => { setSavedFlashcardMessage(`✓ Saved to ${deck.name}`); setIsSaveFlashcardOpen(false) }} onCardSaved={handleVocabularyCardSaved} />
       <Footer />
     </div>
   )

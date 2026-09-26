@@ -9,12 +9,12 @@ import {
 const cleanText = (value) => String(value || "").trim();
 const setMessage = (message) => String(message || "Could not save your flashcard. Please try again.").replace(/flashcard deck/gi, "flashcard set");
 
-function SaveFlashcardComposer({ onClose, onSaved }) {
+function SaveFlashcardComposer({ onClose, onSaved, onCardSaved, initialFront = "", initialBack = "" }) {
   const [decks, setDecks] = useState([]);
   const [selectedDeckId, setSelectedDeckId] = useState("");
   const [isSetMenuOpen, setIsSetMenuOpen] = useState(false);
-  const [front, setFront] = useState("");
-  const [back, setBack] = useState("");
+  const [front, setFront] = useState(() => String(initialFront || ""));
+  const [back, setBack] = useState(() => String(initialBack || ""));
   const [isCreatingSet, setIsCreatingSet] = useState(false);
   const [newSetName, setNewSetName] = useState("");
   const [createdSet, setCreatedSet] = useState(null);
@@ -101,8 +101,9 @@ function SaveFlashcardComposer({ onClose, onSaved }) {
 
       const deckId = isCreatingSet ? destination._id : destinationId;
       const savedDeck = isCreatingSet ? destination : decks.find((deck) => deck._id === deckId);
-      await createPersonalFlashcard(deckId, { prompt, answer });
+      const savedCard = await createPersonalFlashcard(deckId, { prompt, answer });
       onSaved(savedDeck || { _id: deckId, name: "your flashcard set" });
+      onCardSaved?.(savedDeck || { _id: deckId, name: "your flashcard set" }, savedCard);
       onClose();
     } catch (error) {
       if (destination) {
@@ -153,9 +154,9 @@ function SaveFlashcardComposer({ onClose, onSaved }) {
   );
 }
 
-function SaveFlashcardModal({ isOpen, onClose, onSaved }) {
+function SaveFlashcardModal({ isOpen, onClose, onSaved, onCardSaved, initialFront = "", initialBack = "" }) {
   if (!isOpen) return null;
-  return <SaveFlashcardComposer onClose={onClose} onSaved={onSaved} />;
+  return <SaveFlashcardComposer onClose={onClose} onSaved={onSaved} onCardSaved={onCardSaved} initialFront={initialFront} initialBack={initialBack} />;
 }
 
 export default SaveFlashcardModal;
