@@ -1,5 +1,26 @@
 const mongoose = require("mongoose");
 
+const keyVocabularySchema = new mongoose.Schema({
+  thai: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 120,
+  },
+  translation: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 160,
+  },
+  transliteration: {
+    type: String,
+    trim: true,
+    maxlength: 160,
+    default: "",
+  },
+});
+
 const lessonSchema = new mongoose.Schema(
   {
     course: {
@@ -22,6 +43,14 @@ const lessonSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 1,
+    },
+    keyVocabulary: {
+      type: [keyVocabularySchema],
+      default: [],
+      validate: {
+        validator: (entries) => Array.isArray(entries) && entries.length <= 50,
+        message: "A lesson can have at most 50 key vocabulary entries.",
+      },
     },
   },
   { timestamps: true }

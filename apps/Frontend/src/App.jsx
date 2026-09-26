@@ -21,6 +21,10 @@ import About from "./pages/About"
 import NotFound from "./pages/NotFound"
 import Quiz from "./pages/Quiz"
 import Flashcards from "./pages/Flashcards"
+import StudentFlashcardsHub from "./pages/StudentFlashcardsHub"
+import MyFlashcards from "./pages/MyFlashcards"
+import MyFlashcardDeck from "./pages/MyFlashcardDeck"
+import PersonalFlashcardPractice from "./pages/PersonalFlashcardPractice"
 import RequireAuth from "./routes/RequireAuth"
 import ScrollToTop from "./components/ScrollToTop"
 import Seo from "./components/Seo"
@@ -95,7 +99,11 @@ function App() {
             <Route path="learn/:courseId/quiz/:lessonId" element={<Quiz />} />
             <Route path="course-quiz/:courseId/:quizId" element={<Quiz />} />
             <Route path="practice" element={<StudentPractice />} />
-            <Route path="practice/flashcards" element={<Flashcards />} />
+            <Route path="practice/flashcards" element={<StudentFlashcardsHub />} />
+            <Route path="practice/flashcards/public" element={<Flashcards />} />
+            <Route path="practice/flashcards/mine" element={<MyFlashcards />} />
+            <Route path="practice/flashcards/mine/:deckId" element={<MyFlashcardDeck />} />
+            <Route path="practice/flashcards/mine/:deckId/practice" element={<PersonalFlashcardPractice />} />
             <Route path="practice/:section" element={<Practice />} />
             <Route path="blog" element={<Blog />} />
             <Route path="profile" element={<MyProfile />} />
