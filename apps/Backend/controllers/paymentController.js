@@ -1,4 +1,5 @@
 const Payment = require("../models/paymentModel");
+const Enrollment = require("../models/enrollmentModel");
 const User = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
@@ -10,6 +11,7 @@ const { calculateCheckout, listAvailablePaymentMethods } = require("../services/
 const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
 const { uploadPaymentProof, migrateLegacyPaymentProof, streamPaymentProof, deletePaymentProof } = require("../services/paymentProofStorage");
 const { PAYMENT_PROOF_ACCESS_TTL_SECONDS, issuePaymentProofAccessToken, verifyPaymentProofAccessToken } = require("../services/paymentProofAccess");
+const { courseKey, deriveCoursePaymentStates } = require("../services/paymentCourseState");
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -21,7 +23,7 @@ const escapeHtml = (value = "") =>
 
 const PAYMENT_PROOF_FIELDS = "+paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage";
 
-const serializePayment = (payment) => {
+const serializePayment = (payment, coursePaymentState = null) => {
   const value = typeof payment.toObject === "function" ? payment.toObject() : { ...payment };
   const hasPaymentProof = Boolean(value.paymentProofPublicId || value.paymentImagePublicId || value.paymentImage);
   const proofStorage = value.paymentProofStorage || (hasPaymentProof ? "legacy" : null);
@@ -30,7 +32,7 @@ const serializePayment = (payment) => {
   delete value.paymentProofPublicId;
   delete value.paymentProofFormat;
   delete value.paymentProofStorage;
-  return { ...value, hasPaymentProof, proofStorage };
+  return { ...value, hasPaymentProof, proofStorage, ...(coursePaymentState ? { coursePaymentState } : {}) };
 };
 
 const getPaymentProofRecord = (paymentId) => Payment.findById(paymentId).select(PAYMENT_PROOF_FIELDS);
@@ -180,10 +182,20 @@ const getCheckoutPaymentMethods = async (req, res) => {
 const getMyPayments = async (req, res) => {
   try {
     const payments = await Payment.find({ userId: req.user.id }).select(PAYMENT_PROOF_FIELDS)
-      .populate("courseId", "title price thumbnail")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1, _id: -1 });
+    // Preserve the stored reference before population so a deleted Course can
+    // still be grouped with its historical payment attempts.
+    const paymentCourseKeys = new Map(payments.map((payment) => [String(payment._id), courseKey(payment)]));
+    const courseIds = [...new Set([...paymentCourseKeys.values()].filter(Boolean))];
+    const enrollments = courseIds.length
+      ? await Enrollment.find({ userId: req.user.id, courseId: { $in: courseIds } }).select("courseId").lean()
+      : [];
+    const enrolledCourseIds = new Set(enrollments.map((enrollment) => String(enrollment.courseId)));
+    const stateInputs = payments.map((payment) => ({ ...payment.toObject(), courseKey: paymentCourseKeys.get(String(payment._id)) }));
+    const states = deriveCoursePaymentStates(stateInputs, enrolledCourseIds);
+    await Payment.populate(payments, { path: "courseId", select: "title price thumbnail" });
 
-    return res.status(200).json(payments.map(serializePayment));
+    return res.status(200).json(payments.map((payment) => serializePayment(payment, states.get(String(payment._id)) || null)));
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

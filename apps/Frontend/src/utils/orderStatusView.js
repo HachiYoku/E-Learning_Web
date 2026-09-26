@@ -11,6 +11,19 @@ export function savedPaymentDetails(payment) {
 }
 
 export function orderStatusView(payment) {
+  const derived = payment?.coursePaymentState;
+  if (payment?.status === "rejected" && derived?.kind === "enrolled") return {
+    kind: "resolved", eyebrow: "Payment issue resolved", title: "Payment issue resolved",
+    description: "Your updated payment was approved. You now have access to this course.", action: "Start learning", steps: null,
+  };
+  if (payment?.status === "rejected" && derived?.kind === "newer_pending") return {
+    kind: "newer_pending", eyebrow: "New payment submitted", title: "New payment submitted",
+    description: "We’ve received your updated payment and it’s waiting for review.", action: "View latest payment", currentPaymentId: derived.currentPaymentId, steps: null,
+  };
+  if (payment?.status === "rejected" && derived?.kind === "newer_rejected") return {
+    kind: "newer_rejected", eyebrow: "Newer payment needs attention", title: "A newer payment needs attention",
+    description: "Please review your latest payment attempt.", action: "View latest payment", currentPaymentId: derived.currentPaymentId, steps: null,
+  };
   if (payment?.status === "approved") return {
     kind: "approved", eyebrow: "Enrollment complete", title: "Enrollment complete",
     description: "Your payment was approved and you now have access to this course.",

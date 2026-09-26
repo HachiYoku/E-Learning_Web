@@ -17,6 +17,21 @@ test("rejected status is action-required and starts a new payment", () => {
   assert.equal(rejectedPaymentResubmissionPath("course-123"), "/payment/course-123");
 });
 
+test("historical rejected payments use backend-derived newer payment and enrollment state", () => {
+  const pending = orderStatusView({ status: "rejected", coursePaymentState: { kind: "newer_pending", currentPaymentId: "payment-c" } });
+  assert.equal(pending.kind, "newer_pending");
+  assert.equal(pending.currentPaymentId, "payment-c");
+  assert.equal(pending.action, "View latest payment");
+
+  const newerRejected = orderStatusView({ status: "rejected", coursePaymentState: { kind: "newer_rejected", currentPaymentId: "payment-b" } });
+  assert.equal(newerRejected.kind, "newer_rejected");
+  assert.equal(newerRejected.action, "View latest payment");
+
+  const enrolled = orderStatusView({ status: "rejected", coursePaymentState: { kind: "enrolled" } });
+  assert.equal(enrolled.kind, "resolved");
+  assert.equal(enrolled.action, "Start learning");
+});
+
 test("approved status leads directly to learning", () => {
   const view = orderStatusView({ status: "approved" });
   assert.equal(view.title, "Enrollment complete");

@@ -20,6 +20,7 @@ function normalizePayment(payment) {
   return {
     id: payment._id,
     status: payment.status,
+    coursePaymentState: payment.coursePaymentState || null,
     rejectReason: payment.rejectReason || "",
     reviewedAt: payment.reviewedAt || null,
     createdAt: payment.createdAt,

@@ -27,9 +27,13 @@ function MyCourseOrder() {
     loadPayments()
   }, [])
 
-  const getStatusDetails = (status) => {
-    if (status === 'approved') return { label: 'Approved', detail: 'Your course access is ready.', Icon: CircleCheck, classes: 'border-[#7EAF85]/30 bg-[#F1F8F1] text-[#4D7C57]' }
-    if (status === 'rejected') return { label: 'Needs attention', detail: 'Please review the payment details.', Icon: XCircle, classes: 'border-[#D78A86]/30 bg-[#FFF3F1] text-[#A34D45]' }
+  const getStatusDetails = (payment) => {
+    const derived = payment.coursePaymentState
+    if (payment.status === 'rejected' && derived?.kind === 'enrolled') return { label: 'Issue resolved', detail: 'Your updated payment was approved.', Icon: CircleCheck, classes: 'border-[#7EAF85]/30 bg-[#F1F8F1] text-[#4D7C57]', action: 'start' }
+    if (payment.status === 'rejected' && derived?.kind === 'newer_pending') return { label: 'New payment submitted', detail: 'Your updated payment is waiting for review.', Icon: Clock3, classes: 'border-[#E7B85E]/30 bg-[#FFF8E8] text-[#A66B12]', action: 'current', currentPaymentId: derived.currentPaymentId }
+    if (payment.status === 'rejected' && derived?.kind === 'newer_rejected') return { label: 'Newer payment needs attention', detail: 'Review your latest payment attempt.', Icon: XCircle, classes: 'border-[#D78A86]/30 bg-[#FFF3F1] text-[#A34D45]', action: 'current', currentPaymentId: derived.currentPaymentId }
+    if (payment.status === 'approved') return { label: 'Approved', detail: 'Your course access is ready.', Icon: CircleCheck, classes: 'border-[#7EAF85]/30 bg-[#F1F8F1] text-[#4D7C57]', action: 'start' }
+    if (payment.status === 'rejected') return { label: 'Needs attention', detail: 'Please review the payment details.', Icon: XCircle, classes: 'border-[#D78A86]/30 bg-[#FFF3F1] text-[#A34D45]', action: 'details' }
     return { label: 'Under review', detail: 'We are checking your receipt.', Icon: Clock3, classes: 'border-[#E7B85E]/30 bg-[#FFF8E8] text-[#A66B12]' }
   }
 
@@ -66,7 +70,7 @@ function MyCourseOrder() {
                 const course = payment.course
                 const status = payment.courseUnavailable
                   ? { label: 'Course unavailable', detail: 'This course has been removed from the catalogue.', Icon: XCircle, classes: 'border-[#D78A86]/30 bg-[#FFF3F1] text-[#A34D45]' }
-                  : getStatusDetails(payment.status)
+                  : getStatusDetails(payment)
                 const StatusIcon = status.Icon
 
                 return (
@@ -91,11 +95,11 @@ function MyCourseOrder() {
                       </div>
 
                       <button
-                        onClick={() => navigate(payment.courseUnavailable ? '/app/support' : payment.status === 'approved' ? `/app/learn/${course.id}` : `/app/orders/${payment.id}`)}
+                        onClick={() => navigate(payment.courseUnavailable ? '/app/support' : status.action === 'start' ? `/app/learn/${course.id}` : status.action === 'current' ? `/app/orders/${status.currentPaymentId}` : `/app/orders/${payment.id}`)}
                         className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-[#FFF9EA] px-4 py-3 text-sm font-bold text-[#2D2E30] transition-colors hover:border-[#E58C1A] hover:bg-[#FFF4D8]"
                       >
-                        {payment.courseUnavailable ? <FileSearch className="h-4 w-4 text-[#A34D45]" aria-hidden="true" /> : payment.status === 'approved' ? <CircleCheck className="h-4 w-4 text-[#4D7C57]" aria-hidden="true" /> : <FileSearch className="h-4 w-4 text-[#C97112]" aria-hidden="true" />}
-                        {payment.courseUnavailable ? 'Contact support' : payment.status === 'approved' ? 'Start learning' : 'View order details'}
+                        {payment.courseUnavailable ? <FileSearch className="h-4 w-4 text-[#A34D45]" aria-hidden="true" /> : status.action === 'start' ? <CircleCheck className="h-4 w-4 text-[#4D7C57]" aria-hidden="true" /> : <FileSearch className="h-4 w-4 text-[#C97112]" aria-hidden="true" />}
+                        {payment.courseUnavailable ? 'Contact support' : status.action === 'start' ? 'Start learning' : status.action === 'current' ? 'View latest payment' : 'View order details'}
                       </button>
                     </div>
                   </article>
