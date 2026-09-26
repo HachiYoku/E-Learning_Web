@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ArrowRight, BookOpen, Check, CircleCheck, ClipboardCheck, Play, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, CircleCheck, ClipboardCheck, Play, Plus, X } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -8,6 +8,7 @@ import { fetchCourseById } from '../services/courseService'
 import { fetchLessonsByCourse } from '../services/lessonService'
 import { fetchCourseQuizzes } from '../services/quizService'
 import { fetchEnrollmentProgress, saveLastOpenedLesson, setLessonCompleted } from '../services/enrollmentService'
+import SaveFlashcardModal from '../components/SaveFlashcardModal'
 
 function getEmbedUrl(src) {
   if (!src) return ''
@@ -44,6 +45,8 @@ function CourseLessons() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeLesson, setActiveLesson] = useState(null)
+  const [isSaveFlashcardOpen, setIsSaveFlashcardOpen] = useState(false)
+  const [savedFlashcardMessage, setSavedFlashcardMessage] = useState('')
   const [progress, setProgress] = useState(null)
   const activeVideoUrl = useMemo(() => getEmbedUrl(activeLesson?.videoUrl), [activeLesson])
   const activeVideoIsGoogleDrive = useMemo(() => isGoogleDriveUrl(activeLesson?.videoUrl), [activeLesson])
@@ -62,6 +65,7 @@ function CourseLessons() {
   const handleOpenLesson = (lesson) => {
     if (!lesson.videoUrl) return
     setActiveLesson(lesson)
+    setSavedFlashcardMessage('')
     saveLastOpenedLesson(courseId, lesson.id).then(setProgress).catch(() => {})
   }
 
@@ -118,7 +122,8 @@ function CourseLessons() {
         </div>
       </main>
 
-      {activeLesson ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6" onClick={() => setActiveLesson(null)}><div className="relative w-full max-w-4xl overflow-hidden rounded-[1.75rem] bg-[#2D2E30] shadow-2xl" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setActiveLesson(null)} className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2D2E30] transition hover:bg-[#FFF4D8]" aria-label="Close video"><X className="h-5 w-5" /></button>{activeVideoIsGoogleDrive ? <div className="flex aspect-video flex-col items-center justify-center bg-[#FFF9EA] px-6 text-center"><p className="text-lg font-bold text-[#2D2E30]">Open this Google Drive lesson</p><p className="mt-2 max-w-md text-sm leading-6 text-[#765F55]">Google blocks sign-in pages from being embedded. Open the lesson directly in Google Drive to watch it securely.</p><a href={activeLesson.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-6 rounded-xl bg-[#E58C1A] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#C97112]">Open in Google Drive</a></div> : <div className="aspect-video w-full"><iframe src={activeVideoUrl || activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>}<div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-bold text-white">{activeLesson.title}</p><button type="button" onClick={() => navigate(`/app/learn/${courseId}/quiz/${activeLesson.id}`)} className="rounded-xl bg-[#F8C56A] px-4 py-2.5 text-xs font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]">Take lesson quiz</button></div></div></div> : null}
+      {activeLesson ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6" onClick={() => setActiveLesson(null)}><div className="relative w-full max-w-4xl overflow-hidden rounded-[1.75rem] bg-[#2D2E30] shadow-2xl" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setActiveLesson(null)} className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2D2E30] transition hover:bg-[#FFF4D8]" aria-label="Close video"><X className="h-5 w-5" /></button>{activeVideoIsGoogleDrive ? <div className="flex aspect-video flex-col items-center justify-center bg-[#FFF9EA] px-6 text-center"><p className="text-lg font-bold text-[#2D2E30]">Open this Google Drive lesson</p><p className="mt-2 max-w-md text-sm leading-6 text-[#765F55]">Google blocks sign-in pages from being embedded. Open the lesson directly in Google Drive to watch it securely.</p><a href={activeLesson.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-6 rounded-xl bg-[#E58C1A] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#C97112]">Open in Google Drive</a></div> : <div className="aspect-video w-full"><iframe src={activeVideoUrl || activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>}<div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold text-white">{activeLesson.title}</p>{savedFlashcardMessage ? <p role="status" className="mt-1 text-xs font-bold text-[#BDE8C1]">{savedFlashcardMessage}</p> : null}</div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => setIsSaveFlashcardOpen(true)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/25 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/15"><Plus size={16} />Add to My Flashcards</button><button type="button" onClick={() => navigate(`/app/learn/${courseId}/quiz/${activeLesson.id}`)} className="min-h-11 rounded-xl bg-[#F8C56A] px-4 py-2.5 text-xs font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]">Take lesson quiz</button></div></div></div></div> : null}
+      <SaveFlashcardModal isOpen={isSaveFlashcardOpen} onClose={() => setIsSaveFlashcardOpen(false)} onSaved={(deck) => { setSavedFlashcardMessage(`✓ Saved to ${deck.name}`); setIsSaveFlashcardOpen(false) }} />
       <Footer />
     </div>
   )

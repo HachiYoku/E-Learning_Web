@@ -39,10 +39,20 @@ describe("My Flashcards deck manager", () => {
     const mounted = render(<MemoryRouter><MyFlashcards /></MemoryRouter>);
     expect(screen.getByRole("link", { name: /back to flashcards/i }).getAttribute("href")).toBe("/app/practice/flashcards");
     expect(await screen.findByText("Work Vocabulary")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /^practice$/i }).getAttribute("href")).toBe("/app/practice/flashcards/mine/deck-1/practice");
+    expect(screen.getByRole("link", { name: /^manage$/i }).getAttribute("href")).toBe("/app/practice/flashcards/mine/deck-1");
     mounted.unmount();
     service.fetchPersonalFlashcardDecks.mockResolvedValueOnce([]);
     render(<MemoryRouter><MyFlashcards /></MemoryRouter>);
     expect(await screen.findByText(/no flashcard sets yet/i)).toBeTruthy();
+  });
+
+  it("sends empty sets to card management instead of allowing practice", async () => {
+    service.fetchPersonalFlashcardDecks.mockResolvedValueOnce([{ ...deck, cardCount: 0 }]);
+    render(<MemoryRouter><MyFlashcards /></MemoryRouter>);
+    expect(await screen.findByRole("link", { name: /add flashcards/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /add flashcards/i }).getAttribute("href")).toBe("/app/practice/flashcards/mine/deck-1");
+    expect(screen.queryByRole("link", { name: /^practice$/i })).toBeNull();
   });
 
   it("creates a deck and surfaces duplicate-name errors", async () => {

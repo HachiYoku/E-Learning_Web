@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/testSetup.js',
-    include: ['src/pages/personalFlashcards.test.jsx', 'src/pages/personalFlashcardPractice.test.jsx', 'src/pages/publicFlashcards.test.jsx', 'src/services/personalFlashcardService.test.js'],
+    include: ['src/pages/personalFlashcards.test.jsx', 'src/pages/personalFlashcardPractice.test.jsx', 'src/pages/publicFlashcards.test.jsx', 'src/pages/courseLessons.test.jsx', 'src/components/SaveFlashcardModal.test.jsx', 'src/services/personalFlashcardService.test.js'],
   },
   server: {
     host: '127.0.0.1',

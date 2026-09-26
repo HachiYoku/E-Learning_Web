@@ -14,7 +14,7 @@ const deck = { _id: "deck-1", name: "Work Vocabulary", cardCount: 2 };
 const cards = [{ _id: "one", prompt: "เงินเดือน", answer: "Salary" }, { _id: "two", prompt: "หัวหน้า", answer: "Manager" }];
 
 function renderPractice() {
-  return render(<MemoryRouter initialEntries={["/app/practice/flashcards/mine/deck-1/practice"]}><Routes><Route path="/app/practice/flashcards/mine/:deckId/practice" element={<PersonalFlashcardPractice />} /><Route path="/app/practice/flashcards/mine/:deckId" element={<p>Deck manager</p>} /></Routes></MemoryRouter>);
+  return render(<MemoryRouter initialEntries={["/app/practice/flashcards/mine/deck-1/practice"]}><Routes><Route path="/app/practice/flashcards/mine/:deckId/practice" element={<PersonalFlashcardPractice />} /><Route path="/app/practice/flashcards/mine/:deckId" element={<p>Deck manager</p>} /><Route path="/app/practice/flashcards/mine" element={<p>My Flashcards</p>} /></Routes></MemoryRouter>);
 }
 
 beforeEach(() => {
@@ -29,6 +29,7 @@ describe("personal flashcard practice", () => {
     renderPractice();
     expect(await screen.findByText("Work Vocabulary")).toBeTruthy();
     expect(personalService.fetchPersonalFlashcards).toHaveBeenCalledWith("deck-1");
+    expect(screen.queryAllByText("Back to Flashcards")).toHaveLength(1);
     expect(screen.getByText("Card 1 of 2")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /show flashcard back/i }));
     expect(screen.getByText("Salary")).toBeTruthy();
@@ -55,7 +56,7 @@ describe("personal flashcard practice", () => {
     expect(await screen.findByText("Flashcard set not found.")).toBeTruthy();
   });
 
-  it("retries a private API failure and returns to the deck manager", async () => {
+  it("retries a private API failure and returns to My Flashcards", async () => {
     const user = userEvent.setup();
     personalService.fetchPersonalFlashcards.mockRejectedValueOnce(new Error("Private cards unavailable"));
     renderPractice();
@@ -63,6 +64,7 @@ describe("personal flashcard practice", () => {
     personalService.fetchPersonalFlashcards.mockResolvedValueOnce(cards);
     await user.click(screen.getByRole("button", { name: /try again/i }));
     expect(await screen.findByText("Card 1 of 2")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /back to flashcards/i }).getAttribute("href")).toBe("/app/practice/flashcards/mine/deck-1");
+    await user.click(screen.getByRole("button", { name: /back to flashcards/i }));
+    expect(await screen.findByText("My Flashcards")).toBeTruthy();
   });
 });
