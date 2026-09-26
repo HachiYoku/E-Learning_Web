@@ -5,14 +5,23 @@ export function normalizeCourse(course) {
     return null;
   }
 
+  const legacyPriceValue = course.price == null ? null : Number(course.price);
+  const legacyOriginalPriceValue = course.originalPrice == null
+    ? legacyPriceValue
+    : Number(course.originalPrice);
+
   return {
     id: course._id,
     title: course.title,
     description: course.description || "",
     price: `${Number(course.price || 0).toLocaleString()} บาท`,
     priceValue: Number(course.price || 0),
+    legacyPriceValue: Number.isFinite(legacyPriceValue) ? legacyPriceValue : null,
     originalPrice: `${Number(course.originalPrice ?? course.price ?? 0).toLocaleString()} บาท`,
     originalPriceValue: Number(course.originalPrice ?? course.price ?? 0),
+    legacyOriginalPriceValue: Number.isFinite(legacyOriginalPriceValue)
+      ? legacyOriginalPriceValue
+      : null,
     prices: course.prices || {},
     hasDiscount: Number(course.originalPrice ?? course.price ?? 0) > Number(course.price || 0),
     rating: Number(course.rating || 0),
