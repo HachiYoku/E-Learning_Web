@@ -1,9 +1,11 @@
 import { Star, Trash2, Edit2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { formatCourseCardCurrency, getCourseCardPrices } from './courseCardPricing'
 
 function CourseCard({ course, onEdit, onDelete }) {
   const navigate = useNavigate()
   const image = course.image || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=900&h=700&fit=crop'
+  const prices = getCourseCardPrices(course)
 
   const handleAddLesson = () => {
     navigate(`/courses/${course.id}`)
@@ -39,9 +41,37 @@ function CourseCard({ course, onEdit, onDelete }) {
           {course.description || 'No course description yet.'}
         </p>
 
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-[#765F55]">
-          <span className="flex flex-col"><span className="text-lg font-bold text-[#C97112]">{course.price}</span>{course.hasDiscount ? <span className="text-xs font-medium text-[#9B867C] line-through">{course.originalPrice}</span> : null}</span>
-          <span className="rounded-full bg-[#FFF9EA] px-3 py-1 font-semibold">
+        <div className="mb-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {prices.map((price) => (
+              <div
+                className="rounded-xl border border-[#eadfd1] bg-[#fffdf8] px-3 py-2"
+                key={price.currency}
+              >
+                <p className="text-[11px] font-bold tracking-[0.14em] text-[#8b776b]">
+                  {price.currency}
+                </p>
+                {price.configured ? (
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    {price.hasDiscount && (
+                      <>
+                        <span className="text-xs text-[#9a8a7f] line-through">
+                          {formatCourseCardCurrency(price.originalPrice, price.currency)}
+                        </span>
+                        <span aria-hidden="true" className="text-xs text-[#b19e90]">→</span>
+                      </>
+                    )}
+                    <span className="text-base font-bold text-[#c96b17]">
+                      {formatCourseCardCurrency(price.price, price.currency)}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-[#9a8a7f]">Not configured</p>
+                )}
+              </div>
+            ))}
+          </div>
+          <span className="mt-2 inline-flex rounded-full bg-[#FFF9EA] px-3 py-1 text-sm font-semibold text-[#765F55]">
             {course.lessons} lessons
           </span>
         </div>
