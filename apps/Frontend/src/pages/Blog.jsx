@@ -199,7 +199,7 @@ function Blog() {
       </section>
 
       {/* Insights Section */}
-      {!isLoading && !error && insightBlogs.length > 0 ? <section ref={moreToReadRef} className="scroll-mt-20 bg-[#E9EEF0] px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
+      {!isLoading && !error && insightBlogs.length > 0 ? <section ref={moreToReadRef} className="scroll-mt-20 bg-[#FFF9EA] px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
         <div className="mx-auto max-w-7xl">
 
           <div className="mb-8 border-b border-[#2D2E30]/20 pb-6 sm:mb-10 md:mb-12">
@@ -207,7 +207,7 @@ function Blog() {
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
               More to read
             </h2>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-[#536166] sm:text-base">New ideas, useful words, and friendly perspectives for your Thai learning journey.</p>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-[#765F55] sm:text-base">New ideas, useful words, and friendly perspectives for your Thai learning journey.</p>
           </div>
 
           {insightBlogs.length ? (

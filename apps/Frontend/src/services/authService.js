@@ -45,3 +45,11 @@ export function updateProfile(payload) {
 
   return apiClient.put("/user", formData);
 }
+
+export function confirmOwnAccountDeletion(currentPassword) {
+  return apiClient.post("/user/me/deletion-confirmation", { currentPassword });
+}
+
+export function deleteOwnAccount(deletionConfirmationToken) {
+  return apiClient.delete("/user/me", { deletionConfirmationToken });
+}
