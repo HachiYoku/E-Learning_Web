@@ -1,5 +1,5 @@
-import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useParams, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, BookOpen, Check, CircleCheck, ClipboardCheck, Play, Plus, X } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
@@ -43,6 +43,7 @@ function isGoogleDriveUrl(src) {
 function CourseLessons() {
   const { courseId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [course, setCourse] = useState(null)
   const [lessons, setLessons] = useState([])
   const [courseQuizzes, setCourseQuizzes] = useState([])
@@ -55,8 +56,16 @@ function CourseLessons() {
   const [savedVocabulary, setSavedVocabulary] = useState({})
   const [savedFlashcardMessage, setSavedFlashcardMessage] = useState('')
   const [progress, setProgress] = useState(null)
+  const consumedResumeIntent = useRef(null)
+  const isMounted = useRef(true)
   const activeVideoUrl = useMemo(() => getEmbedUrl(activeLesson?.videoUrl), [activeLesson])
   const activeVideoIsGoogleDrive = useMemo(() => isGoogleDriveUrl(activeLesson?.videoUrl), [activeLesson])
+  const requestedLessonId = useMemo(() => new URLSearchParams(location.search).get('lesson'), [location.search])
+
+  useEffect(() => {
+    isMounted.current = true
+    return () => { isMounted.current = false }
+  }, [])
 
   useEffect(() => {
     const timers = Object.entries(savedVocabulary)
@@ -81,13 +90,33 @@ function CourseLessons() {
     loadCourseLessons()
   }, [courseId])
 
-  const handleOpenLesson = (lesson) => {
+  const handleOpenLesson = useCallback((lesson) => {
     if (!lesson.videoUrl) return
     setActiveLesson(lesson)
     setSavedFlashcardMessage('')
     setSavedVocabulary({})
     saveLastOpenedLesson(courseId, lesson.id).then(setProgress).catch(() => {})
-  }
+  }, [courseId])
+
+  useEffect(() => {
+    if (loading || !requestedLessonId) return
+
+    const intentKey = `${location.key}:${requestedLessonId}`
+    if (consumedResumeIntent.current === intentKey) return
+    consumedResumeIntent.current = intentKey
+
+    const nextSearchParams = new URLSearchParams(location.search)
+    nextSearchParams.delete('lesson')
+    const nextSearch = nextSearchParams.toString()
+    navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '', hash: location.hash }, { replace: true })
+
+    const requestedLesson = lessons.find((lesson) => String(lesson.id) === requestedLessonId)
+    if (requestedLesson) {
+      window.setTimeout(() => {
+        if (isMounted.current) handleOpenLesson(requestedLesson)
+      }, 0)
+    }
+  }, [handleOpenLesson, lessons, loading, location.hash, location.key, location.pathname, location.search, navigate, requestedLessonId])
 
   const handleCompletionToggle = async (lesson) => {
     const isCompleted = progress?.completedLessonIds?.includes(lesson.id)

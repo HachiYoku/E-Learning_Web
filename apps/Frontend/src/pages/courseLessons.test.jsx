@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CourseLessons from "./CourseLessons";
 import * as personalService from "../services/personalFlashcardService";
@@ -19,6 +19,11 @@ import { fetchLessonsByCourse } from "../services/lessonService";
 import { fetchCourseQuizzes } from "../services/quizService";
 import { fetchEnrollmentProgress, saveLastOpenedLesson } from "../services/enrollmentService";
 
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   fetchCourseById.mockResolvedValue({ id: "course-1", title: "Thai Basics", description: "Learn Thai", features: [] });
@@ -31,6 +36,50 @@ beforeEach(() => {
 });
 
 describe("CourseLessons quick save", () => {
+  it('opens only the requested authorized lesson and consumes the resume URL intent', async () => {
+    fetchLessonsByCourse.mockResolvedValue([
+      { id: 'lesson-1', title: 'Greetings', videoUrl: 'https://example.com/greetings', order: 1 },
+      { id: 'lesson-2', title: 'Introductions', videoUrl: 'https://example.com/introductions', order: 2 },
+    ]);
+    fetchEnrollmentProgress.mockResolvedValue({ completedLessonIds: [], completedLessons: 0, totalLessons: 2, percentage: 0 });
+    render(<MemoryRouter initialEntries={["/app/learn/course-1?lesson=lesson-2"]}><Routes><Route path="/app/learn/:courseId" element={<><CourseLessons /><LocationProbe /></>} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByTitle('Introductions')).toBeTruthy();
+    expect(screen.queryByTitle('Greetings')).toBeNull();
+    await waitFor(() => expect(saveLastOpenedLesson).toHaveBeenCalledWith('course-1', 'lesson-2'));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/app/learn/course-1'));
+  });
+
+  it.each(['lesson-deleted', 'not-an-object-id'])('safely ignores an unavailable or malformed resume lesson ID: %s', async (lessonId) => {
+    render(<MemoryRouter initialEntries={[`/app/learn/course-1?lesson=${lessonId}`]}><Routes><Route path="/app/learn/:courseId" element={<><CourseLessons /><LocationProbe /></>} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByText('Your lessons')).toBeTruthy();
+    expect(screen.queryByTitle('Greetings')).toBeNull();
+    expect(saveLastOpenedLesson).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/app/learn/course-1'));
+  });
+
+  it('does not open a valid-looking lesson ID that is absent from this course’s authorized lesson response', async () => {
+    const foreignLessonId = '507f1f77bcf86cd799439011';
+    render(<MemoryRouter initialEntries={[`/app/learn/course-1?lesson=${foreignLessonId}`]}><Routes><Route path="/app/learn/:courseId" element={<><CourseLessons /><LocationProbe /></>} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByText('Your lessons')).toBeTruthy();
+    expect(screen.queryByTitle('Greetings')).toBeNull();
+    expect(saveLastOpenedLesson).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/app/learn/course-1'));
+  });
+
+  it('does not reopen a resumed lesson after the student closes it', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/app/learn/course-1?lesson=lesson-1"]}><Routes><Route path="/app/learn/:courseId" element={<><CourseLessons /><LocationProbe /></>} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByTitle('Greetings')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /close video/i }));
+    await waitFor(() => expect(screen.queryByTitle('Greetings')).toBeNull());
+    expect(screen.getByTestId('location').textContent).toBe('/app/learn/course-1');
+    expect(saveLastOpenedLesson).toHaveBeenCalledTimes(1);
+  });
+
   it("opens the composer from an enrolled lesson while retaining the lesson video and quiz action", async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
