@@ -6,6 +6,7 @@ import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { fetchQuizzesForLesson, fetchCourseQuizzes, fetchQuizHistory, submitQuiz } from "../services/quizService";
 import { learningCoursePath } from "../utils/learningNavigation";
+import { useAuth } from "../contexts/AuthContext";
 
 function scoreMessage(percentage) {
   if (percentage === 100) return "Perfect! Excellent work.";
@@ -57,6 +58,7 @@ function FinalAnswerReview({ questions, answers, correctAnswers }) {
 
 function Quiz() {
   const { courseId, lessonId, quizId } = useParams();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
   const [quizIndex, setQuizIndex] = useState(0);
@@ -72,7 +74,8 @@ function Quiz() {
   const quiz = quizzes[quizIndex];
   const question = quiz?.questions?.[questionIndex];
   const isCourseQuiz = Boolean(quizId);
-  const draftKey = `quiz-draft:${courseId}:${lessonId || "course"}:${quizId || "lesson"}`;
+  const userId = user?.id || user?._id;
+  const draftKey = userId ? `quiz-draft:${userId}:${courseId}:${lessonId || "course"}:${quizId || "lesson"}` : null;
 
   useEffect(() => {
     const loadQuizzes = async () => {
@@ -89,7 +92,7 @@ function Quiz() {
           items = await fetchQuizzesForLesson(courseId, lessonId);
         }
 
-        const savedDraft = getSavedQuizDraft(draftKey);
+        const savedDraft = draftKey ? getSavedQuizDraft(draftKey) : null;
         const savedQuizIndex = items.findIndex(
           (item) => String(item._id || item.id) === String(savedDraft?.quizId)
         );
@@ -99,6 +102,10 @@ function Quiz() {
           && savedDraft.answers.length === (selectedQuiz?.questions?.length || 0)
           && savedDraft.answers.every((answer, index) => answer === null || Number.isInteger(answer) && answer >= 0 && answer < (selectedQuiz.questions[index]?.options?.length || 0));
 
+        if (draftKey && selectedQuiz?.maxAttempts && selectedQuiz.attemptsUsed >= selectedQuiz.maxAttempts) {
+          clearSavedQuizDraft(draftKey);
+        }
+
         setQuizzes(items);
         setQuizIndex(selectedQuizIndex);
         setQuestionIndex(
@@ -106,7 +113,7 @@ function Quiz() {
             ? Math.min(Math.max(savedDraft.questionIndex || 0, 0), Math.max((selectedQuiz?.questions?.length || 1) - 1, 0))
             : 0
         );
-        setAnswers(validSavedAnswers ? savedDraft.answers : Array(selectedQuiz?.questions?.length || 0).fill(null));
+        setAnswers(validSavedAnswers && !(selectedQuiz?.maxAttempts && selectedQuiz.attemptsUsed >= selectedQuiz.maxAttempts) ? savedDraft.answers : Array(selectedQuiz?.questions?.length || 0).fill(null));
       } catch (err) {
         setError(err.message);
       } finally {
@@ -118,7 +125,12 @@ function Quiz() {
   }, [courseId, lessonId, quizId, isCourseQuiz, draftKey]);
 
   useEffect(() => {
-    if (loading || !quiz || result) return;
+    if (loading || !quiz || result || !draftKey) return;
+
+    if (quiz.maxAttempts && quiz.attemptsUsed >= quiz.maxAttempts) {
+      clearSavedQuizDraft(draftKey);
+      return;
+    }
 
     try {
       localStorage.setItem(
@@ -188,7 +200,7 @@ function Quiz() {
       setError("");
       const submission = await submitQuiz(quiz._id, answers);
       setResult(submission);
-      clearSavedQuizDraft(draftKey);
+      if (draftKey) clearSavedQuizDraft(draftKey);
       fetchQuizHistory(quiz._id)
         .then(setHistory)
         .catch(() => {});
