@@ -244,6 +244,23 @@ describe("CourseLessons quick save", () => {
     expect(vocabularyScrollArea.className).toContain('overflow-y-auto');
   });
 
+  it('expands only the existing lesson footer when Up Next appears', async () => {
+    const user = userEvent.setup();
+    fetchLessonsByCourse.mockResolvedValue([
+      { id: 'lesson-1', title: 'Greetings', videoUrl: 'https://example.com/greetings', order: 1, keyVocabulary: [{ _id: 'vocabulary-1', thai: 'สวัสดี', translation: 'Hello' }] },
+      { id: 'lesson-2', title: 'Next lesson', videoUrl: 'https://example.com/next', order: 2, keyVocabulary: [] },
+    ]);
+    fetchEnrollmentProgress.mockResolvedValue({ completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 2, percentage: 50 });
+    saveLastOpenedLesson.mockResolvedValue({ completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 2, percentage: 50 });
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: /greetings/i }));
+    expect(screen.getByRole('button', { name: /continue to next lesson/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /add to my flashcards/i }).closest('.shrink-0').className).toContain('min-h-[20rem]');
+    expect(screen.getByLabelText('Lesson progression').className).toContain('p-3');
+    expect(screen.getByText('Hello').closest('.grid').closest('.lesson-key-vocabulary').className).toContain('flex-1');
+  });
+
   it('opens one vocabulary composer with the selected Thai and translation, then opens the manual composer blank', async () => {
     const user = userEvent.setup();
     fetchLessonsByCourse.mockResolvedValue([{

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const PersonalFlashcardDeck = require("../models/personalFlashcardDeckModel");
 const PersonalFlashcard = require("../models/personalFlashcardModel");
+const FlashcardReviewProgress = require("../models/flashcardReviewProgressModel");
 
 const DECK_NOT_FOUND = "Flashcard deck not found.";
 const CARD_NOT_FOUND = "Flashcard not found.";
@@ -100,7 +101,10 @@ exports.deleteDeck = async (req, res) => {
     const deleted = await mongoose.connection.transaction(async (session) => {
       const deck = await PersonalFlashcardDeck.findOne({ _id: req.params.deckId, ownerId: req.user.id }).session(session);
       if (!deck) return false;
+      const cards = await PersonalFlashcard.find({ ownerId: req.user.id, deckId: deck._id }).select("_id").session(session);
+      const cardIds = cards.map((card) => card._id);
       const cardDeletion = await PersonalFlashcard.deleteMany({ ownerId: req.user.id, deckId: deck._id }, { session });
+      if (cardIds.length) await FlashcardReviewProgress.deleteMany({ userId: req.user.id, cardType: "personal", cardId: { $in: cardIds } }, { session });
       deletedCardCount = cardDeletion.deletedCount;
       await deck.deleteOne({ session });
       return true;
@@ -152,8 +156,14 @@ exports.updateCard = async (req, res) => {
 exports.deleteCard = async (req, res) => {
   if (!isObjectId(req.params.deckId) || !isObjectId(req.params.cardId)) return res.status(404).json({ message: CARD_NOT_FOUND });
   try {
-    const card = await PersonalFlashcard.findOneAndDelete({ _id: req.params.cardId, deckId: req.params.deckId, ownerId: req.user.id });
-    if (!card) return res.status(404).json({ message: CARD_NOT_FOUND });
+    const deleted = await mongoose.connection.transaction(async (session) => {
+      const card = await PersonalFlashcard.findOne({ _id: req.params.cardId, deckId: req.params.deckId, ownerId: req.user.id }).session(session);
+      if (!card) return false;
+      await FlashcardReviewProgress.deleteMany({ userId: req.user.id, cardType: "personal", cardId: card._id }, { session });
+      await card.deleteOne({ session });
+      return true;
+    });
+    if (!deleted) return res.status(404).json({ message: CARD_NOT_FOUND });
     return res.json({ message: "Flashcard deleted successfully" });
   } catch (error) { return sendError(res, error); }
 };

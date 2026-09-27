@@ -25,6 +25,7 @@ import StudentFlashcardsHub from "./pages/StudentFlashcardsHub"
 import MyFlashcards from "./pages/MyFlashcards"
 import MyFlashcardDeck from "./pages/MyFlashcardDeck"
 import PersonalFlashcardPractice from "./pages/PersonalFlashcardPractice"
+import PersonalFlashcardReview from "./pages/PersonalFlashcardReview"
 import RequireAuth from "./routes/RequireAuth"
 import ScrollToTop from "./components/ScrollToTop"
 import Seo from "./components/Seo"
@@ -102,6 +103,7 @@ function App() {
             <Route path="practice/flashcards" element={<StudentFlashcardsHub />} />
             <Route path="practice/flashcards/public" element={<Flashcards />} />
             <Route path="practice/flashcards/mine" element={<MyFlashcards />} />
+            <Route path="practice/flashcards/review" element={<PersonalFlashcardReview />} />
             <Route path="practice/flashcards/mine/:deckId" element={<MyFlashcardDeck />} />
             <Route path="practice/flashcards/mine/:deckId/practice" element={<PersonalFlashcardPractice />} />
             <Route path="practice/:section" element={<Practice />} />

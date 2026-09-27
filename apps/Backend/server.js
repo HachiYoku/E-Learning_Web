@@ -185,6 +185,9 @@ app.use('/flashcards', flashcardRoutes)
 const personalFlashcardRoutes = require('./routes/personalFlashcard')
 app.use('/my-flashcards', personalFlashcardRoutes)
 
+const flashcardReviewRoutes = require('./routes/flashcardReview')
+app.use('/flashcard-reviews', flashcardReviewRoutes)
+
 const promoCodeRoutes = require('./routes/promoCode')
 app.use('/promo-codes', promoCodeRoutes)
 
