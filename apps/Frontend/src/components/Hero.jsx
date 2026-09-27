@@ -37,8 +37,10 @@ function Hero() {
           <h1 className="text-4xl font-bold leading-[1.06] tracking-tight text-[#2D2E30] sm:text-5xl lg:text-7xl">
             Learn Thai with <span className="text-[#E58C1A]">confidence</span><span className="text-[#2D2E30]">, naturally.</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-[#765F55] md:text-xl">
-            Where Thai learning feels relaxed, practical, and enjoyable.
+          <p lang="my" className="font-myanmar mx-auto mt-6 w-full max-w-none text-base leading-[1.8] text-[#765F55] max-[399px]:w-[calc(100%+1rem)] max-[399px]:-mx-2 sm:max-w-xl md:text-xl lg:w-[calc(100%+4rem)] lg:-mx-8 lg:text-lg xl:text-xl">
+            သင့်ရဲ့ ထိုင်းနိုင်ငံ ရည်မှန်းချက်တွေအတွက် အစပျိုးရာ —{" "}
+            <br className="hidden md:block" />
+            <span className="lg:whitespace-nowrap">ထိုင်းစာ၊ ထိုင်းစကားကို အချိန်မရွေး လွယ်ကူစွာ လေ့ကျင့်လိုက်ပါ။</span>
           </p>
           <button
             onClick={() => navigate("/courses")}
@@ -46,7 +48,7 @@ function Hero() {
           >
             Explore Courses <span aria-hidden="true">→</span>
           </button>
-          <p className="mt-4 text-sm font-medium text-[#8B6F61]">Begin with practical Thai for real life.</p>
+          <p lang="my" className="font-myanmar mx-auto mt-4 w-full max-w-none text-sm font-medium leading-7 text-[#8B6F61] max-[399px]:w-[calc(100%+1rem)] max-[399px]:-mx-2 sm:max-w-xl">ထိုင်းစာကို အခြေခံမှ စတင်လေ့လာနိုင်ပါပြီ။</p>
           <div className="mt-8 flex justify-center gap-4" aria-label="Social links">
             <img src={lineIcon} alt="Line" className="h-7 w-7 transition hover:scale-110" />
             <img src={facebookIcon} alt="Facebook" className="h-7 w-7 transition hover:scale-110" />
