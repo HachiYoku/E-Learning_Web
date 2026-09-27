@@ -17,7 +17,7 @@ vi.mock("../services/personalFlashcardService", () => ({ fetchPersonalFlashcardD
 import { fetchCourseById } from "../services/courseService";
 import { fetchLessonsByCourse } from "../services/lessonService";
 import { fetchCourseQuizzes } from "../services/quizService";
-import { fetchEnrollmentProgress, saveLastOpenedLesson } from "../services/enrollmentService";
+import { fetchEnrollmentProgress, saveLastOpenedLesson, setLessonCompleted } from "../services/enrollmentService";
 
 function LocationProbe() {
   const location = useLocation();
@@ -31,6 +31,7 @@ beforeEach(() => {
   fetchCourseQuizzes.mockResolvedValue([]);
   fetchEnrollmentProgress.mockResolvedValue({ completedLessonIds: [], completedLessons: 0, totalLessons: 1, percentage: 0 });
   saveLastOpenedLesson.mockResolvedValue({ completedLessonIds: [], completedLessons: 0, totalLessons: 1, percentage: 0 });
+  setLessonCompleted.mockResolvedValue({ completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 1, percentage: 100 });
   personalService.fetchPersonalFlashcardDecks.mockResolvedValue([{ _id: "set-1", name: "Lesson words" }]);
   personalService.deletePersonalFlashcard.mockResolvedValue({ message: 'Flashcard deleted successfully' });
 });
@@ -94,6 +95,49 @@ describe("CourseLessons quick save", () => {
     expect(screen.getByTitle("Greetings")).toBeTruthy();
   });
 
+  it('marks an incomplete lesson complete from the modal and updates the existing progress UI', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: /greetings/i }));
+    await user.click(screen.getByRole('button', { name: 'Mark Complete' }));
+
+    await waitFor(() => expect(setLessonCompleted).toHaveBeenCalledWith('course-1', 'lesson-1', true));
+    expect(screen.queryByRole('button', { name: 'Mark Complete' })).toBeNull();
+    expect(screen.getAllByText('Completed').length).toBeGreaterThan(0);
+    expect(screen.getByText('1 complete')).toBeTruthy();
+  });
+
+  it('shows a completed state in the modal when the lesson was already completed', async () => {
+    const user = userEvent.setup();
+    fetchEnrollmentProgress.mockResolvedValue({ completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 1, percentage: 100 });
+    saveLastOpenedLesson.mockResolvedValue({ completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 1, percentage: 100 });
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: /greetings/i }));
+    expect(screen.queryByRole('button', { name: 'Mark Complete' })).toBeNull();
+    expect(screen.getAllByText('Completed').length).toBeGreaterThan(0);
+    expect(setLessonCompleted).not.toHaveBeenCalled();
+  });
+
+  it('prevents duplicate completion requests while the modal action is pending', async () => {
+    const user = userEvent.setup();
+    let resolveCompletion;
+    setLessonCompleted.mockImplementation(() => new Promise((resolve) => { resolveCompletion = resolve; }));
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: /greetings/i }));
+    await user.click(screen.getByRole('button', { name: 'Mark Complete' }));
+    const savingButtons = screen.getAllByRole('button', { name: 'Saving...' });
+    expect(savingButtons).toHaveLength(2);
+    expect(savingButtons.every((button) => button.disabled)).toBe(true);
+    await user.click(savingButtons[0]);
+    expect(setLessonCompleted).toHaveBeenCalledTimes(1);
+
+    resolveCompletion({ completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 1, percentage: 100 });
+    await waitFor(() => expect(screen.getAllByText('Completed').length).toBeGreaterThan(0));
+  });
+
   it('displays vocabulary for the active lesson only and keeps the manual composer action available', async () => {
     const user = userEvent.setup();
     fetchLessonsByCourse.mockResolvedValue([
@@ -144,6 +188,7 @@ describe("CourseLessons quick save", () => {
     expect(modal.className).toContain('overflow-hidden');
     expect(footer.className).toContain('shrink-0');
     expect(screen.getByRole('button', { name: /take lesson quiz/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Mark Complete' })).toBeTruthy();
     expect(vocabularyScrollArea.className).toContain('min-h-0');
     expect(vocabularyScrollArea.className).toContain('flex-1');
     expect(vocabularyScrollArea.className).toContain('overflow-y-auto');

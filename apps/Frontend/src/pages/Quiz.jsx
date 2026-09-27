@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { fetchQuizzesForLesson, fetchCourseQuizzes, fetchQuizHistory, submitQuiz } from "../services/quizService";
+import { learningCoursePath } from "../utils/learningNavigation";
 
 function scoreMessage(percentage) {
   if (percentage === 100) return "Perfect! Excellent work.";
@@ -130,13 +131,9 @@ function Quiz() {
   }, [answers, draftKey, loading, questionIndex, quiz, result]);
 
   useEffect(() => {
-    if (!quiz?._id) {
-      setHistory(null);
-      return undefined;
-    }
+    if (!quiz?._id) return undefined;
 
     let isMounted = true;
-    setHistory(null);
 
     fetchQuizHistory(quiz._id)
       .then((data) => {
@@ -149,12 +146,13 @@ function Quiz() {
     return () => {
       isMounted = false;
     };
-  }, [quiz?._id]);
+  }, [quiz?._id, quiz?.attemptsUsed, quiz?.maxAttempts]);
 
   const chooseQuiz = (index) => {
     setQuizIndex(index);
     setQuestionIndex(0);
     setAnswers(Array(quizzes[index]?.questions?.length || 0).fill(null));
+    setHistory(null);
     setResult(null);
     setError("");
   };
@@ -224,6 +222,7 @@ function Quiz() {
   }
 
   const backPath = `/app/learn/${courseId}`;
+  const lessonBackPath = !isCourseQuiz && lessonId ? learningCoursePath(courseId, lessonId) : backPath;
   const noQuizMessage = isCourseQuiz ? "This course quiz is not available." : "Your teacher has not added a quiz for this lesson.";
   const attemptsRemaining = quiz ? Math.max((quiz.maxAttempts ?? Infinity) - (quiz.attemptsUsed ?? 0), 0) : 0;
   const isQuizLocked = Boolean(quiz?.maxAttempts) && (quiz?.attemptsUsed ?? 0) >= quiz.maxAttempts && !result;
@@ -346,16 +345,19 @@ function Quiz() {
                     </p>
                   ) : null}
 
-                  {quiz.maxAttempts && quiz.attemptsUsed >= quiz.maxAttempts ? (
-                    <p className="mt-8 font-semibold text-gray-600">You have used all available attempts for this quiz.</p>
-                  ) : (
-                    <button
-                      onClick={retryQuiz}
-                      className="mt-8 rounded-xl bg-[#F8C56A] px-6 py-3 font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]"
-                    >
-                      Try again
-                    </button>
-                  )}
+                  <div className="mt-8 flex flex-wrap justify-center gap-3">
+                    {!isCourseQuiz ? <button onClick={() => navigate(lessonBackPath)} className="rounded-xl border border-[#2D2E30]/15 bg-white px-6 py-3 font-bold text-[#765F55] transition hover:bg-[#FFF9EA] hover:text-[#C97112]">Back to Lesson</button> : null}
+                    {quiz.maxAttempts && quiz.attemptsUsed >= quiz.maxAttempts ? (
+                      <p className="self-center font-semibold text-gray-600">You have used all available attempts for this quiz.</p>
+                    ) : (
+                      <button
+                        onClick={retryQuiz}
+                        className="rounded-xl bg-[#F8C56A] px-6 py-3 font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]"
+                      >
+                        Try again
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : isQuizLocked ? (
                 <div className="py-10 text-center">
