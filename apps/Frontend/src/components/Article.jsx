@@ -49,8 +49,8 @@ function Article() {
             <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
               Thai Learning <span className="text-[#E58C1A]">Insights.</span>
             </h2>
-            <p className="mt-4 text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg">
-              Practical tips, useful language notes, and encouragement for every stage of your Thai learning journey.
+            <p lang="my" className="font-myanmar mt-5 max-w-2xl text-sm leading-[1.85] text-[#765F55] sm:text-base md:text-lg">
+              ထိုင်းစာ၊ ထိုင်းစကားနဲ့ ထိုင်းယဉ်ကျေးမှုကို ပိုမိုနားလည်စေမယ့် အသုံးဝင်သော <br className="hidden md:block" /> ဆောင်းပါးများကို ဖတ်ရှုလေ့လာလိုက်ပါ။
             </p>
           </div>
           <button
