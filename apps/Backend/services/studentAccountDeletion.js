@@ -3,6 +3,7 @@ const User = require("../models/userModel");
 const Enrollment = require("../models/enrollmentModel");
 const PersonalFlashcardDeck = require("../models/personalFlashcardDeckModel");
 const PersonalFlashcard = require("../models/personalFlashcardModel");
+const FlashcardReviewProgress = require("../models/flashcardReviewProgressModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const Notification = require("../models/notificationModel");
 const SupportTicket = require("../models/supportTicketModel");
@@ -50,6 +51,7 @@ async function deleteStudentAccount(userId, { actorId, initiatedBy, deletionConf
     await Promise.all([
       Enrollment.deleteMany({ userId: student._id }, { session }),
       PersonalFlashcard.deleteMany({ ownerId: student._id }, { session }),
+      FlashcardReviewProgress.deleteMany({ userId: student._id }, { session }),
       PersonalFlashcardDeck.deleteMany({ ownerId: student._id }, { session }),
       QuizAttempt.deleteMany({ user: student._id }, { session }),
       Notification.deleteMany({ userId: student._id }, { session }),
