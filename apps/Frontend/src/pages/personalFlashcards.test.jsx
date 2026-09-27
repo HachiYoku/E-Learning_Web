@@ -6,11 +6,13 @@ import MyFlashcardDeck from "./MyFlashcardDeck";
 import MyFlashcards from "./MyFlashcards";
 import StudentFlashcardsHub from "./StudentFlashcardsHub";
 import * as service from "../services/personalFlashcardService";
+import * as reviewService from "../services/flashcardReviewService";
 
 vi.mock("../services/personalFlashcardService", () => ({
   fetchPersonalFlashcardDecks: vi.fn(), createPersonalFlashcardDeck: vi.fn(), updatePersonalFlashcardDeck: vi.fn(), deletePersonalFlashcardDeck: vi.fn(),
   fetchPersonalFlashcards: vi.fn(), createPersonalFlashcard: vi.fn(), updatePersonalFlashcard: vi.fn(), deletePersonalFlashcard: vi.fn(),
 }));
+vi.mock("../services/flashcardReviewService", () => ({ fetchPersonalReviewSummary: vi.fn() }));
 
 const deck = { _id: "deck-1", name: "Work Vocabulary", cardCount: 1, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z" };
 const card = { _id: "card-1", prompt: "เงินเดือน", answer: "Salary" };
@@ -23,6 +25,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   service.fetchPersonalFlashcardDecks.mockResolvedValue([deck]);
   service.fetchPersonalFlashcards.mockResolvedValue([card]);
+  reviewService.fetchPersonalReviewSummary.mockResolvedValue({ dueCount: 0 });
 });
 
 describe("student flashcard hub", () => {
@@ -34,6 +37,24 @@ describe("student flashcard hub", () => {
 });
 
 describe("My Flashcards deck manager", () => {
+  it("shows due personal cards separately and links to review", async () => {
+    reviewService.fetchPersonalReviewSummary.mockResolvedValueOnce({ dueCount: 3 });
+    render(<MemoryRouter><MyFlashcards /></MemoryRouter>);
+    expect(await screen.findByText(/3 flashcards are ready for review/i)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /start review/i }).getAttribute("href")).toBe("/app/practice/flashcards/review");
+  });
+
+  it("keeps set management available when review status fails and lets students retry", async () => {
+    const user = userEvent.setup();
+    reviewService.fetchPersonalReviewSummary.mockRejectedValueOnce(new Error("Review service unavailable"));
+    render(<MemoryRouter><MyFlashcards /></MemoryRouter>);
+    expect(await screen.findByText("Work Vocabulary")).toBeTruthy();
+    expect(await screen.findByText("Review service unavailable")).toBeTruthy();
+    reviewService.fetchPersonalReviewSummary.mockResolvedValueOnce({ dueCount: 1 });
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    expect(await screen.findByRole("link", { name: /start review/i })).toBeTruthy();
+  });
+
   it("loads decks and shows the empty state", async () => {
     service.fetchPersonalFlashcardDecks.mockResolvedValueOnce([deck]);
     const mounted = render(<MemoryRouter><MyFlashcards /></MemoryRouter>);

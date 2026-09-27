@@ -1,7 +1,8 @@
-import { ArrowLeft, CalendarClock, Edit3, Layers3, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, Edit3, Layers3, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { createPersonalFlashcardDeck, deletePersonalFlashcardDeck, fetchPersonalFlashcardDecks, updatePersonalFlashcardDeck } from "../services/personalFlashcardService";
+import { fetchPersonalReviewSummary } from "../services/flashcardReviewService";
 
 const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)) : "";
 const setMessage = (message) => message === "You already have a flashcard deck with that name." ? "You already have a flashcard set with that name." : message;
@@ -13,12 +14,24 @@ function MyFlashcards() {
   const [deckModal, setDeckModal] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [pending, setPending] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState({ loading: true, dueCount: 0, error: "" });
 
   const load = async () => {
     setLoading(true); setError("");
     try { setDecks(await fetchPersonalFlashcardDecks()); } catch (requestError) { setError(setMessage(requestError.message)); } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+
+  const loadReviewStatus = async () => {
+    setReviewStatus((status) => ({ ...status, loading: true, error: "" }));
+    try {
+      const summary = await fetchPersonalReviewSummary();
+      setReviewStatus({ loading: false, dueCount: Number(summary?.dueCount) || 0, error: "" });
+    } catch (requestError) {
+      setReviewStatus((status) => ({ ...status, loading: false, error: requestError.message || "We couldn't load your review status." }));
+    }
+  };
+  useEffect(() => { loadReviewStatus(); }, []);
 
   const saveDeck = async (name) => {
     if (pending) return;
@@ -40,10 +53,18 @@ function MyFlashcards() {
   return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
     <Link to="/app/practice/flashcards" className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1CE] hover:text-[#C97112]"><ArrowLeft size={16} />Back to Flashcards</Link>
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-[#C97112]">Practice</p><h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">My Flashcards</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#765F55] sm:text-base">Create and practice your own flashcards.</p></div><button type="button" onClick={() => setDeckModal({ deck: null, error: "" })} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A]"><Plus size={18} />Create a Set</button></header>
+    <ReviewStatus status={reviewStatus} retry={loadReviewStatus} />
     {loading ? <DeckSkeleton /> : error ? <LoadError error={error} retry={load} /> : decks.length ? <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{decks.map((deck) => <DeckCard key={deck._id} deck={deck} onRename={() => setDeckModal({ deck, error: "" })} onDelete={() => setDeleteTarget({ ...deck, error: "" })} />)}</div> : <Empty onCreate={() => setDeckModal({ deck: null, error: "" })} />}
     {deckModal && <DeckModal deck={deckModal.deck} error={deckModal.error} pending={pending} onClose={() => !pending && setDeckModal(null)} onSave={saveDeck} />}
     {deleteTarget && <DeleteDeckModal deck={deleteTarget} pending={pending} onCancel={() => !pending && setDeleteTarget(null)} onConfirm={removeDeck} />}
   </div>;
+}
+
+function ReviewStatus({ status, retry }) {
+  if (status.loading) return <section aria-busy="true" aria-label="Loading review status" className="mt-8 min-h-36 animate-pulse rounded-3xl border border-[#2D2E30]/10 bg-white p-5 sm:p-6"><div className="h-4 w-28 rounded bg-[#F2EFEB]" /><div className="mt-4 h-7 w-52 rounded bg-[#F2EFEB]" /><div className="mt-4 h-11 w-36 rounded-xl bg-[#F2EFEB]" /></section>;
+  if (status.error) return <section className="mt-8 min-h-36 rounded-3xl border border-red-100 bg-white p-5 sm:p-6"><p className="text-sm font-bold text-[#2D2E30]">Review status is unavailable</p><p role="alert" className="mt-1 text-sm text-[#765F55]">{status.error}</p><button type="button" onClick={retry} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#2D2E30]/15 px-4 py-3 text-sm font-bold text-[#765F55] hover:bg-[#FFF9EA]"><RefreshCw size={17} />Try again</button></section>;
+  if (!status.dueCount) return <section className="mt-8 min-h-36 rounded-3xl border border-[#4D927F]/20 bg-[#EDF8F3] p-5 sm:p-6"><div className="flex items-start gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#397A69]"><CheckCircle2 size={22} /></span><div><h2 className="text-lg font-bold text-[#2D2E30]">You&apos;re all caught up</h2><p className="mt-1 text-sm leading-6 text-[#765F55]">No flashcards are ready for review right now.</p></div></div></section>;
+  return <section className="mt-8 min-h-36 rounded-3xl border border-[#E58C1A]/25 bg-[#FFF9EA] p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-[#C97112]">Personal review</p><h2 className="mt-2 text-xl font-bold text-[#2D2E30]">Ready to Review</h2><p className="mt-1 text-sm leading-6 text-[#765F55]">{status.dueCount} {status.dueCount === 1 ? "flashcard is" : "flashcards are"} ready for review.</p></div><Link to="/app/practice/flashcards/review" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A]">Start Review</Link></div></section>;
 }
 
 function DeckCard({ deck, onRename, onDelete }) {
