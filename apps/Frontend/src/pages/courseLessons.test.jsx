@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -108,6 +108,45 @@ describe("CourseLessons quick save", () => {
     expect(screen.getByText('1 complete')).toBeTruthy();
   });
 
+  it('offers and opens the first incomplete lesson after completing the current lesson', async () => {
+    const user = userEvent.setup();
+    fetchLessonsByCourse.mockResolvedValue([
+      { id: 'lesson-1', title: 'Greetings', videoUrl: 'https://example.com/greetings', order: 1 },
+      { id: 'lesson-2', title: 'Directions', videoUrl: 'https://example.com/directions', order: 9 },
+      { id: 'lesson-3', title: 'Shopping', videoUrl: 'https://example.com/shopping', order: 21 },
+    ]);
+    setLessonCompleted.mockResolvedValue({ completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 3, percentage: 33 });
+    saveLastOpenedLesson.mockImplementation((_, lessonId) => Promise.resolve(lessonId === 'lesson-2'
+      ? { completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 3, percentage: 33 }
+      : { completedLessonIds: [], completedLessons: 0, totalLessons: 3, percentage: 0 }));
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: /greetings/i }));
+    await user.click(screen.getByRole('button', { name: 'Mark Complete' }));
+    const continueButton = await screen.findByRole('button', { name: /continue to next lesson/i });
+    expect(screen.getByText('Lesson 9 · Directions')).toBeTruthy();
+    await user.click(continueButton);
+
+    expect(await screen.findByTitle('Directions')).toBeTruthy();
+    await waitFor(() => expect(saveLastOpenedLesson).toHaveBeenLastCalledWith('course-1', 'lesson-2'));
+  });
+
+  it('offers the remaining earlier incomplete lesson when no later incomplete lesson exists', async () => {
+    const user = userEvent.setup();
+    fetchLessonsByCourse.mockResolvedValue([
+      { id: 'lesson-1', title: 'Greetings', videoUrl: 'https://example.com/greetings', order: 1 },
+      { id: 'lesson-2', title: 'Directions', videoUrl: 'https://example.com/directions', order: 9 },
+      { id: 'lesson-3', title: 'Shopping', videoUrl: 'https://example.com/shopping', order: 21 },
+    ]);
+    fetchEnrollmentProgress.mockResolvedValue({ completedLessonIds: ['lesson-2', 'lesson-3'], completedLessons: 2, totalLessons: 3, percentage: 67 });
+    saveLastOpenedLesson.mockResolvedValue({ completedLessonIds: ['lesson-2', 'lesson-3'], completedLessons: 2, totalLessons: 3, percentage: 67 });
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: /shopping/i }));
+    expect(await screen.findByRole('button', { name: 'Continue Course' })).toBeTruthy();
+    expect(screen.getByText('Lesson 1 · Greetings')).toBeTruthy();
+  });
+
   it('shows a completed state in the modal when the lesson was already completed', async () => {
     const user = userEvent.setup();
     fetchEnrollmentProgress.mockResolvedValue({ completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 1, percentage: 100 });
@@ -117,6 +156,9 @@ describe("CourseLessons quick save", () => {
     await user.click(await screen.findByRole('button', { name: /greetings/i }));
     expect(screen.queryByRole('button', { name: 'Mark Complete' })).toBeNull();
     expect(screen.getAllByText('Completed').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Completed').find((element) => element.tagName === 'SPAN').className).toContain('bg-[#E9F4EA]');
+    expect(screen.getByText('All lessons completed')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to Course' })).toBeTruthy();
     expect(setLessonCompleted).not.toHaveBeenCalled();
   });
 
@@ -131,6 +173,7 @@ describe("CourseLessons quick save", () => {
     const savingButtons = screen.getAllByRole('button', { name: 'Saving...' });
     expect(savingButtons).toHaveLength(2);
     expect(savingButtons.every((button) => button.disabled)).toBe(true);
+    expect(screen.queryByLabelText('Lesson progression')).toBeNull();
     await user.click(savingButtons[0]);
     expect(setLessonCompleted).toHaveBeenCalledTimes(1);
 
@@ -186,9 +229,16 @@ describe("CourseLessons quick save", () => {
     expect(modal.className).toContain('h-[calc(100dvh-3rem)]');
     expect(modal.className).toContain('flex-col');
     expect(modal.className).toContain('overflow-hidden');
+    expect(modal.className).toContain('lesson-modal');
+    expect(modal.className).toContain('h-[calc(100dvh-6rem)]');
+    expect(modal.className).toContain('sm:h-[calc(100dvh-3rem)]');
     expect(footer.className).toContain('shrink-0');
     expect(screen.getByRole('button', { name: /take lesson quiz/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Mark Complete' })).toBeTruthy();
+    const actionGrid = screen.getByRole('button', { name: /add to my flashcards/i }).parentElement;
+    expect(actionGrid.className).toContain('grid-cols-2');
+    expect(screen.getByRole('button', { name: /take lesson quiz/i }).className).toContain('w-full');
+    expect(screen.getByRole('button', { name: 'Mark Complete' }).className).toContain('w-full');
     expect(vocabularyScrollArea.className).toContain('min-h-0');
     expect(vocabularyScrollArea.className).toContain('flex-1');
     expect(vocabularyScrollArea.className).toContain('overflow-y-auto');
@@ -207,15 +257,17 @@ describe("CourseLessons quick save", () => {
 
     await user.click(await screen.findByRole('button', { name: /greetings/i }));
     await user.click(screen.getByRole('button', { name: 'Save vocabulary สวัสดี to My Flashcards' }));
-    expect(await screen.findByRole('dialog', { name: /add to my flashcards/i })).toBeTruthy();
-    expect(screen.getByLabelText(/^front$/i).value).toBe('สวัสดี');
-    expect(screen.getByLabelText(/^back$/i).value).toBe('Hello');
-    expect(screen.queryByText('sa-wat-dee', { selector: 'textarea' })).toBeNull();
+    const vocabularyDialog = await screen.findByRole('dialog', { name: /save to my flashcards/i });
+    expect(within(vocabularyDialog).getByText('สวัสดี')).toBeTruthy();
+    expect(within(vocabularyDialog).getByText('Hello')).toBeTruthy();
+    expect(screen.queryByLabelText(/^front$/i)).toBeNull();
+    expect(screen.queryByLabelText(/^back$/i)).toBeNull();
 
     await user.click(screen.getByRole('button', { name: /close add to my flashcards/i }));
     await user.click(screen.getByRole('button', { name: 'Save vocabulary ขอบคุณ to My Flashcards' }));
-    expect(screen.getByLabelText(/^front$/i).value).toBe('ขอบคุณ');
-    expect(screen.getByLabelText(/^back$/i).value).toBe('Thank you');
+    expect(within(screen.getByRole('dialog')).getByText('ขอบคุณ')).toBeTruthy();
+    expect(within(screen.getByRole('dialog')).getByText('Thank you')).toBeTruthy();
+    expect(screen.queryByLabelText(/^front$/i)).toBeNull();
 
     await user.click(screen.getByRole('button', { name: /close add to my flashcards/i }));
     await user.click(screen.getByRole('button', { name: /add to my flashcards/i }));

@@ -11,6 +11,7 @@ import { fetchEnrollmentProgress, saveLastOpenedLesson, setLessonCompleted } fro
 import SaveFlashcardModal from '../components/SaveFlashcardModal'
 import LessonKeyVocabulary from '../components/LessonKeyVocabulary'
 import { deletePersonalFlashcard } from '../services/personalFlashcardService'
+import { findNextIncompleteLesson } from '../utils/lessonProgression'
 
 const VOCABULARY_UNDO_WINDOW_MS = 5000
 
@@ -174,6 +175,11 @@ function CourseLessons() {
   const completedLessons = progress?.completedLessons || 0
   const totalLessons = progress?.totalLessons || lessons.length
   const percentage = progress?.percentage || 0
+  const completedLessonIds = progress?.completedLessonIds || []
+  const activeLessonIsCompleted = Boolean(activeLesson && completedLessonIds.some((lessonId) => String(lessonId) === String(activeLesson.id)))
+  const nextLessonProgression = activeLessonIsCompleted
+    ? findNextIncompleteLesson(lessons, activeLesson.id, completedLessonIds)
+    : null
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FFFDF8]">
@@ -216,8 +222,8 @@ function CourseLessons() {
       </main>
 
       {activeLesson ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6" onClick={() => setActiveLesson(null)}>
-          <div className={`relative w-full max-w-4xl rounded-[1.75rem] bg-[#2D2E30] shadow-2xl ${Array.isArray(activeLesson.keyVocabulary) && activeLesson.keyVocabulary.length > 0 ? 'flex h-[calc(100dvh-3rem)] flex-col overflow-hidden' : 'overflow-hidden'}`} onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 pb-20 pt-3 sm:py-6" onClick={() => setActiveLesson(null)}>
+          <div className={`lesson-modal relative w-full max-w-4xl rounded-[1.75rem] bg-[#2D2E30] shadow-2xl ${Array.isArray(activeLesson.keyVocabulary) && activeLesson.keyVocabulary.length > 0 ? 'flex h-[calc(100dvh-6rem)] flex-col overflow-hidden sm:h-[calc(100dvh-3rem)]' : 'overflow-hidden'}`} onClick={(event) => event.stopPropagation()}>
             <button type="button" onClick={() => setActiveLesson(null)} className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2D2E30] transition hover:bg-[#FFF4D8]" aria-label="Close video"><X className="h-5 w-5" /></button>
             {activeVideoIsGoogleDrive ? (
               <div className={`flex aspect-video flex-col items-center justify-center bg-[#FFF9EA] px-6 text-center ${activeLesson.keyVocabulary?.length ? 'h-[min(48vw,38vh)] shrink-0 overflow-y-auto' : ''}`}>
@@ -229,16 +235,17 @@ function CourseLessons() {
               <div className={`aspect-video w-full shrink-0 ${activeLesson.keyVocabulary?.length ? 'h-[min(48vw,38vh)]' : ''}`}><iframe src={activeVideoUrl || activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>
             )}
             <LessonKeyVocabulary vocabulary={activeLesson.keyVocabulary} onSave={openVocabularyFlashcardComposer} savedVocabulary={savedVocabulary} onUndo={handleUndoVocabularySave} />
-            <div className="shrink-0 border-t border-white/10 p-4">
+            <div className="shrink-0 border-t border-white/10 p-3 sm:p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div><p className="text-sm font-bold text-white">{activeLesson.title}</p>{savedFlashcardMessage ? <p role="status" className="mt-1 text-xs font-bold text-[#BDE8C1]">{savedFlashcardMessage}</p> : null}</div>
-              <div className="flex flex-wrap gap-2"><button type="button" onClick={openManualFlashcardComposer} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/25 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/15"><Plus size={16} />Add to My Flashcards</button><button type="button" onClick={() => navigate(`/app/learn/${courseId}/quiz/${activeLesson.id}`)} className="min-h-11 rounded-xl bg-[#F8C56A] px-4 py-2.5 text-xs font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]">Take lesson quiz</button>{progress?.completedLessonIds?.includes(activeLesson.id) ? <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#BDE8C1]/30 bg-[#246B35] px-4 py-2.5 text-xs font-bold text-white"><Check size={16} aria-hidden="true" />Completed</span> : <button type="button" disabled={completionPendingLessonId === activeLesson.id} onClick={() => handleCompletionToggle(activeLesson)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#246B35] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#397A69] disabled:cursor-not-allowed disabled:opacity-60">{completionPendingLessonId === activeLesson.id ? 'Saving...' : <><Check size={16} aria-hidden="true" />Mark Complete</>}</button>}</div>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"><button type="button" onClick={openManualFlashcardComposer} className="col-span-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/25 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/15 sm:w-auto"><Plus size={16} />Add to My Flashcards</button><button type="button" onClick={() => navigate(`/app/learn/${courseId}/quiz/${activeLesson.id}`)} className="min-h-11 w-full whitespace-nowrap rounded-xl bg-[#F8C56A] px-2 py-2.5 text-[11px] font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] sm:w-auto sm:px-4 sm:text-xs">Take lesson quiz</button>{activeLessonIsCompleted ? <span className="inline-flex min-h-11 w-full items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-[#7EAF85]/40 bg-[#E9F4EA] px-2 py-2.5 text-[11px] font-bold text-[#397445] sm:w-auto sm:gap-2 sm:px-4 sm:text-xs"><Check size={16} aria-hidden="true" />Completed</span> : <button type="button" disabled={completionPendingLessonId === activeLesson.id} onClick={() => handleCompletionToggle(activeLesson)} className="inline-flex min-h-11 w-full items-center justify-center gap-1 whitespace-nowrap rounded-xl bg-[#246B35] px-2 py-2.5 text-[11px] font-bold text-white transition hover:bg-[#397A69] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:gap-2 sm:px-4 sm:text-xs">{completionPendingLessonId === activeLesson.id ? 'Saving...' : <><Check size={16} aria-hidden="true" />Mark Complete</>}</button>}</div>
               </div>
+              {activeLessonIsCompleted ? <section className="mt-3 rounded-xl border border-[#BDE8C1]/25 bg-white/10 p-3" aria-label="Lesson progression">{nextLessonProgression ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#BDE8C1]">{nextLessonProgression.isAfterCurrent ? 'Up next' : 'Continue course'}</p><p className="mt-1 text-sm font-bold text-white">Lesson {nextLessonProgression.lesson.order} · {nextLessonProgression.lesson.title}</p></div><button type="button" onClick={() => handleOpenLesson(nextLessonProgression.lesson)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#BDE8C1] px-4 py-2.5 text-xs font-bold text-[#183C20] transition hover:bg-white">{nextLessonProgression.isAfterCurrent ? 'Continue to Next Lesson' : 'Continue Course'}<ArrowRight className="h-4 w-4" aria-hidden="true" /></button></div> : <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold text-white">All lessons completed</p><p className="mt-1 text-xs text-white/75">You’ve completed all lessons in this course.</p></div><button type="button" onClick={() => setActiveLesson(null)} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/25 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/15">Back to Course</button></div>}</section> : null}
             </div>
           </div>
         </div>
       ) : null}
-      <SaveFlashcardModal isOpen={isSaveFlashcardOpen} initialFront={flashcardInitialValues?.front} initialBack={flashcardInitialValues?.back} onClose={() => setIsSaveFlashcardOpen(false)} onSaved={(deck) => { setSavedFlashcardMessage(`✓ Saved to ${deck.name}`); setIsSaveFlashcardOpen(false) }} onCardSaved={handleVocabularyCardSaved} />
+      <SaveFlashcardModal isOpen={isSaveFlashcardOpen} initialFront={flashcardInitialValues?.front} initialBack={flashcardInitialValues?.back} readOnly={Boolean(activeVocabularyForSave)} onClose={() => setIsSaveFlashcardOpen(false)} onSaved={(deck) => { setSavedFlashcardMessage(`✓ Saved to ${deck.name}`); setIsSaveFlashcardOpen(false) }} onCardSaved={handleVocabularyCardSaved} />
       <Footer />
     </div>
   )
