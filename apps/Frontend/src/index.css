@@ -24,6 +24,25 @@ main > .mx-auto.max-w-3xl > header.text-center > div:first-child {
   }
 }
 
+@media (max-width: 639px) and (max-height: 750px) {
+  .lesson-modal {
+    height: auto;
+    max-height: calc(100dvh - 6rem);
+  }
+
+  /* Keep lesson actions visible when Key Vocabulary is long on short phones. */
+  .lesson-key-vocabulary {
+    flex: none;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .lesson-key-vocabulary__scroll {
+    flex: none;
+    max-height: 9rem;
+  }
+}
+
 h1,
 h2,
 h3,

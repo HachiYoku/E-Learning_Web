@@ -1,17 +1,17 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, BookOpen, CircleCheck } from 'lucide-react'
+import { learningCoursePath } from '../utils/learningNavigation'
 
 function MyCourseCard({ id, image, title, description, progress, buttonText = "Learn Now" }) {
   const navigate = useNavigate()
-
-  const handleLearnNow = () => {
-    navigate(`/app/learn/${id}`)
-  }
-
   const completedLessons = progress?.completedLessons || 0
   const totalLessons = progress?.totalLessons || 0
   const percentage = progress?.percentage || 0
   const lastLesson = progress?.lastOpenedLesson
+
+  const handleLearnNow = () => {
+    navigate(learningCoursePath(id, lastLesson?.id))
+  }
 
   return (
     <article className="group relative flex flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-[#FFFDF8] p-3 shadow-[0_18px_45px_-32px_rgba(80,48,19,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_26px_55px_-32px_rgba(80,48,19,0.45)] md:flex-row md:gap-5 md:p-4">

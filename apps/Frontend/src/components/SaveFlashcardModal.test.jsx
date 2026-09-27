@@ -94,10 +94,14 @@ describe("SaveFlashcardModal", () => {
     await waitForSets(user);
     await fillCard(user, "ไป", "Go");
     await user.click(screen.getByRole("button", { name: /create a new set/i }));
-    await user.type(screen.getByLabelText(/set name/i), "Travel Thai");
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await user.type(screen.getByLabelText(/new set name/i), "Travel Thai");
+    expect(screen.getByPlaceholderText("Enter set name")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save" }).disabled).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Create Set" }));
 
     await waitFor(() => expect(service.createPersonalFlashcardDeck).toHaveBeenCalledWith("Travel Thai"));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
     expect(service.createPersonalFlashcard).toHaveBeenCalledWith("set-travel", { prompt: "ไป", answer: "Go" });
     expect(onSaved).toHaveBeenCalledWith(newSet);
   });
@@ -111,7 +115,9 @@ describe("SaveFlashcardModal", () => {
     await waitForSets(user);
     await fillCard(user, "ข้าว", "Rice");
     await user.click(screen.getByRole("button", { name: /create a new set/i }));
-    await user.type(screen.getByLabelText(/set name/i), "Food");
+    await user.type(screen.getByLabelText(/new set name/i), "Food");
+    await user.click(screen.getByRole("button", { name: "Create Set" }));
+    await waitFor(() => expect(service.createPersonalFlashcardDeck).toHaveBeenCalledWith("Food"));
     await user.click(screen.getByRole("button", { name: /^save$/i }));
     expect((await screen.findByRole("alert")).textContent).toContain("Food” was created");
     expect(screen.getByText("Food")).toBeTruthy();
@@ -181,5 +187,28 @@ describe("SaveFlashcardModal", () => {
     await waitForSets(user);
     expect(screen.getByLabelText(/^front$/i).value).toBe("");
     expect(screen.getByLabelText(/^back$/i).value).toBe("");
+  });
+
+  it("shows vocabulary saves as read-only content while retaining manual Front and Back editing", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderModal({ initialFront: "สวัสดี", initialBack: "Hello", readOnly: true });
+    await waitForSets(user);
+
+    expect(screen.getByRole("heading", { name: "Save to My Flashcards" })).toBeTruthy();
+    expect(screen.getByText("สวัสดี")).toBeTruthy();
+    expect(screen.getByText("Hello")).toBeTruthy();
+    expect(screen.queryByLabelText(/^front$/i)).toBeNull();
+    expect(screen.queryByLabelText(/^back$/i)).toBeNull();
+    await chooseSet(user);
+    service.createPersonalFlashcard.mockResolvedValue({ _id: "card-vocabulary" });
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(service.createPersonalFlashcard).toHaveBeenCalledWith("set-work", { prompt: "สวัสดี", answer: "Hello" }));
+
+    rerender(<SaveFlashcardModal isOpen={false} onClose={vi.fn()} onSaved={vi.fn()} />);
+    rerender(<SaveFlashcardModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+    await waitForSets(user);
+    expect(screen.getByRole("heading", { name: "Add to My Flashcards" })).toBeTruthy();
+    expect(screen.getByLabelText(/^front$/i)).toBeTruthy();
+    expect(screen.getByLabelText(/^back$/i)).toBeTruthy();
   });
 });
