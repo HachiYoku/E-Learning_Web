@@ -1,7 +1,6 @@
 const User = require("../models/userModel");
 const Course = require("../models/courseModel");
 const Enrollment = require("../models/enrollmentModel");
-const Payment = require("../models/paymentModel");
 const AuditLog = require("../models/auditLogModel");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
@@ -9,7 +8,9 @@ const { uploadStream } = require("../services/uploadStream");
 const { createNotification } = require("./notificationController");
 const { writeAuditLog } = require("../services/auditLogger");
 const { revokeAllUserSessions } = require("../services/sessionService");
-const { deletePaymentProof } = require("../services/paymentProofStorage");
+const { STUDENT_REFRESH_COOKIE_NAME, REFRESH_COOKIE_NAME, clearRefreshCookieOptions } = require("../services/sessionService");
+const { deleteStudentAccount } = require("../services/studentAccountDeletion");
+const { hasValidDeletionConfirmation, issueDeletionConfirmation } = require("../services/accountDeletionConfirmation");
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
@@ -104,53 +105,60 @@ const updateProfile = async (req, res) => {
   }
 };
 
+const verifyPasswordReauthentication = async (userId, password, { missingMessage = "Current password is required.", invalidMessage = "Current password is incorrect." } = {}) => {
+  if (typeof password !== "string" || !password.trim()) {
+    throw Object.assign(new Error(missingMessage), { status: 400 });
+  }
+  // This remains deliberately separate from account cleanup so an OAuth-only
+  // account can later supply another re-authentication mechanism.
+  const user = await User.findById(userId).select("+password role");
+  if (!user || !bcrypt.compareSync(password, user.password)) {
+    throw Object.assign(new Error(invalidMessage), { status: 403 });
+  }
+  return user;
+};
+
 const deletAccount = async (req, res) => {
   try {
     const { adminPassword } = req.body || {};
-
-    if (typeof adminPassword !== 'string' || !adminPassword.trim()) {
-      return res.status(400).json({ message: "Admin password is required to perform this action" });
-    }
-
-    // Verify admin password
-    const adminUser = await User.findById(req.user?.id).select("+password");
-    if (!adminUser) {
-      return res.status(403).json({ message: "Admin user not found" });
-    }
-
-    const isAdminPasswordValid = bcrypt.compareSync(adminPassword, adminUser.password);
-    if (!isAdminPasswordValid) {
-      return res.status(403).json({ message: "Invalid admin password" });
-    }
-
-    const user = await User.findByIdAndDelete(req.params.id);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    await Enrollment.deleteMany({ userId: req.params.id });
-    const payments = await Payment.find({ userId: req.params.id }).select("+paymentProofPublicId +paymentProofStorage +paymentImagePublicId");
-    await Promise.all(payments.map((payment) => deletePaymentProof(
-      payment.paymentProofPublicId || payment.paymentImagePublicId,
-      { legacy: payment.paymentProofStorage !== "authenticated" }
-    ).catch(() => undefined)));
-    await Payment.deleteMany({ userId: req.params.id });
-    await revokeAllUserSessions(user._id);
-
-    await writeAuditLog({
-      actorId: req.user.id,
-      action: "user.deleted",
-      targetType: "user",
-      targetId: user._id,
-      metadata: { email: user.email, name: user.name },
+    const adminUser = await verifyPasswordReauthentication(req.user?.id, adminPassword, {
+      missingMessage: "Admin password is required to perform this action",
+      invalidMessage: "Invalid admin password",
     });
-
+    if (adminUser.role !== "admin") return res.status(403).json({ message: "Admin access only" });
+    await deleteStudentAccount(req.params.id, { actorId: adminUser._id, initiatedBy: "admin" });
     return res.status(200).json({ message: "User deleted successfully" });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to delete user account" });
   }
 }
+
+const deleteOwnAccount = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const deletionConfirmationToken = req.body?.deletionConfirmationToken;
+    if (!await hasValidDeletionConfirmation(userId, req.user?.sessionVersion, deletionConfirmationToken)) {
+      return res.status(400).json({ message: "A recent password confirmation is required to delete your account." });
+    }
+    await deleteStudentAccount(userId, { actorId: userId, initiatedBy: "self", deletionConfirmationToken, deletionConfirmationSessionVersion: req.user?.sessionVersion });
+    res.clearCookie(STUDENT_REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
+    res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
+    return res.status(200).json({ message: "Your account has been deleted." });
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to delete your account" });
+  }
+};
+
+const confirmOwnAccountDeletion = async (req, res) => {
+  try {
+    const user = await verifyPasswordReauthentication(req.user?.id, req.body?.currentPassword);
+    if (user.role !== "user") return res.status(403).json({ message: "Only student accounts can be deleted here." });
+    const confirmation = await issueDeletionConfirmation(user._id, req.user?.sessionVersion);
+    return res.status(200).json({ deletionConfirmationToken: confirmation.token, expiresAt: confirmation.expiresAt });
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to confirm your password" });
+  }
+};
 
 const updateUserStatus = async (req, res) => {
   try {
@@ -315,6 +323,8 @@ module.exports = {
   getAuditLogs,
   updateProfile,
   deletAccount,
+  deleteOwnAccount,
+  confirmOwnAccountDeletion,
   updateUserStatus,
   updateUserCourseAccess,
 }
