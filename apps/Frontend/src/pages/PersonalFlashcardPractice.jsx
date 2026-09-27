@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import FlashcardPracticeSession from "../components/FlashcardPracticeSession";
 import { fetchPersonalFlashcardDecks, fetchPersonalFlashcards } from "../services/personalFlashcardService";
+import { ratePersonalFlashcard } from "../services/flashcardReviewService";
 
 const setMessage = (message) => message === "Flashcard deck not found." ? "Flashcard set not found." : message;
 
@@ -34,7 +35,7 @@ const { deckId } = useParams();
   if (loading) return <LoadingState />;
   if (error || !deck) return <FailureState error={error || "Flashcard set not found."} retry={load} backPath={myFlashcardsPath} />;
   if (!cards.length) return <EmptyState deck={deck} deckPath={deckPath} backPath={myFlashcardsPath} />;
-  return <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12"><header className="border-b border-[#2D2E30]/10 pb-7"><p className="text-xs font-bold uppercase tracking-[.22em] text-[#C97112]">Private practice</p><h1 className="mt-3 break-words text-3xl font-bold tracking-tight sm:text-4xl">{deck.name}</h1><p className="mt-2 text-sm text-[#765F55]">{cards.length} {cards.length === 1 ? "flashcard" : "flashcards"} in this practice session</p></header><FlashcardPracticeSession cards={cards} onExit={() => navigate(myFlashcardsPath)} exitLabel="Back to Flashcards" /></div>;
+  return <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12"><header className="border-b border-[#2D2E30]/10 pb-7"><p className="text-xs font-bold uppercase tracking-[.22em] text-[#C97112]">Private practice</p><h1 className="mt-3 break-words text-3xl font-bold tracking-tight sm:text-4xl">{deck.name}</h1><p className="mt-2 text-sm text-[#765F55]">{cards.length} {cards.length === 1 ? "flashcard" : "flashcards"} in this practice session</p></header><FlashcardPracticeSession cards={cards} onRate={(card, rating) => ratePersonalFlashcard(card._id, rating)} onExit={() => navigate(myFlashcardsPath)} exitLabel="Back to Flashcards" /></div>;
 }
 
 function LoadingState() { return <div className="mx-auto max-w-4xl animate-pulse px-4 py-10 sm:px-6 lg:px-10"><div className="h-5 w-32 rounded bg-[#F2EFEB]" /><div className="mt-8 h-10 w-64 rounded bg-[#F2EFEB]" /><div className="mt-8 h-96 rounded-[2rem] bg-white" /></div>; }
