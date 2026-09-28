@@ -35,6 +35,7 @@ import StudentMore from "./pages/StudentMore"
 import StudentPractice from "./pages/StudentPractice"
 import StudentExplore from "./pages/StudentExplore"
 import StudentSupport from "./pages/StudentSupport"
+import { CookiePolicy, PrivacyPolicy } from "./pages/LegalPolicy"
 
 const privateRoutePrefixes = ["/app", "/login", "/register", "/forgot-password", "/verification-help", "/reset-password", "/enroll", "/payment", "/my-courses", "/my-course-order", "/my-profile", "/notifications", "/order-status", "/course-lessons", "/course-quiz"]
 
@@ -50,7 +51,7 @@ function LegacyOrderRedirect() {
   return <Navigate to={`/app/orders/${orderId}`} replace />
 }
 
-function RouteMetadata() {
+export function RouteMetadata() {
   const { pathname } = useLocation()
   const isPrivate = privateRoutePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   if (isPrivate) return <Seo title="Account" path={pathname} noIndex />
@@ -62,8 +63,11 @@ function RouteMetadata() {
     "/practice": ["Thai Language Practice", "Practice Thai consonants and vowels with free interactive learning resources."],
     "/about": ["About Arun Thai", "Learn about Arun Thai Language Center and our supportive approach to learning Thai."],
     "/flashcards": ["Thai Flashcards", "Practice Thai vocabulary with free interactive flashcards from Arun Thai Language Center."],
+    "/privacy-policy": ["Privacy Policy", "Privacy information for Arun Thai Language Center."],
+    "/cookie-policy": ["Cookie Policy", "Cookie information for Arun Thai Language Center."],
   }
   const page = publicPages[pathname]
+  if (pathname === "/privacy-policy" || pathname === "/cookie-policy") return <Seo title={page[0]} description={page[1]} path={pathname} robots="noindex, follow" />
   if (page) return <Seo title={page[0]} description={page[1]} path={pathname} />
   if (pathname.startsWith("/practice/")) return <Seo title="Thai Language Practice" description="Practice Thai consonants and vowels with free interactive learning resources." path={pathname} />
   if (pathname.startsWith("/courses/")) return <Seo title="Thai Course" description="Learn practical Thai online with Arun Thai Language Center." path={pathname} />
@@ -91,6 +95,8 @@ function App() {
         <Route path="/flashcards" element={<Flashcards />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/about" element={<About />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/cookie-policy" element={<CookiePolicy />} />
         <Route element={<RequireAuth />}>
           <Route path="/app" element={<StudentLayout />}>
             <Route index element={<StudentDashboard />} />

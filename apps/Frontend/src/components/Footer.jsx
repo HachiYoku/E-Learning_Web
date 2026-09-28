@@ -1,4 +1,4 @@
-import { useLocation } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 
 function Footer() {
   const currentYear = new Date().getFullYear()
@@ -7,29 +7,17 @@ function Footer() {
   if (pathname === "/app" || pathname.startsWith("/app/")) return null
 
   return (
-    <footer className="bg-white border-t border-gray-200 py-8">
-      <div className="max-w-7xl mx-auto px-2 md:px-4 lg:px-4">
-        <div className=" flex flex-col md:flex-row justify-between items-center gap-6">
-          {/* Left - Copyright */}
-          <div className="text-gray-700 text-sm md:text-base">
-            Copyright {currentYear} © <span className="font-bold"> Arun Thai Language Center</span>. All rights reserved.
+    <footer className="border-t border-[#E58C1A]/15 bg-[#FFFDF8] py-6 sm:py-7">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-center justify-between gap-4 md:flex-row md:gap-6">
+          <div className="text-center text-sm text-[#765F55] sm:text-base md:text-left">
+            Copyright {currentYear} © <span className="font-bold text-[#2D2E30]">Arun Thai Language Center</span>. All rights reserved.
           </div>
 
-          {/* Right - Links */}
-          <div className="flex items-center gap-6 text-gray-700 text-sm md:text-base">
-            <a 
-              href="#privacy" 
-              className="hover:text-gray-900 transition-colors font-medium"
-            >
-              Privacy Policy
-            </a>
-            <span className="text-gray-400">|</span>
-            <a 
-              href="#cookies" 
-              className="hover:text-gray-900 transition-colors font-medium"
-            >
-              Cookie Policy
-            </a>
+          <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 text-sm sm:text-base">
+            <Link to="/privacy-policy" className="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#2D2E30] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/15">Privacy Policy</Link>
+            <span className="text-[#B9A79D]" aria-hidden="true">|</span>
+            <Link to="/cookie-policy" className="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#2D2E30] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/15">Cookie Policy</Link>
           </div>
         </div>
       </div>
