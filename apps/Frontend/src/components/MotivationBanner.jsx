@@ -3,7 +3,7 @@ const closeIcon = "/moti/close.svg"
 
 function MotivationBanner() {
   return (
-    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 pb-8 pt-16 sm:px-6 sm:py-16 md:px-10 md:py-24 lg:px-16">
+    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 pb-8 pt-16 sm:px-6 sm:pb-10 sm:pt-16 md:px-10 md:pb-10 md:pt-24 lg:px-16">
       <div className="relative mx-auto max-w-[1500px]">
         <div className="relative overflow-hidden rounded-[2rem] border border-[#E58C1A]/20 bg-[linear-gradient(120deg,#FFFDF7_0%,#FFF4D8_52%,#FCE5C4_100%)] px-5 py-8 shadow-[0_28px_70px_-42px_rgba(80,48,19,0.5)] sm:px-8 sm:py-10 md:rounded-[2.5rem] md:px-12 md:py-12 lg:px-16 lg:py-14">
           <div className="pointer-events-none absolute -left-20 top-1/2 h-56 w-56 -translate-y-1/2 rounded-full bg-[#F8C56A]/35 blur-3xl" aria-hidden="true" />
@@ -12,7 +12,7 @@ function MotivationBanner() {
 
           <div className="relative max-w-3xl lg:max-w-2xl">
             <div className="mb-5 h-1 w-16 rounded-full bg-[#E58C1A] sm:mb-6 sm:w-24" />
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">A note for your journey</p>
+            <p className="text-brand-accent mb-3 text-xs font-bold uppercase tracking-[0.18em]">A note for your journey</p>
             <h2 lang="my" className="font-myanmar text-[1.35rem] font-medium leading-[1.62] tracking-normal text-[#2D2E30] sm:text-2xl sm:leading-[1.58] md:text-3xl md:leading-[1.55] lg:text-[2rem] xl:text-4xl">
               သဘာဝကျကျ ထိုင်းစကား ပြောဆိုပြီး <br className="md:block"/>အောင်မြင်မှုကို ယုံကြည်ချက်ရှိရှိ <br className="md:block"/>ရယူလိုက်ပါ။
             </h2>

@@ -41,7 +41,7 @@ function ArticleCard({ id, image, title, description, authorLogo, authorName, da
       </div>
 
       <div className="flex flex-1 flex-col px-5 pb-5 pt-5 sm:px-6 sm:pb-6">
-        <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-[#C97112]">
+        <div className="text-brand-accent mb-3 flex items-center gap-2 text-xs font-semibold">
           <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
           <span>{date || "Latest insight"}</span>
         </div>

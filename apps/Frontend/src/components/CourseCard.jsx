@@ -41,7 +41,7 @@ function CourseCard({ course, id, image, title, description, price, originalPric
       {/* Content Container - Right */}
       <div className="flex min-w-0 flex-1 flex-col justify-between py-1 md:py-2">
         {/* Title as Badge */}
-        <div className="mb-5 flex w-full shrink-0 justify-center rounded-full border border-[#E58C1A]/20 bg-[#FFF4D8] px-4 py-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">
+        <div className="text-brand-accent mb-5 flex w-full shrink-0 justify-center rounded-full border border-[#E58C1A]/20 bg-[#FFF4D8] px-4 py-2 text-center text-xs font-bold uppercase tracking-[0.2em]">
           {courseTitle}
         </div>
 
@@ -51,7 +51,7 @@ function CourseCard({ course, id, image, title, description, price, originalPric
         </p>
 
         {/* Price */}
-        <div className="mb-3">{displayPrice.available ? <><p className="text-lg font-bold text-[#C97112] md:text-xl">{displayPrice.price}</p>{displayPrice.hasDiscount ? <p className="mt-0.5 text-xs font-medium text-[#9B867C] line-through">{displayPrice.originalPrice}</p> : null}</> : <p className="text-sm font-semibold text-[#765F55]">Not available in {displayPrice.currency}</p>}</div>
+        <div className="mb-3">{displayPrice.available ? <><p className="text-brand-accent text-lg font-bold md:text-xl">{displayPrice.price}</p>{displayPrice.hasDiscount ? <p className="mt-0.5 text-xs font-medium text-[#9B867C] line-through">{displayPrice.originalPrice}</p> : null}</> : <p className="text-sm font-semibold text-[#765F55]">Not available in {displayPrice.currency}</p>}</div>
 
         {/* Rating */}
         <div className="mb-4 flex items-center gap-1.5">
@@ -70,14 +70,14 @@ function CourseCard({ course, id, image, title, description, price, originalPric
           {!isEnrolled && (
             <button 
               onClick={handleViewDetails}
-              className="flex-1 rounded-xl border border-[#2D2E30]/18 px-3 py-2.5 text-xs font-semibold text-[#2D2E30] transition-colors hover:border-[#E58C1A] hover:text-[#C97112] md:text-sm"
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-[#2D2E30]/18 px-3 py-2.5 text-xs font-semibold text-[#2D2E30] transition-colors hover:border-[#E58C1A] hover:text-[#A94F00] md:text-sm"
             >
               View details
             </button>
           )}
           <button 
             onClick={() => navigate(isEnrolled ? `/app/learn/${courseId}` : `/enroll/${courseId}`)}
-            className="flex-1 rounded-xl bg-[#2D2E30] px-3 py-2.5 text-xs font-semibold text-white shadow-md shadow-[#2D2E30]/15 transition-colors hover:bg-[#E58C1A] md:text-sm"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[#2D2E30] px-3 py-2.5 text-xs font-semibold text-white shadow-md shadow-[#2D2E30]/15 transition-colors hover:bg-[#E58C1A] md:text-sm"
           >
             {isEnrolled ? 'Learn Now' : 'Enroll Now'}
           </button>

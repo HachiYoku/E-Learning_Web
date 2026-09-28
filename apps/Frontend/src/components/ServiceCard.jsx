@@ -18,15 +18,17 @@ function ServiceCard({ number, label, image, title, tagline, description, imageL
 
       <div className="flex flex-1 flex-col p-5 sm:p-7">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E58C1A]/25 bg-[#FFF1D0] text-xs font-bold tracking-[0.12em] text-[#C97112]">{number}</span>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">{label}</p>
+          <span className="text-brand-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E58C1A]/25 bg-[#FFF1D0] text-xs font-bold tracking-[0.12em]">{number}</span>
+          <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.16em]">{label}</p>
         </div>
         <h3 className="mt-5 text-[1.4rem] font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-2xl">{title}</h3>
         <p className="mt-2.5 text-sm font-medium leading-relaxed text-[#765F55]">{tagline}</p>
         <p lang="my" className="font-myanmar mt-4 text-sm font-normal leading-[1.8] text-[#765F55] sm:text-base">{description}</p>
-        <button type="button" onClick={onContact} className="mt-6 inline-flex min-h-11 w-fit items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#E58C1A] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20">
-          Contact Us <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </button>
+        <div className="mt-auto pt-6">
+          <button type="button" onClick={onContact} className="inline-flex min-h-11 w-fit items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#E58C1A] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20">
+            Contact Us <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </article>
   );

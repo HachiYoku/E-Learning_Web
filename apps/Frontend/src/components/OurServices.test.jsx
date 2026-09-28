@@ -24,6 +24,12 @@ describe("OurServices", () => {
     expect(sectionDescription.className).toContain("font-myanmar");
     expect(serviceDescriptions).toHaveLength(3);
     serviceDescriptions.forEach((description) => expect(description.className).toContain("font-myanmar"));
+    const serviceGrid = screen.getByRole("heading", { name: "Our Thai Learning Services." }).closest("section").querySelector(".grid.items-stretch");
+    expect(serviceGrid.className).toContain("md:grid-cols-2");
+    expect(serviceGrid.className).toContain("lg:grid-cols-3");
+    screen.getAllByRole("button", { name: /contact us/i }).forEach((button) => {
+      expect(button.parentElement.className).toContain("mt-auto");
+    });
     expect(screen.queryByText("What you’ll get")).toBeNull();
   });
 
@@ -51,6 +57,15 @@ describe("OurServices", () => {
         expect(screen.getByRole("button", { name: new RegExp(`${label} is not available yet`, "i") }).disabled).toBe(true);
       }
     });
+
+    const closeButton = screen.getByRole("button", { name: /close contact options/i });
+    const messenger = screen.getByRole("link", { name: "Facebook Messenger" });
+    closeButton.focus();
+    fireEvent.keyDown(window, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(messenger);
+    messenger.focus();
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(document.activeElement).toBe(closeButton);
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: /let's talk/i })).toBeNull();

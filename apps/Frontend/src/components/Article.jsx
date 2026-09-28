@@ -45,9 +45,9 @@ function Article() {
       <div className="mx-auto max-w-[1500px]">
         <div className="flex flex-col gap-6 border-b border-[#2D2E30]/12 pb-8 sm:pb-10 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C97112]">From our journal</p>
+            <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.24em]">From our journal</p>
             <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
-              Thai Learning <span className="text-[#E58C1A]">Insights.</span>
+              Thai Learning <span className="text-brand-accent">Insights.</span>
             </h2>
             <p lang="my" className="font-myanmar mt-5 max-w-2xl text-sm leading-[1.85] text-[#765F55] sm:text-base md:text-lg">
               ထိုင်းစာ၊ ထိုင်းစကားနဲ့ ထိုင်းယဉ်ကျေးမှုကို ပိုမိုနားလည်စေမယ့် အသုံးဝင်သော <br className="hidden md:block" /> ဆောင်းပါးများကို ဖတ်ရှုလေ့လာလိုက်ပါ။

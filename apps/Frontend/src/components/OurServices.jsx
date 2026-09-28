@@ -45,15 +45,15 @@ function OurServices() {
   const closeContact = useCallback(() => setIsContactOpen(false), []);
 
   return (
-    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-16 sm:px-6 md:px-10 md:py-24 lg:px-16">
+    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-16 sm:px-6 md:px-10 md:pb-24 md:pt-16 lg:px-16">
       <div className="absolute -left-28 bottom-0 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/18 blur-3xl" aria-hidden="true" />
       <div className="absolute -right-24 top-0 -z-10 h-96 w-96 rounded-full bg-[#E9A9A0]/18 blur-3xl" aria-hidden="true" />
       <div className="mx-auto max-w-[1500px]">
         <div className="border-b border-[#2D2E30]/12 pb-8 sm:pb-10">
           <div className="max-w-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C97112]">Learn your way</p>
+            <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.24em]">Learn your way</p>
             <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
-              Our Thai Learning <span className="text-[#E58C1A]">Services.</span>
+              Our Thai Learning <span className="text-brand-accent">Services.</span>
             </h2>
             <p lang="my" className="font-myanmar mt-5 max-w-2xl text-sm leading-[1.85] text-[#765F55] sm:text-base">
               သင့်ရဲ့ ရည်မှန်းချက်၊ အချိန်နဲ့ သင်ယူမှုပုံစံနဲ့ အကိုက်ညီဆုံး ထိုင်းစာသင်တန်းကို ရွေးချယ်လိုက်ပါ။
@@ -61,7 +61,7 @@ function OurServices() {
           </div>
         </div>
 
-        <div className="grid items-stretch gap-6 pt-10 sm:gap-8 md:grid-cols-3 md:gap-8 md:pt-14 lg:gap-10">
+        <div className="grid items-stretch gap-6 pt-10 sm:gap-8 md:grid-cols-2 md:gap-8 md:pt-14 lg:grid-cols-3 lg:gap-10">
           {services.map((service) => (
             <ServiceCard
               key={service.title}

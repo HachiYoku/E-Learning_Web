@@ -15,6 +15,7 @@ function ContactOption({ label, href, icon }) {
 
 function ContactChoiceModal({ isOpen, onClose, returnFocusRef }) {
   const closeButtonRef = useRef(null);
+  const dialogRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -27,6 +28,24 @@ function ContactChoiceModal({ isOpen, onClose, returnFocusRef }) {
     document.documentElement.style.overflow = "hidden";
     const handleKeyDown = (event) => {
       if (event.key === "Escape") onClose();
+      if (event.key !== "Tab") return;
+
+      const focusableElements = dialogRef.current?.querySelectorAll(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusableElements?.length) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey && (activeElement === firstElement || !dialogRef.current.contains(activeElement))) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && (activeElement === lastElement || !dialogRef.current.contains(activeElement))) {
+        event.preventDefault();
+        firstElement.focus();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -43,10 +62,10 @@ function ContactChoiceModal({ isOpen, onClose, returnFocusRef }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-[#2D2E30]/65 p-3 backdrop-blur-[2px] sm:p-4" onMouseDown={onClose}>
-      <section role="dialog" aria-modal="true" aria-labelledby="contact-choice-title" className="w-full max-w-md rounded-[1.75rem] border border-[#E58C1A]/20 bg-[#FFFDF8] shadow-[0_28px_70px_-30px_rgba(45,46,48,0.55)] sm:rounded-[2rem]" onMouseDown={(event) => event.stopPropagation()}>
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="contact-choice-title" className="w-full max-w-md rounded-[1.75rem] border border-[#E58C1A]/20 bg-[#FFFDF8] shadow-[0_28px_70px_-30px_rgba(45,46,48,0.55)] sm:rounded-[2rem]" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 border-b border-[#2D2E30]/10 px-5 py-5 sm:px-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">Arun Thai Academy</p>
+            <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.18em]">Arun Thai Academy</p>
             <h2 id="contact-choice-title" className="mt-1 text-2xl font-bold tracking-tight text-[#2D2E30]">Let&apos;s talk</h2>
             <p className="mt-2 text-sm leading-relaxed text-[#765F55]">Choose how you&apos;d like to contact us.</p>
           </div>

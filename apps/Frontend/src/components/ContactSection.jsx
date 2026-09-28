@@ -45,9 +45,9 @@ function ContactSection() {
       <div className="absolute -right-24 top-0 -z-10 h-80 w-80 rounded-full bg-[#E9A9A0]/18 blur-3xl" aria-hidden="true" />
       <div className="mx-auto grid max-w-[1500px] gap-10 lg:grid-cols-2 lg:items-stretch lg:gap-16 xl:gap-24">
         <div className="pt-2">
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C97112]">Stay connected</p>
+          <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.24em]">Stay connected</p>
           <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
-            Let’s Talk About Your <span className="text-[#E58C1A]">Thai Journey.</span>
+            Let’s Talk About Your <span className="text-brand-accent">Thai Journey.</span>
           </h2>
           <p lang="my" className="font-myanmar mt-5 max-w-xl text-base leading-[1.85] text-[#765F55] sm:text-lg">
             သင်တန်းအကြောင်း သိချင်တာပဲဖြစ်ဖြစ်၊ ဘယ်သင်တန်းက သင့်အတွက် အသင့်တော်ဆုံးလဲ မေးချင်တာပဲဖြစ်ဖြစ် Arun Thai ကို အချိန်မရွေး ဆက်သွယ်မေးမြန်းနိုင်ပါတယ်။
@@ -55,7 +55,7 @@ function ContactSection() {
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <section className="rounded-2xl border border-[#E58C1A]/15 bg-[#FFFDF8]/80 p-5 sm:h-full">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#C97112]">Chat with us</p>
+              <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.14em]">Chat with us</p>
               <div className="mt-4 space-y-2.5">
                 <ContactChannel label="Facebook Messenger" href={CONTACT_LINKS.messenger} icon={MessageCircle} />
                 <ContactChannel label="LINE" href={CONTACT_LINKS.line} icon={Send} />
@@ -65,11 +65,11 @@ function ContactSection() {
             <div className="space-y-4">
               <a href="mailto:arunthaiedu@gmail.com" className="group flex min-h-[8.5rem] flex-col rounded-2xl border border-[#E58C1A]/15 bg-[#FFFDF8]/80 p-5 transition hover:-translate-y-1 hover:border-[#E58C1A]/35 hover:shadow-[0_16px_35px_-25px_rgba(80,48,19,0.5)] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/15">
                 <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFF1D0] text-[#C97112]"><Mail className="h-5 w-5" aria-hidden="true" /></span>
-                <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em] text-[#C97112]">Email us</p>
-                <p className="mt-1 break-words text-sm font-semibold text-[#2D2E30] group-hover:text-[#C97112]">arunthaiedu@gmail.com</p>
+                <p className="text-brand-accent mt-4 text-xs font-bold uppercase tracking-[0.14em]">Email us</p>
+                <p className="mt-1 break-words text-sm font-semibold text-[#2D2E30] group-hover:text-[#A94F00]">arunthaiedu@gmail.com</p>
               </a>
               <section className="rounded-2xl border border-[#E58C1A]/15 bg-[#FFFDF8]/80 p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#C97112]">Follow us</p>
+              <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.14em]">Follow us</p>
                 <div className="mt-4"><ContactChannel label="Instagram" href={CONTACT_LINKS.instagram} icon={Camera} /></div>
               </section>
             </div>
@@ -79,7 +79,7 @@ function ContactSection() {
         <form onSubmit={handleSubmit} className="rounded-[2rem] border border-[#E58C1A]/18 bg-[#FFFDF8] p-6 shadow-[0_24px_60px_-38px_rgba(80,48,19,0.42)] sm:p-8 md:rounded-[2.5rem] md:p-10 lg:mt-8">
           <div className="flex items-start justify-between gap-5">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Get in touch</p>
+              <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.2em]">Get in touch</p>
               <h3 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl">Have a Question?</h3>
             </div>
             <Send className="h-6 w-6 shrink-0 text-[#E58C1A]" aria-hidden="true" />

@@ -7,6 +7,7 @@
   --font-body: "Inter", sans-serif;
   --font-heading: "Poppins", sans-serif;
   --font-myanmar: "Noto Sans Myanmar", sans-serif;
+  --color-accent-text: #A94F00;
 }
 
 body {
@@ -16,6 +17,11 @@ body {
 /* Apply Myanmar's script-appropriate font only to explicitly Burmese content. */
 .font-myanmar {
   font-family: var(--font-myanmar);
+}
+
+/* Use this darker brand orange only when text needs AA contrast on light surfaces. */
+.text-brand-accent {
+  color: var(--color-accent-text);
 }
 
 /* Flashcard practice starts with the title; the decorative sparkle is omitted. */
