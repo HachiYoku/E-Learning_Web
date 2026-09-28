@@ -1,4 +1,4 @@
-import { ExternalLink, MessageCircle, Send, X } from "lucide-react";
+import { ExternalLink, MessageCircle, Music2, Send, X } from "lucide-react";
 import { createElement, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { CONTACT_LINKS } from "../config/contactLinks";
@@ -55,7 +55,8 @@ function ContactChoiceModal({ isOpen, onClose, returnFocusRef }) {
         <div className="space-y-3 px-5 py-5 sm:px-6 sm:py-6">
           <ContactOption label="Facebook Messenger" href={CONTACT_LINKS.messenger} icon={MessageCircle} />
           <ContactOption label="LINE" href={CONTACT_LINKS.line} icon={Send} />
-          {!CONTACT_LINKS.messenger && !CONTACT_LINKS.line ? <p className="rounded-xl bg-[#FFF1D0]/65 px-3 py-2.5 text-xs leading-relaxed text-[#765F55]">Our contact links are being set up. Please check back soon.</p> : null}
+          <ContactOption label="TikTok" href={CONTACT_LINKS.tiktok} icon={Music2} />
+          {!CONTACT_LINKS.messenger && !CONTACT_LINKS.line && !CONTACT_LINKS.tiktok ? <p className="rounded-xl bg-[#FFF1D0]/65 px-3 py-2.5 text-xs leading-relaxed text-[#765F55]">Our contact links are being set up. Please check back soon.</p> : null}
         </div>
       </section>
     </div>,

@@ -39,6 +39,7 @@ describe("OurServices", () => {
     [
       ["Facebook Messenger", CONTACT_LINKS.messenger],
       ["LINE", CONTACT_LINKS.line],
+      ["TikTok", CONTACT_LINKS.tiktok],
     ].forEach(([label, href]) => {
       const link = screen.queryByRole("link", { name: label });
       if (href) {

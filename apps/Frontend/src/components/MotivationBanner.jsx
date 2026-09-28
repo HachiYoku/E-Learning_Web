@@ -14,11 +14,11 @@ function MotivationBanner() {
             <div className="mb-5 h-1 w-16 rounded-full bg-[#E58C1A] sm:mb-6 sm:w-24" />
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">A note for your journey</p>
             <h2 lang="my" className="font-myanmar text-[1.35rem] font-medium leading-[1.62] tracking-normal text-[#2D2E30] sm:text-2xl sm:leading-[1.58] md:text-3xl md:leading-[1.55] lg:text-[2rem] xl:text-4xl">
-              သင့်ရဲ့ ကြိုးစားအားထုတ်မှုနဲ့ ရည်မှန်းချက်တွေရှေ့မှာ ဘာသာစကား အဟန့်အတား မရှိပါစေနဲ့။
+              သဘာဝကျကျ ထိုင်းစကား ပြောဆိုပြီး <br className="md:block"/>အောင်မြင်မှုကို ယုံကြည်ချက်ရှိရှိ <br className="md:block"/>ရယူလိုက်ပါ။
             </h2>
             <div className="mt-6 h-px w-14 bg-[#E58C1A]/65 sm:w-20" aria-hidden="true" />
             <p className="mt-4 text-sm font-medium leading-relaxed text-[#654E44] sm:text-base lg:text-lg">
-              Your ambition has no language barrier.
+              Speak Thai naturally, thrive confidently.
             </p>
           </div>
 
