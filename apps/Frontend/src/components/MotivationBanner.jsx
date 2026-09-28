@@ -3,44 +3,30 @@ const closeIcon = "/moti/close.svg"
 
 function MotivationBanner() {
   return (
-    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 py-16 sm:px-6 md:px-10 md:py-24 lg:px-16">
-      <div className="absolute -left-24 top-0 -z-10 h-72 w-72 rounded-full bg-[#F8C56A]/20 blur-3xl" aria-hidden="true" />
-      <div className="absolute -bottom-20 -right-16 -z-10 h-72 w-72 rounded-full bg-[#E9A9A0]/20 blur-3xl" aria-hidden="true" />
+    <section className="relative isolate overflow-hidden bg-[#FFF9EA] px-4 pb-8 pt-16 sm:px-6 sm:pb-10 sm:pt-16 md:px-10 md:pb-10 md:pt-24 lg:px-16">
       <div className="relative mx-auto max-w-[1500px]">
-        <div className="relative mx-auto max-w-4xl rounded-[2rem] border border-white/80 bg-white/55 px-8 py-10 shadow-[0_24px_60px_-32px_rgba(80,48,19,0.45)] backdrop-blur-sm sm:px-12 sm:py-12 md:px-16 md:py-14">
+        <div className="relative overflow-hidden rounded-[2rem] border border-[#E58C1A]/20 bg-[linear-gradient(120deg,#FFFDF7_0%,#FFF4D8_52%,#FCE5C4_100%)] px-5 py-8 shadow-[0_28px_70px_-42px_rgba(80,48,19,0.5)] sm:px-8 sm:py-10 md:rounded-[2.5rem] md:px-12 md:py-12 lg:px-16 lg:py-14">
+          <div className="pointer-events-none absolute -left-20 top-1/2 h-56 w-56 -translate-y-1/2 rounded-full bg-[#F8C56A]/35 blur-3xl" aria-hidden="true" />
+          <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full border-[18px] border-[#E58C1A]/10" aria-hidden="true" />
+          <div className="pointer-events-none absolute bottom-0 right-0 h-40 w-40 rounded-tl-full bg-[#E9A9A0]/20" aria-hidden="true" />
 
-          <div className="absolute left-3 top-4 sm:left-5 sm:top-5">
-              <img
-                src={openIcon}
-                alt=""
-                className="h-7 w-7 opacity-60 sm:h-9 sm:w-9 md:h-12 md:w-12"
-              />
-            </div>
+          <div className="relative max-w-3xl lg:max-w-2xl">
+            <div className="mb-5 h-1 w-16 rounded-full bg-[#E58C1A] sm:mb-6 sm:w-24" />
+            <p className="text-brand-accent mb-3 text-xs font-bold uppercase tracking-[0.18em]">A note for your journey</p>
+            <h2 lang="my" className="font-myanmar text-[1.35rem] font-medium leading-[1.62] tracking-normal text-[#2D2E30] sm:text-2xl sm:leading-[1.58] md:text-3xl md:leading-[1.55] lg:text-[2rem] xl:text-4xl">
+              သဘာဝကျကျ ထိုင်းစကား ပြောဆိုပြီး <br className="md:block"/>အောင်မြင်မှုကို ယုံကြည်ချက်ရှိရှိ <br className="md:block"/>ရယူလိုက်ပါ။
+            </h2>
+            <div className="mt-6 h-px w-14 bg-[#E58C1A]/65 sm:w-20" aria-hidden="true" />
+            <p className="mt-4 text-sm font-medium leading-relaxed text-[#654E44] sm:text-base lg:text-lg">
+              Speak Thai naturally, thrive confidently.
+            </p>
+          </div>
 
-          <div className="absolute bottom-4 right-3 sm:bottom-5 sm:right-5">
-              <img
-                src={closeIcon}
-                alt=""
-                className="h-7 w-7 opacity-60 sm:h-9 sm:w-9 md:h-12 md:w-12"
-              />
-            </div>
-
-            <div className="relative">
-              <div className="mb-5 h-1 w-16 rounded-full bg-[#E58C1A] sm:mb-6 sm:w-24" />
-
-              <div className="pr-4 sm:pr-6">
-                <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">A note for your journey</p>
-                <h2 className="mb-4 text-xl font-bold leading-snug tracking-tight text-[#2D2E30] sm:text-2xl md:text-3xl lg:text-4xl">
-                  Every small effort you make in learning Thai
-                  today builds the confidence and fluency you
-                  will proudly use tomorrow.
-                </h2>
-                <p className="text-sm leading-relaxed text-[#765F55] sm:text-base lg:text-lg">
-                  Learn smarter, progress faster, and speak with confidence.
-                </p>
-              </div>
-            </div>
-
+          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[34%] lg:block" aria-hidden="true">
+            <div className="absolute right-16 top-14 h-28 w-28 rounded-full border border-[#E58C1A]/25 bg-white/25" />
+            <img src={openIcon} alt="" className="absolute right-24 top-20 h-28 w-28 -rotate-6 opacity-[0.12]" />
+            <img src={closeIcon} alt="" className="absolute bottom-12 right-12 h-36 w-36 rotate-6 opacity-[0.12]" />
+          </div>
         </div>
       </div>
     </section>
