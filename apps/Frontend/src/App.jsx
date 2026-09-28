@@ -35,6 +35,7 @@ import StudentMore from "./pages/StudentMore"
 import StudentPractice from "./pages/StudentPractice"
 import StudentExplore from "./pages/StudentExplore"
 import StudentSupport from "./pages/StudentSupport"
+import StudentFeedback from "./pages/StudentFeedback"
 import { CookiePolicy, PrivacyPolicy } from "./pages/LegalPolicy"
 
 const privateRoutePrefixes = ["/app", "/login", "/register", "/forgot-password", "/verification-help", "/reset-password", "/enroll", "/payment", "/my-courses", "/my-course-order", "/my-profile", "/notifications", "/order-status", "/course-lessons", "/course-quiz"]
@@ -120,6 +121,7 @@ function App() {
             <Route path="orders/:orderId" element={<OrderStatus />} />
             <Route path="more" element={<StudentMore />} />
             <Route path="support" element={<StudentSupport />} />
+            <Route path="feedback" element={<StudentFeedback />} />
           </Route>
           <Route path="/enroll/:courseId" element={<Enroll />} />
           <Route path="/payment/:courseId" element={<Payment />} />
