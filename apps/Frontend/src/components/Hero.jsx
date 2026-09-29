@@ -35,7 +35,7 @@ function Hero() {
         <div className="z-10 rounded-[2rem] border border-white/70 bg-white/45 px-5 py-8 text-center shadow-[0_24px_60px_-32px_rgba(80,48,19,0.45)] backdrop-blur-sm sm:px-8 sm:py-10 md:border-0 md:bg-transparent md:px-0 md:py-0 md:shadow-none md:backdrop-blur-none">
           <p className="text-brand-accent mb-5 inline-flex rounded-full border border-[#E58C1A]/20 bg-[#FFF4D8] px-4 py-2 text-xs font-bold uppercase tracking-[0.2em]">Arun Thai Academy</p>
           <h1 className="text-4xl font-bold leading-[1.06] tracking-tight text-[#2D2E30] sm:text-5xl lg:text-7xl">
-            Learn Thai with <span className="text-brand-accent">confidence</span><span className="text-[#2D2E30]">, naturally.</span>
+            Learn Thai with <span className="text-[#E58C1A]">confidence</span><span className="text-[#2D2E30]">, naturally.</span>
           </h1>
           <p lang="my" className="font-myanmar mx-auto mt-6 w-full max-w-none text-base leading-[1.8] text-[#765F55] max-[399px]:w-[calc(100%+1rem)] max-[399px]:-mx-2 sm:max-w-xl md:text-xl lg:text-lg xl:text-xl">
             သင့်ရဲ့ ထိုင်းနိုင်ငံ ရည်မှန်းချက်တွေအတွက် အစပျိုးရာ —{" "}

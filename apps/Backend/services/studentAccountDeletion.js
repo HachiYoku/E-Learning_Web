@@ -7,6 +7,7 @@ const FlashcardReviewProgress = require("../models/flashcardReviewProgressModel"
 const QuizAttempt = require("../models/quizAttemptModel");
 const Notification = require("../models/notificationModel");
 const SupportTicket = require("../models/supportTicketModel");
+const StudentFeedback = require("../models/studentFeedbackModel");
 const RefreshSession = require("../models/refreshSessionModel");
 const AuditLog = require("../models/auditLogModel");
 const AccountAssetCleanup = require("../models/accountAssetCleanupModel");
@@ -56,6 +57,7 @@ async function deleteStudentAccount(userId, { actorId, initiatedBy, deletionConf
       QuizAttempt.deleteMany({ user: student._id }, { session }),
       Notification.deleteMany({ userId: student._id }, { session }),
       SupportTicket.deleteMany({ studentId: student._id }, { session }),
+      StudentFeedback.deleteMany({ studentId: student._id }, { session }),
       AccountDeletionConfirmation.deleteMany({ userId: student._id }, { session }),
       RefreshSession.updateMany({ userId: student._id, revokedAt: null }, { $set: { revokedAt: new Date() } }, { session }),
     ]);

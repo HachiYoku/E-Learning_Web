@@ -53,7 +53,7 @@ function OurServices() {
           <div className="max-w-2xl">
             <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.24em]">Learn your way</p>
             <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
-              Our Thai Learning <span className="text-brand-accent">Services.</span>
+              Our Thai Learning <span className="text-[#E58C1A]">Services.</span>
             </h2>
             <p lang="my" className="font-myanmar mt-5 max-w-2xl text-sm leading-[1.85] text-[#765F55] sm:text-base">
               သင့်ရဲ့ ရည်မှန်းချက်၊ အချိန်နဲ့ သင်ယူမှုပုံစံနဲ့ အကိုက်ညီဆုံး ထိုင်းစာသင်တန်းကို ရွေးချယ်လိုက်ပါ။

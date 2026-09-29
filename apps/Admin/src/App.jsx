@@ -31,6 +31,7 @@ import QuizAttempts from './pages/QuizManagement/QuizAttempts'
 import Flashcards from './pages/FlashcardManagement/Flashcards'
 import PromoCodes from './pages/PromoManagement/PromoCodes'
 import SupportTickets from './pages/SupportManagement/SupportTickets'
+import StudentFeedback from './pages/StudentFeedbackManagement/StudentFeedback'
 
 function ProtectedLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768)
@@ -74,6 +75,7 @@ function App() {
             <Route path="/pending-verifications" element={<PendingVerifications />} />
             <Route path="/contacts" element={<ContactLeads />} />
             <Route path="/support" element={<SupportTickets />} />
+            <Route path="/student-feedback" element={<StudentFeedback />} />
             <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/announcements" element={<Campaigns />} />
             <Route path="/blog" element={<Blogs />} />

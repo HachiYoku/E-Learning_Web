@@ -11,6 +11,7 @@ export default defineConfig({
       'src/components/KeyVocabularyEditor.test.jsx',
       'src/pages/CourseManagement/lessonVocabularyForms.test.jsx',
       'src/services/lessonService.test.js',
+      'src/pages/StudentFeedbackManagement/StudentFeedback.test.jsx',
     ],
   },
   server: {

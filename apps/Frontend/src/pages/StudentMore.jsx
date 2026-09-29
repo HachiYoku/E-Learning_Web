@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, Headphones, Newspaper, ReceiptText } from "lucide-react"
+import { BookOpen, ChevronRight, Headphones, MessageCircleHeart, Newspaper, ReceiptText } from "lucide-react"
 import { createElement } from "react"
 import { Link } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
@@ -8,6 +8,7 @@ const destinations = [
   { title: "Blog", description: "Read Thai learning stories and tips", to: "/app/blog", icon: Newspaper, color: "bg-[#E8F3FA] text-[#367599]" },
   { title: "Course orders", description: "View payments and enrollment status", to: "/app/orders", icon: ReceiptText, color: "bg-[#E9F4EA] text-[#4D7C57]" },
   { title: "Help & support", description: "Send a question to the Arun Thai team", to: "/app/support", icon: Headphones, color: "bg-[#FFF1D0] text-[#C97112]" },
+  { title: "Share feedback", description: "Help improve the Arun Thai learning experience", to: "/app/feedback", icon: MessageCircleHeart, color: "bg-[#FFF1D0] text-[#C97112]" },
 ]
 
 function StudentMore() {
