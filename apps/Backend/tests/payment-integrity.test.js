@@ -57,6 +57,7 @@ const PaymentProofRetentionCleanup = require("../models/paymentProofRetentionCle
 const AuditLog = require("../models/auditLogModel");
 const { cleanFailedProof } = require("../services/paymentProofCleanup");
 const { processExpiredPaymentProofs, recoverStalePaymentProofRetentionClaims } = require("../services/paymentProofRetention");
+const { processPaymentSnapshotMinimization } = require("../services/paymentSnapshotMinimization");
 let server, mongo, directory, base, admin, adminToken, mongoPort;
 const password = "PaymentTestPassword123";
 let serial = 0;
@@ -94,7 +95,7 @@ async function submit(f) {
   return request(`/payments/course/${f.course._id}`, { method: "POST", access: token(f.student), body });
 }
 const review = (id, action, access = adminToken) => request(`/payments/${id}/${action}`, {
-  method: "PATCH", access, body: { adminPassword: password, rejectReason: "Wrong receipt" },
+  method: "PATCH", access, body: { adminPassword: password, rejectionReasonCode: "receipt_unverifiable", rejectionNote: "Wrong receipt" },
 });
 async function pending(f) {
   const result = await submit(f);
@@ -357,6 +358,21 @@ test("payment-proof retention cleanup retains retry state when Cloudinary deleti
   job = await PaymentProofRetentionCleanup.findOne({ paymentId: payment._id });
   assert.equal(job, null);
   assert.equal((await Payment.findById(payment._id).select("+paymentProofPublicId")).paymentProofPublicId, undefined);
+});
+
+test("snapshot minimization preserves financial history and respects reviewedAt holds", async () => {
+  const f = await fixture({ withPromo: false });
+  const snapshot = { schemaVersion: 1, kind: "method", methodId: f.method._id, methodVersion: 0, name: "Saved method", currency: "THB", type: "qr", provider: "manual", instructions: "private instructions", recipient: { accountName: "Receiver", accountNumber: "123", phoneNumber: "09" }, qrImage: { url: "https://example.test/qr", publicId: "qr" } };
+  const payment = await Payment.create({ userId: f.student._id, courseId: f.course._id, amount: 100, originalAmount: 120, discountAmount: 20, status: "approved", reviewedAt: new Date("2024-02-29T00:00:00Z"), paymentMethodId: f.method._id, paymentMethodSnapshot: snapshot });
+  await processPaymentSnapshotMinimization({ now: new Date("2025-02-27T00:00:00Z") });
+  assert.equal((await Payment.findById(payment._id)).paymentMethodSnapshot.instructions, "private instructions");
+  await processPaymentSnapshotMinimization({ now: new Date("2025-02-28T00:00:00Z") });
+  let stored = await Payment.findById(payment._id);
+  assert.equal(stored.paymentMethodSnapshot.instructions, ""); assert.equal(stored.paymentMethodSnapshot.recipient.accountNumber, ""); assert.equal(stored.paymentMethodSnapshot.qrImage.url, "");
+  assert.equal(stored.paymentMethodSnapshot.name, "Saved method"); assert.equal(stored.amount, 100); assert.equal(stored.discountAmount, 20);
+  const held = await Payment.create({ userId: f.student._id, courseId: new mongoose.Types.ObjectId(), amount: 1, status: "rejected", reviewedAt: new Date("2024-01-01"), paymentMethodId: f.method._id, paymentMethodSnapshot: snapshot, proofRetentionHold: { active: true, reason: "dispute" } });
+  await processPaymentSnapshotMinimization({ now: new Date("2025-01-02") });
+  assert.equal((await Payment.findById(held._id)).paymentMethodSnapshot.instructions, "private instructions");
 });
 
 test("an active cleanup claim rejects a hold without creating an audit event", async () => {

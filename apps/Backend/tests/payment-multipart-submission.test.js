@@ -110,7 +110,7 @@ async function submit(f, currency, { promoCode = f.promo?.code, courseVersion = 
 
 async function review(paymentId, action) {
   return request(`/payments/${paymentId}/${action}`, {
-    method: "PATCH", body: { adminPassword: password, rejectReason: "Receipt could not be verified" },
+    method: "PATCH", body: { adminPassword: password, rejectionReasonCode: "receipt_unverifiable" },
   });
 }
 

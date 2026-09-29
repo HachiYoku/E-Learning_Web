@@ -34,7 +34,7 @@ export function normalizePayment(payment) {
     paymentMethodType: payment.paymentMethodSnapshot?.type || "",
     cardInfo: payment.userId?.email || "",
     status: payment.status,
-    denialReason: payment.rejectReason || "",
+    denialReason: payment.rejectionReasonCode ? ({ receipt_unreadable: "The receipt is not readable.", receipt_incomplete: "The receipt is incomplete.", receipt_unverifiable: "We could not verify the receipt." }[payment.rejectionReasonCode] || "") + (payment.rejectionNote ? ` ${payment.rejectionNote}` : "") : (payment.rejectReason || ""),
     hasPaymentProof: Boolean(payment.hasPaymentProof),
     proofStorage: payment.proofStorage || null,
   };

@@ -21,7 +21,7 @@ function normalizePayment(payment) {
     id: payment._id,
     status: payment.status,
     coursePaymentState: payment.coursePaymentState || null,
-    rejectReason: payment.rejectReason || "",
+    rejectReason: payment.rejectionReasonCode ? ({ receipt_unreadable: "The receipt is not readable.", receipt_incomplete: "The receipt is incomplete.", receipt_unverifiable: "We could not verify the receipt." }[payment.rejectionReasonCode] || "") + (payment.rejectionNote ? ` ${payment.rejectionNote}` : "") : (payment.rejectReason || ""),
     reviewedAt: payment.reviewedAt || null,
     createdAt: payment.createdAt,
     courseUnavailable: Boolean(payment.courseDeletedAt || !payment.courseId),

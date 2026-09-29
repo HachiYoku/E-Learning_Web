@@ -439,7 +439,7 @@ test("payment approval and rejection preserve the existing review workflow witho
   assert.equal(approved.status, 200);
   assert.equal((await responseJson(approved)).payment.status, "approved");
 
-  const rejected = await request(`/payments/${rejectedPayment._id}/reject`, { method: "PATCH", token: loginResult.body.accessToken, body: { adminPassword: password, rejectReason: "Receipt is incomplete" }, origin: "https://admin.example.test" });
+  const rejected = await request(`/payments/${rejectedPayment._id}/reject`, { method: "PATCH", token: loginResult.body.accessToken, body: { adminPassword: password, rejectionReasonCode: "receipt_incomplete" }, origin: "https://admin.example.test" });
   assert.equal(rejected.status, 200);
   const rejectedBody = await responseJson(rejected);
   assert.equal(rejectedBody.payment.status, "rejected");

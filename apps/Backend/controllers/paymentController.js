@@ -22,8 +22,9 @@ const escapeHtml = (value = "") =>
     .replace(/'/g, "&#039;");
 
 const PAYMENT_PROOF_FIELDS = "+paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage";
-const PAYMENT_PROOF_HOLD_FIELDS = `${PAYMENT_PROOF_FIELDS} +proofRetentionHold +proofRetentionCleanupClaim`;
+const PAYMENT_PROOF_HOLD_FIELDS = `${PAYMENT_PROOF_FIELDS} +proofRetentionHold +proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim`;
 const PAYMENT_PROOF_HOLD_REASONS = new Set(["dispute", "refund", "investigation"]);
+const REJECTION_REASON_LABELS = { receipt_unreadable: "The receipt is not readable.", receipt_incomplete: "The receipt is incomplete.", receipt_unverifiable: "We could not verify the receipt." };
 
 const serializePayment = (payment, coursePaymentState = null) => {
   const value = typeof payment.toObject === "function" ? payment.toObject() : { ...payment };
@@ -376,10 +377,11 @@ const openPaymentProofRetentionHold = async (req, res) => {
       "proofRetentionHold.active": { $ne: true },
       ...proofCondition,
       "proofRetentionCleanupClaim.token": { $exists: false },
+      "paymentMethodSnapshotMinimizationClaim.token": { $exists: false },
     }, { $set: { proofRetentionHold: hold }, $unset: { proofRetentionCleanupClaim: 1 } }, { returnDocument: "after" }).select(PAYMENT_PROOF_HOLD_FIELDS);
     if (!protectedPayment) {
-      const current = await Payment.findById(payment._id).select("+proofRetentionCleanupClaim");
-      if (current?.proofRetentionCleanupClaim?.token) {
+      const current = await Payment.findById(payment._id).select("+proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim");
+      if (current?.proofRetentionCleanupClaim?.token || current?.paymentMethodSnapshotMinimizationClaim?.token) {
         return res.status(409).json({ message: "Payment proof cleanup is already in progress; reload the payment before opening a hold" });
       }
       return res.status(409).json({ message: "Payment proof changed; reload the payment before opening a hold" });
@@ -422,9 +424,12 @@ const resolvePaymentProofRetentionHold = async (req, res) => {
 
 const reviewPayment = (status) => async (req, res) => {
   try {
-    const { adminPassword, rejectReason } = req.body || {};
-    if (status === "rejected" && (typeof rejectReason !== "string" || !rejectReason.trim())) {
-      return res.status(400).json({ message: "Reject reason is required" });
+    const { adminPassword, rejectionReasonCode, rejectionNote } = req.body || {};
+    if (status === "rejected" && !REJECTION_REASON_LABELS[rejectionReasonCode]) {
+      return res.status(400).json({ message: "A valid rejection reason code is required" });
+    }
+    if (status === "rejected" && (rejectionNote != null && (typeof rejectionNote !== "string" || rejectionNote.trim().length > 300))) {
+      return res.status(400).json({ message: "Rejection note must be a short message of 300 characters or fewer" });
     }
     if (typeof adminPassword !== "string" || !adminPassword.trim()) {
       return res.status(400).json({ message: "Admin password is required to review a payment" });
@@ -433,12 +438,13 @@ const reviewPayment = (status) => async (req, res) => {
     if (!admin || !bcrypt.compareSync(adminPassword, admin.password)) return res.status(403).json({ message: "Invalid admin password" });
     const { payment, enrollment, course } = await reviewManualPayment({
       paymentId: req.params.paymentId, adminId: req.user.id, status,
-      rejectReason: typeof rejectReason === "string" ? rejectReason.trim() : undefined,
+      rejectionReasonCode: status === "rejected" ? rejectionReasonCode : undefined,
+      rejectionNote: status === "rejected" ? String(rejectionNote || "").trim() : undefined,
     });
     await afterPaymentCommit(async () => emitAdminEvent("admin:payment-updated"));
     await afterPaymentCommit(() => writeAuditLog({
       actorId: req.user.id, action: `payment.${status}`, targetType: "payment", targetId: payment._id,
-      metadata: { userId: payment.userId, courseId: payment.courseId, amount: payment.amount, rejectReason: payment.rejectReason },
+      metadata: { userId: payment.userId, courseId: payment.courseId, amount: payment.amount, ...(payment.rejectionReasonCode ? { rejectionReasonCode: payment.rejectionReasonCode } : {}) },
     }));
     await afterPaymentCommit(() => createNotification({
       userId: payment.userId, courseId: payment.courseId, type: "payment",
@@ -450,7 +456,7 @@ const reviewPayment = (status) => async (req, res) => {
     }));
     await afterPaymentCommit(async () => {
       const user = await User.findById(payment.userId).select("name email").lean();
-      await sendPaymentReviewEmail({ user, courseTitle: course?.title, status, rejectReason: payment.rejectReason });
+      await sendPaymentReviewEmail({ user, courseTitle: course?.title, status, rejectReason: payment.rejectionReasonCode ? `${REJECTION_REASON_LABELS[payment.rejectionReasonCode]}${payment.rejectionNote ? ` ${payment.rejectionNote}` : ""}` : payment.rejectReason });
     });
     return res.status(200).json({
       message: status === "approved" ? "Payment approved and enrollment created successfully" : "Payment rejected successfully",

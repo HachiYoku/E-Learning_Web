@@ -50,6 +50,7 @@ const proofRetentionCleanupClaimSchema = new mongoose.Schema({
   claimedAt: { type: Date, required: true },
   expiresAt: { type: Date, required: true },
 }, { _id: false });
+const snapshotMinimizationClaimSchema = new mongoose.Schema({ token: { type: String, required: true }, claimedAt: { type: Date, required: true }, expiresAt: { type: Date, required: true } }, { _id: false });
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -125,6 +126,7 @@ const paymentSchema = new mongoose.Schema(
     },
     proofRetentionHold: { type: proofRetentionHoldSchema, default: undefined, select: false },
     proofRetentionCleanupClaim: { type: proofRetentionCleanupClaimSchema, default: undefined, select: false },
+    paymentMethodSnapshotMinimizationClaim: { type: snapshotMinimizationClaimSchema, default: undefined, select: false },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
@@ -141,6 +143,8 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    rejectionReasonCode: { type: String, enum: ["receipt_unreadable", "receipt_incomplete", "receipt_unverifiable"], default: undefined },
+    rejectionNote: { type: String, trim: true, maxlength: 300, default: undefined },
   },
   { timestamps: true }
 );

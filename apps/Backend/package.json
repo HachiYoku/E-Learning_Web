@@ -33,6 +33,7 @@
     "accounts:cleanup-assets": "node scripts/cleanupAccountAssets.js",
     "campaigns:cleanup-expired": "node scripts/cleanupExpiredCampaigns.js"
     ,"contacts:cleanup-suppressions": "node scripts/cleanupContactLeadSuppressions.js"
+    ,"payments:minimize-snapshots": "node scripts/minimizePaymentMethodSnapshots.js"
   },
   "author": "",
   "license": "ISC",
