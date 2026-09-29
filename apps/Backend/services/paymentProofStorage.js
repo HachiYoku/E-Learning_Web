@@ -52,11 +52,16 @@ async function streamPaymentProof(publicId, format) {
 
 async function deletePaymentProof(publicId, { legacy = false } = {}) {
   if (!publicId) return;
-  await cloudinary.uploader.destroy(publicId, {
+  const result = await cloudinary.uploader.destroy(publicId, {
     resource_type: "image",
     type: legacy ? "upload" : "authenticated",
     invalidate: true,
   });
+  // Cloudinary reports an already-deleted asset as a normal response. Treat it
+  // as idempotent success, but do not hide transport/authentication failures
+  // or unexpected API results behind an accidental SDK default.
+  if (["ok", "not found", "not_found"].includes(result?.result)) return result;
+  throw new Error(`Cloudinary payment-proof deletion failed: ${result?.result || "unexpected response"}`);
 }
 
 module.exports = {

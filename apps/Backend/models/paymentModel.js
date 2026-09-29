@@ -30,6 +30,27 @@ const paymentMethodSnapshotSchema = new mongoose.Schema({
   qrImage: { type: paymentQrSnapshotSchema, default: undefined },
 }, { _id: false });
 
+// This is deliberately a pseudonymous, operational hold record: it prevents
+// proof cleanup but does not alter the financial Payment record's retention.
+const proofRetentionHoldSchema = new mongoose.Schema({
+  active: { type: Boolean, default: false },
+  reason: { type: String, enum: ["dispute", "refund", "investigation"], default: null },
+  openedAt: { type: Date, default: null },
+  resolvedAt: { type: Date, default: null },
+  openedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+}, { _id: false });
+
+// A short-lived worker lease, not a retention decision. It is intentionally
+// private because it is an operational concurrency control record.
+const proofRetentionCleanupClaimSchema = new mongoose.Schema({
+  token: { type: String, required: true },
+  publicId: { type: String, required: true },
+  storage: { type: String, enum: ["authenticated", "legacy"], required: true },
+  claimedAt: { type: Date, required: true },
+  expiresAt: { type: Date, required: true },
+}, { _id: false });
+
 const paymentSchema = new mongoose.Schema(
   {
     userId: {
@@ -102,6 +123,8 @@ const paymentSchema = new mongoose.Schema(
       enum: ["authenticated", "legacy"],
       select: false,
     },
+    proofRetentionHold: { type: proofRetentionHoldSchema, default: undefined, select: false },
+    proofRetentionCleanupClaim: { type: proofRetentionCleanupClaimSchema, default: undefined, select: false },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
