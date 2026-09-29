@@ -71,8 +71,10 @@ async function deleteStudentAccount(userId, { actorId, initiatedBy, deletionConf
       actorId,
       action: initiatedBy === "self" ? "user.self_deleted" : "user.deleted",
       targetType: "user",
+      // This remains a pseudonymous, linkable historical identifier; it is
+      // intentionally not treated as anonymized data.
       targetId: student._id,
-      metadata: { email: student.email, name: student.name, initiatedBy },
+      metadata: { initiatedBy },
     }], { session });
 
     await student.deleteOne({ session });
