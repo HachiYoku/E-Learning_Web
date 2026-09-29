@@ -14,6 +14,7 @@ export default defineConfig({
       'src/services/lessonService.test.js',
       'src/services/userService.test.js',
       'src/pages/StudentFeedbackManagement/StudentFeedback.test.jsx',
+      'src/pages/ContactManagement/ContactLeads.test.jsx',
     ],
   },
   server: {

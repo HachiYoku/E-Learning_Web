@@ -33,7 +33,7 @@ describe("ContactSection", () => {
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Maya" } });
     fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "maya@example.com" } });
-    fireEvent.click(screen.getByLabelText("Send me course news and Thai learning updates too."));
+    fireEvent.click(screen.getByLabelText(/I’d like to receive course updates/));
     fireEvent.click(screen.getByRole("button", { name: /send message/i }));
 
     expect(submitContactLead).toHaveBeenCalledWith(expect.objectContaining({ name: "Maya", email: "maya@example.com", marketingOptIn: true }));

@@ -102,7 +102,7 @@ function ContactSection() {
           </label>
           <label className="mt-5 flex min-h-11 items-start gap-3 rounded-xl px-1 text-sm leading-relaxed text-[#765F55]">
             <input type="checkbox" name="marketingOptIn" checked={form.marketingOptIn} onChange={updateField} className="mt-1 h-4 w-4 rounded border-[#2D2E30]/30 text-[#E58C1A] focus:ring-[#E58C1A]" />
-            Send me course news and Thai learning updates too.
+            I’d like to receive course updates, new class announcements, promotions, and other news from Arun Thai by email. I can unsubscribe anytime.
           </label>
 
           {status.message ? (

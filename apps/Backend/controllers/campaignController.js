@@ -79,7 +79,7 @@ const createCampaign = async (req, res) => {
     const contactIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("contact:")).map((key) => key.slice(8));
     const [systemUsers, optedInLeads] = await Promise.all([
       User.find({ _id: { $in: systemIds }, role: "user", isVerified: true }).select("_id name email"),
-      ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("_id name email"),
+      ContactLead.find({ _id: { $in: contactIds }, "marketingConsent.status": "subscribed" }).select("_id name email"),
     ]);
     const selectedRecipients = uniqueRecipientsByEmail([
       ...systemUsers.map((user) => ({ recordType: "system", recipientId: user._id, name: user.name, email: user.email })),
@@ -129,7 +129,7 @@ const sendCampaign = async (req, res) => {
     const contactIds = selectedRecipients.filter((item) => item.recordType === "contact").map((item) => item.recipientId);
     const [systemUsers, leads] = await Promise.all([
       User.find({ _id: { $in: systemIds }, role: "user", isActive: true, isVerified: true }).select("name email"),
-      ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("name email"),
+      ContactLead.find({ _id: { $in: contactIds }, "marketingConsent.status": "subscribed" }).select("name email"),
     ]);
     const recipients = uniqueRecipientsByEmail([
       ...systemUsers.map((user) => ({ name: user.name, email: user.email, recordType: "system" })),
@@ -200,7 +200,7 @@ const updateDraftCampaign = async (req, res) => {
     const contactIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("contact:")).map((key) => key.slice(8));
     const [systemUsers, optedInLeads] = await Promise.all([
       User.find({ _id: { $in: systemIds }, role: "user", isVerified: true }).select("_id name email"),
-      ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("_id name email"),
+      ContactLead.find({ _id: { $in: contactIds }, "marketingConsent.status": "subscribed" }).select("_id name email"),
     ]);
     const selectedRecipients = uniqueRecipientsByEmail([
       ...systemUsers.map((user) => ({ recordType: "system", recipientId: user._id, name: user.name, email: user.email })),

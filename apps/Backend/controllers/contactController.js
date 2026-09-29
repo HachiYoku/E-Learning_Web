@@ -1,4 +1,5 @@
 const ContactLead = require("../models/contactLeadModel");
+const ContactEnquiry = require("../models/contactEnquiryModel");
 const sendEmail = require("../services/sendEmail");
 const jwt = require("jsonwebtoken");
 const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
@@ -35,9 +36,30 @@ const buildSubscriptionConfirmation = (name, unsubscribeUrl) => `
     </body>
   </html>`;
 
+const subscribedConsent = () => ({
+  status: "subscribed",
+  lastOptedInAt: new Date(),
+  lastOptInSource: "contact_form",
+});
+
+const currentConsent = (lead) => {
+  if (lead?.marketingConsent?.status) return lead.marketingConsent.toObject?.() || lead.marketingConsent;
+  return { status: "never_subscribed" };
+};
+
+const resolveConsentTransition = (existingConsent, explicitOptIn) => {
+  if (!explicitOptIn) return { consent: existingConsent, shouldSendConfirmation: false };
+  return {
+    consent: { ...existingConsent, ...subscribedConsent() },
+    shouldSendConfirmation: existingConsent.status !== "subscribed",
+  };
+};
+
+const publicLead = (lead) => ({ id: lead._id, name: lead.name, email: lead.email });
+
 const createContactLead = async (req, res) => {
   try {
-    const { name, email, message = "", marketingOptIn = true, website = "" } = req.body || {};
+    const { name, email, message = "", marketingOptIn, website = "" } = req.body || {};
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
     const normalizedName = typeof name === "string" ? name.trim() : "";
 
@@ -54,21 +76,24 @@ const createContactLead = async (req, res) => {
       return res.status(201).json({ message: "Thank you. We will keep you updated." });
     }
 
-    const existingLead = await ContactLead.findOne({ email: normalizedEmail }).select("marketingOptIn");
-    const wasAlreadySubscribed = Boolean(existingLead?.marketingOptIn);
-    const lead = await ContactLead.findOneAndUpdate(
-      { email: normalizedEmail },
-      {
-        name: normalizedName,
-        message: typeof message === "string" ? message.trim() : "",
-        marketingOptIn: Boolean(marketingOptIn),
-        isRead: false,
-      },
-      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true }
-    );
+    const existingLead = await ContactLead.findOne({ email: normalizedEmail });
+    const existingConsent = currentConsent(existingLead);
+    const explicitOptIn = marketingOptIn === true;
+    const { consent: marketingConsent, shouldSendConfirmation } = resolveConsentTransition(existingConsent, explicitOptIn);
+
+    const lead = existingLead || new ContactLead({ email: normalizedEmail, name: normalizedName });
+    lead.name = normalizedName;
+    lead.marketingConsent = marketingConsent;
+    await lead.save();
+
+    await ContactEnquiry.create({
+      contactLead: lead._id,
+      message: typeof message === "string" ? message.trim() : "",
+      isRead: false,
+    });
 
     let confirmationSent = false;
-    if (lead.marketingOptIn) {
+    if (shouldSendConfirmation) {
       try {
         const unsubscribeToken = jwt.sign(
           { email: normalizedEmail, purpose: "contact-unsubscribe" },
@@ -89,11 +114,9 @@ const createContactLead = async (req, res) => {
 
     return res.status(201).json({
       message: confirmationSent
-        ? wasAlreadySubscribed
-          ? "You are already subscribed. We sent another confirmation to your email."
-          : "Thank you. Please check your email for a confirmation."
-        : "Thank you. We will keep you updated.",
-      lead: { id: lead._id, name: lead.name, email: lead.email },
+        ? "Thank you. Please check your email for a confirmation."
+        : "Thank you. Your enquiry has been sent.",
+      lead: publicLead(lead),
     });
   } catch (error) {
     if (error?.code === 11000) {
@@ -112,7 +135,16 @@ const unsubscribeContactLead = async (req, res) => {
       return res.status(400).send("This unsubscribe link is invalid.");
     }
 
-    await ContactLead.findOneAndUpdate({ email: payload.email.toLowerCase() }, { marketingOptIn: false });
+    await ContactLead.findOneAndUpdate(
+      { email: payload.email.toLowerCase() },
+      {
+        $set: {
+          "marketingConsent.status": "unsubscribed",
+          "marketingConsent.withdrawnAt": new Date(),
+          "marketingConsent.withdrawalSource": "unsubscribe_link",
+        },
+      }
+    );
     return res.status(200).type("html").send("<main style=\"font-family:Arial,sans-serif;padding:48px;color:#2d2e30\"><h1>You have been unsubscribed.</h1><p>You will no longer receive Arun Thai Academy marketing updates.</p></main>");
   } catch (_error) {
     return res.status(400).type("html").send("<main style=\"font-family:Arial,sans-serif;padding:48px;color:#2d2e30\"><h1>This unsubscribe link is invalid or has expired.</h1></main>");
@@ -121,20 +153,57 @@ const unsubscribeContactLead = async (req, res) => {
 
 const listContactLeads = async (_req, res) => {
   try {
-    const leads = await ContactLead.find({}).sort({ createdAt: -1 });
-    await ContactLead.updateMany({ isRead: false }, { $set: { isRead: true } });
+    const leads = await ContactLead.aggregate([
+      {
+        $lookup: {
+          from: "contactenquiries",
+          let: { leadId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$contactLead", "$$leadId"] } } },
+            { $sort: { submittedAt: -1 } },
+            { $group: { _id: null, latest: { $first: "$message" }, latestSubmittedAt: { $first: "$submittedAt" }, unreadEnquiryCount: { $sum: { $cond: ["$isRead", 0, 1] } } } },
+          ],
+          as: "enquirySummary",
+        },
+      },
+      { $unwind: { path: "$enquirySummary", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          name: 1, email: 1, marketingConsent: 1, createdAt: 1,
+          latestEnquiry: "$enquirySummary.latest",
+          latestEnquiryAt: "$enquirySummary.latestSubmittedAt",
+          unreadEnquiryCount: { $ifNull: ["$enquirySummary.unreadEnquiryCount", 0] },
+        },
+      },
+      { $sort: { latestEnquiryAt: -1, createdAt: -1 } },
+    ]);
     return res.status(200).json(leads);
   } catch (_error) {
     return res.status(500).json({ message: "Unable to load contact leads." });
   }
 };
 
+const getContactEnquiries = async (req, res) => {
+  try {
+    const lead = await ContactLead.findById(req.params.id).select("_id name email");
+    if (!lead) return res.status(404).json({ message: "Contact not found." });
+
+    await ContactEnquiry.updateMany({ contactLead: lead._id, isRead: false }, { $set: { isRead: true } });
+    const enquiries = await ContactEnquiry.find({ contactLead: lead._id })
+      .select("message submittedAt")
+      .sort({ submittedAt: -1 });
+    return res.status(200).json({ contact: publicLead(lead), enquiries });
+  } catch (_error) {
+    return res.status(500).json({ message: "Unable to load contact enquiries." });
+  }
+};
+
 const getUnreadContactLeadCount = async (_req, res) => {
   try {
-    return res.status(200).json({ count: await ContactLead.countDocuments({ isRead: false }) });
+    return res.status(200).json({ count: await ContactEnquiry.countDocuments({ isRead: false }) });
   } catch (_error) {
     return res.status(500).json({ message: "Unable to load contact notification count." });
   }
 };
 
-module.exports = { createContactLead, unsubscribeContactLead, listContactLeads, getUnreadContactLeadCount };
+module.exports = { createContactLead, unsubscribeContactLead, listContactLeads, getContactEnquiries, getUnreadContactLeadCount, resolveConsentTransition, currentConsent };
