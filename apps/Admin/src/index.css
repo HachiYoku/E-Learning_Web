@@ -53,6 +53,16 @@ body {
 .input { display: block; width: 100%; margin-top: 0.5rem; border: 1px solid rgba(45, 46, 48, .15); border-radius: 0.75rem; background: white; padding: 0.625rem 0.75rem; outline: none; }
 .input:focus { border-color: #e58c1a; }
 
+/* Feedback-review decisions should be immediately visible without moving the review layout. */
+main.mx-auto.max-w-7xl > p[role="status"] {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 60;
+  width: min(24rem, calc(100vw - 2rem));
+  box-shadow: 0 16px 36px -20px rgba(45, 46, 48, .55);
+}
+
 /* Keep the long admin navigation easy to scan without the browser-default bar. */
 .admin-sidebar-scroll {
   scrollbar-color: #765f55 #2d2e30;

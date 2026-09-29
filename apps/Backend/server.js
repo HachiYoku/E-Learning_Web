@@ -216,6 +216,8 @@ app.use('/support-tickets', supportTicketRoutes)
 
 const studentFeedbackRoutes = require('./routes/studentFeedback')
 app.use('/student-feedback', studentFeedbackRoutes)
+const adminStudentFeedbackRoutes = require('./routes/adminStudentFeedback')
+app.use('/admin/student-feedback', adminStudentFeedbackRoutes)
 
 const campaignRoutes = require('./routes/campaign')
 app.use('/campaigns', campaignRoutes)
