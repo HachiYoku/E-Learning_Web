@@ -2,6 +2,7 @@ import { BookOpen, ChevronRight, Headphones, MessageCircleHeart, Newspaper, Rece
 import { createElement } from "react"
 import { Link } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
+import Avatar from "../components/Avatar"
 
 const destinations = [
   { title: "Explore courses", description: "Browse every Arun Thai course", to: "/app/explore", icon: BookOpen, color: "bg-[#FFF1D0] text-[#C97112]" },
@@ -13,14 +14,14 @@ const destinations = [
 
 function StudentMore() {
   const { user } = useAuth()
-  const profileImage = user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || "student"}`
+  const profileImage = user?.avatar || ""
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
       <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Student app</p>
       <h1 className="mt-3 text-3xl font-bold tracking-tight">More</h1>
       <Link to="/app/profile" className="mt-6 flex items-center gap-4 rounded-2xl border border-[#2D2E30]/10 bg-white p-4 shadow-sm">
-        <img src={profileImage} alt="" className="h-12 w-12 rounded-full border-2 border-[#E58C1A]/20 object-cover" />
+        <Avatar src={profileImage} name={user?.name} className="h-12 w-12 rounded-full border-2 border-[#E58C1A]/20 object-cover" fallbackClassName="h-12 w-12 rounded-full border-2 border-[#E58C1A]/20 bg-[#F4CD7D] text-sm font-semibold text-[#2D2E30]" />
         <span className="min-w-0 flex-1"><span className="block truncate font-bold">{user?.name || "Student"}</span><span className="block truncate text-sm text-[#765F55]">View profile</span></span><ChevronRight className="h-5 w-5 text-[#9A8775]" />
       </Link>
 

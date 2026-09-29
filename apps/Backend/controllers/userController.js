@@ -4,7 +4,7 @@ const Enrollment = require("../models/enrollmentModel");
 const AuditLog = require("../models/auditLogModel");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const { uploadStream } = require("../services/uploadStream");
+const { replaceAvatarForUser } = require("../services/avatarReplacement");
 const { createNotification } = require("./notificationController");
 const { writeAuditLog } = require("../services/auditLogger");
 const { revokeAllUserSessions } = require("../services/sessionService");
@@ -85,18 +85,16 @@ const getProfile = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
     const { name } = req.body;
-    if (name) user.name = name;
-
     if (req.file && req.file.buffer) {
-      const result = await uploadStream(req.file.buffer, "english_kafe/avatars");
-      user.avatar = result.secure_url;
-      user.avatarPublicId = result.public_id;
+      const result = await replaceAvatarForUser({ userId: req.user.id, name, buffer: req.file.buffer });
+      const updated = await User.findById(result.user._id).select("-password");
+      return res.status(200).json(updated);
     }
 
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (name) user.name = name;
     await user.save();
     const updated = await User.findById(req.user.id).select("-password");
     return res.status(200).json(updated);

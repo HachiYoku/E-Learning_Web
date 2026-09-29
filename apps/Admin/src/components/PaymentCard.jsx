@@ -1,5 +1,6 @@
 import { ArrowRight, CreditCard, Loader2, Maximize2, RotateCcw, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Avatar } from './Avatar'
 import { fetchPaymentProofBlob, formatPaymentAmount } from '../services/paymentService'
 
 function Detail({ label, children, full = false }) {
@@ -94,7 +95,7 @@ export default function PaymentCard({ payment, onApprove, onDeny, status = 'revi
           <span className="text-xs text-[#9E887C]">{payment.date}</span>
         </div>
         <div className="p-5">
-          <div className="flex items-center gap-3"><img src={payment.userAvatar} alt="" className="h-10 w-10 rounded-full object-cover" /><div className="min-w-0"><p className="truncate font-bold text-[#2D2E30]">{payment.userName}</p><p className="truncate text-xs text-[#765F55]">{payment.userEmail}</p></div></div>
+          <div className="flex items-center gap-3"><Avatar src={payment.userAvatar} name={payment.userName} className="h-10 w-10 rounded-full object-cover" fallbackClassName="h-10 w-10 rounded-full bg-[#FFF1CE] text-sm font-bold text-[#C97112]" /><div className="min-w-0"><p className="truncate font-bold text-[#2D2E30]">{payment.userName}</p><p className="truncate text-xs text-[#765F55]">{payment.userEmail}</p></div></div>
           <div className="mt-5 rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#C97112]">Course order</p><p className="mt-2 font-bold text-[#2D2E30]">{payment.courseName}</p><p className="mt-1 text-xs text-[#765F55]">{payment.paymentMethod} · {payment.currency}</p><div className="mt-3 flex items-end justify-between border-t border-[#2D2E30]/10 pt-3"><span className="text-xs font-semibold uppercase tracking-wide text-[#765F55]">Amount paid</span><strong className="text-lg text-[#D97910]">{payment.amount}</strong></div></div>
           {isDenied && payment.denialReason ? <p className="mt-4 rounded-xl bg-[#FFF0EE] px-3 py-2 text-xs text-[#A34D45]">{payment.denialReason}</p> : null}
           {status === 'review' ? <button type="button" onClick={() => setReviewOpen(true)} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A]">Review payment <ArrowRight size={17} /></button> : null}

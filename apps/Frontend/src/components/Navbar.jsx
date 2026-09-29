@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext"
 import { useNotification } from "../contexts/NotificationContext"
 import { getSafeNotificationPath } from "../utils/notificationLink"
 import LogoutConfirmModal from "./LogoutConfirmModal"
+import Avatar from "./Avatar"
 
 const NOTIFICATION_FILTERS = [
   { key: "all", label: "All" },
@@ -181,7 +182,7 @@ function Navbar() {
     setIsLogoutConfirmOpen(true)
   }
 
-  const profileImage = user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || 'user'}`
+  const profileImage = user?.avatar || ''
   const userName = user?.name || 'User'
   const isStudentApp = location.pathname === '/app' || location.pathname.startsWith('/app/')
 
@@ -238,21 +239,13 @@ function Navbar() {
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="flex items-center gap-2 transition-opacity hover:opacity-80"
               >
-                <img
-                  src={profileImage}
-                  alt="Profile"
-                  className="size-12 scale-120 rounded-full border-2 border-gray-300 object-cover"
-                />
+                <Avatar src={profileImage} name={user?.name} alt="Profile" className="size-12 scale-120 rounded-full border-2 border-gray-300 object-cover" fallbackClassName="size-12 scale-120 rounded-full border-2 border-gray-300 bg-[#F4CD7D] text-sm font-semibold text-[#2D2E30]" />
               </button>
 
               {showProfileMenu && (
                 <div className="absolute right-0 z-50 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-xl top-full">
                   <div className="flex items-center gap-3 overflow-hidden border-b border-gray-200 px-2 py-4">
-                    <img
-                      src={profileImage}
-                      alt="Profile"
-                      className="h-12 w-12 rounded-full border-2 border-gray-300 object-cover"
-                    />
+                    <Avatar src={profileImage} name={user?.name} alt="Profile" className="h-12 w-12 rounded-full border-2 border-gray-300 object-cover" fallbackClassName="h-12 w-12 rounded-full border-2 border-gray-300 bg-[#F4CD7D] text-sm font-semibold text-[#2D2E30]" />
                     <div>
                       <p className="font-semibold text-gray-900">{userName}</p>
                       <p className="text-xs text-gray-500">{user?.email}</p>
@@ -349,11 +342,7 @@ function Navbar() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3 rounded-2xl bg-gray-50 px-4 py-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={profileImage}
-                      alt="Profile"
-                      className="h-12 w-12 rounded-full border-2 border-gray-300 object-cover"
-                    />
+                    <Avatar src={profileImage} name={user?.name} alt="Profile" className="h-12 w-12 rounded-full border-2 border-gray-300 object-cover" fallbackClassName="h-12 w-12 rounded-full border-2 border-gray-300 bg-[#F4CD7D] text-sm font-semibold text-[#2D2E30]" />
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-gray-900">{userName}</p>
                       <p className="truncate text-xs text-gray-500">{user?.email}</p>

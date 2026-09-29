@@ -2,6 +2,7 @@ import { BookOpen, FileText, Users, CreditCard, Trash2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ConfirmationModal from '../components/ConfirmationModal'
+import { Avatar } from '../components/Avatar'
 import { fetchCourses } from '../services/courseService'
 import { fetchAllPayments } from '../services/paymentService'
 import { fetchUsers, deleteUser } from '../services/userService'
@@ -189,11 +190,7 @@ function Dashboard() {
                 <tr key={user.id} className={`border-b border-[#2D2E30]/8 ${index % 2 === 0 ? 'bg-white' : 'bg-[#FFFDF8]'} transition-colors hover:bg-[#FFF4D8]/45`}>
                   <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                     <div className="flex items-center gap-2 sm:gap-3">
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="h-7 w-7 shrink-0 rounded-full border border-[#E58C1A]/25 object-cover sm:h-8 sm:w-8"
-                      />
+                      <Avatar src={user.avatar} name={user.name} alt={user.name} className="h-7 w-7 shrink-0 rounded-full border border-[#E58C1A]/25 object-cover sm:h-8 sm:w-8" fallbackClassName="h-7 w-7 shrink-0 rounded-full border border-[#E58C1A]/25 bg-[#FFF1CE] text-xs font-bold text-[#C97112] sm:h-8 sm:w-8" />
                       <span className="truncate text-xs font-semibold text-[#2D2E30] sm:text-sm">{user.name}</span>
                     </div>
                   </td>

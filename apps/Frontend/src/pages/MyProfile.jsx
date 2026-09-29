@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertTriangle, Camera, CheckCircle2, Mail, Pencil, ShieldCheck, Trash2, UserRound, X } from "lucide-react"
+import Avatar from "../components/Avatar"
 import { useAuth } from "../contexts/AuthContext"
 import { updateProfile } from "../services/authService"
 
@@ -23,8 +24,9 @@ function MyProfile() {
   const userName = user?.name || "Student"
   const deletionScheduledOrInProgress = Boolean(scheduledDeletion) || deletionInProgress
   const [formData, setFormData] = useState({ userName, avatarFile: null, avatarPreview: "" })
+  const avatarName = formData.userName || user?.name || ""
 
-  const profileImage = formData.avatarPreview || user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEmail}`
+  const profileImage = formData.avatarPreview || user?.avatar || ""
   const handleChange = (event) => setFormData((current) => ({ ...current, userName: event.target.value }))
   const handleAvatarChange = (event) => {
     const file = event.target.files?.[0]
@@ -122,7 +124,7 @@ function MyProfile() {
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-5">
         <section className="rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-5 shadow-[0_18px_45px_-35px_rgba(80,48,19,0.35)] sm:p-6 lg:col-span-2">
-          <div className="flex items-center gap-4"><div className="flex shrink-0 flex-col items-center gap-2"><div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FFF1D0]"><img src={profileImage} alt={userName} className="size-10 rounded-xl object-cover shadow-sm" /></div><label className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-bold text-[#C97112] transition hover:bg-[#FFF1D0]"><Camera className="h-3.5 w-3.5" />Change photo<input type="file" accept="image/*" onClick={() => setIsEditing(true)} onChange={handleAvatarChange} className="hidden" /></label></div><div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Student account</p><h2 className="mt-1 truncate text-xl font-bold">{formData.userName || "Student"}</h2><p className="mt-1 truncate text-sm text-[#765F55]">{userEmail}</p></div></div>
+          <div className="flex items-center gap-4"><div className="flex shrink-0 flex-col items-center gap-2"><div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FFF1D0]"><Avatar src={profileImage} name={avatarName} alt={userName} className="size-10 rounded-xl object-cover shadow-sm" fallbackClassName="size-10 rounded-xl bg-[#F8C56A] text-sm font-bold text-[#2D2E30] shadow-sm" /></div><label className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-bold text-[#C97112] transition hover:bg-[#FFF1D0]"><Camera className="h-3.5 w-3.5" />Change photo<input type="file" accept="image/*" onClick={() => setIsEditing(true)} onChange={handleAvatarChange} className="hidden" /></label></div><div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Student account</p><h2 className="mt-1 truncate text-xl font-bold">{formData.userName || "Student"}</h2><p className="mt-1 truncate text-sm text-[#765F55]">{userEmail}</p></div></div>
           <div className="mt-6 rounded-2xl bg-[#FFF9EA] p-4"><div className="flex items-center gap-2 text-sm font-bold text-[#2D2E30]"><ShieldCheck className="h-4 w-4 text-[#4D7C57]" />Your student account</div><p className="mt-2 text-sm leading-relaxed text-[#765F55]">Your profile details are used to personalize your Arun Thai learning space.</p></div>
           <div className="mt-5 flex items-center justify-between border-t border-[#2D2E30]/10 pt-4"><span className="text-xs font-bold uppercase tracking-[0.14em] text-[#765F55]">Account status</span><span className="inline-flex items-center gap-1.5 rounded-full bg-[#E9F4EA] px-2.5 py-1 text-xs font-bold text-[#4D7C57]"><span className="h-1.5 w-1.5 rounded-full bg-[#4D7C57]" />Active</span></div>
         </section>

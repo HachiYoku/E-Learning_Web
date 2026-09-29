@@ -12,9 +12,7 @@ export function normalizePayment(payment) {
     id: payment._id,
     userName: payment.userId?.name || "Unknown user",
     userEmail: payment.userId?.email || "",
-    userAvatar:
-      payment.userId?.avatar ||
-      `https://ui-avatars.com/api/?background=f8b2c0&color=111827&name=${encodeURIComponent(payment.userId?.name || "User")}`,
+    userAvatar: payment.userId?.avatar || "",
     userDate: payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : "",
     // Snapshots are the purchase record. Populated documents exist solely for
     // pre-Phase-5 legacy payments that do not have the equivalent snapshot.

@@ -9,8 +9,10 @@ export default defineConfig({
     setupFiles: './src/testSetup.js',
     include: [
       'src/components/KeyVocabularyEditor.test.jsx',
+      'src/components/Avatar.test.jsx',
       'src/pages/CourseManagement/lessonVocabularyForms.test.jsx',
       'src/services/lessonService.test.js',
+      'src/services/userService.test.js',
       'src/pages/StudentFeedbackManagement/StudentFeedback.test.jsx',
     ],
   },
