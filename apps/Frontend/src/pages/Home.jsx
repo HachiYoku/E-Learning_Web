@@ -16,14 +16,16 @@ function Home() {
     <div>
       <Seo title="Learn Thai Online" description="Build confidence in everyday Thai with practical online courses, free learning resources, and supportive guidance from Arun Thai." structuredData={organizationSchema} />
       <Navbar />
-      <Hero />
-      <Courses />
-      <Benefits />
-      <Article />
-      <MotivationBanner />
-      <OurServices />
-      <StudentReview />
-      <ContactSection />
+      <main>
+        <Hero />
+        <Courses />
+        <Benefits />
+        <Article />
+        <MotivationBanner />
+        <OurServices />
+        <StudentReview />
+        <ContactSection />
+      </main>
       <Footer />
     </div>
   )

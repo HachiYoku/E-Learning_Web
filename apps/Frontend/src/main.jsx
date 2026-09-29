@@ -6,15 +6,18 @@ import "./index.css"
 import { AuthProvider } from "./contexts/AuthContext.jsx"
 import { NotificationProvider } from "./contexts/NotificationContext.jsx"
 import { ToastProvider } from "./contexts/ToastContext.jsx"
+import { CatalogueCurrencyProvider } from "./contexts/CatalogueCurrencyContext.jsx"
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <Router>
       <AuthProvider>
         <NotificationProvider>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
+          <CatalogueCurrencyProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </CatalogueCurrencyProvider>
         </NotificationProvider>
       </AuthProvider>
     </Router>

@@ -18,6 +18,7 @@ import Blogs from './pages/BlogManagement/Blogs'
 import AddBlog from './pages/BlogManagement/AddBlog'
 import EditBlog from './pages/BlogManagement/EditBlog'
 import ReviewPayment from './pages/Payment/ReviewPayment'
+import PaymentMethods from './pages/Payment/PaymentMethods'
 import Instructors from './pages/InstructorManagement/Instructors'
 import Analytics from './pages/Reports/Analytics'
 import Settings from './pages/Settings/GeneralSettings'
@@ -30,6 +31,7 @@ import QuizAttempts from './pages/QuizManagement/QuizAttempts'
 import Flashcards from './pages/FlashcardManagement/Flashcards'
 import PromoCodes from './pages/PromoManagement/PromoCodes'
 import SupportTickets from './pages/SupportManagement/SupportTickets'
+import StudentFeedback from './pages/StudentFeedbackManagement/StudentFeedback'
 
 function ProtectedLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768)
@@ -73,12 +75,14 @@ function App() {
             <Route path="/pending-verifications" element={<PendingVerifications />} />
             <Route path="/contacts" element={<ContactLeads />} />
             <Route path="/support" element={<SupportTickets />} />
+            <Route path="/student-feedback" element={<StudentFeedback />} />
             <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/announcements" element={<Campaigns />} />
             <Route path="/blog" element={<Blogs />} />
             <Route path="/blog/add" element={<AddBlog />} />
             <Route path="/blog/edit/:id" element={<EditBlog />} />
             <Route path="/review-payment" element={<ReviewPayment />} />
+            <Route path="/payment-methods" element={<PaymentMethods />} />
             <Route path="/instructors" element={<Instructors />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />

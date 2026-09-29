@@ -66,14 +66,30 @@ const getUploadedFile = (req, fieldName) => {
   return req.files[fieldName][0] || null;
 };
 
+const parsePrices = (value) => {
+  if (value === undefined) return undefined;
+  let parsed = value;
+  if (typeof value === "string") { try { parsed = JSON.parse(value); } catch (_error) { throw Object.assign(new Error("Currency prices must be valid JSON."), { status: 400 }); } }
+  if (!parsed || typeof parsed !== "object") throw Object.assign(new Error("Currency prices must be an object."), { status: 400 });
+  const result = {};
+  for (const currency of ["THB", "MMK"]) {
+    if (!parsed[currency]) continue;
+    const price = Number(parsed[currency].price); const originalPrice = Number(parsed[currency].originalPrice);
+    if (!Number.isFinite(price) || price < 0 || !Number.isFinite(originalPrice) || originalPrice < price) throw Object.assign(new Error(`Enter a valid ${currency} original price and price.`), { status: 400 });
+    result[currency] = { price, originalPrice };
+  }
+  return result;
+};
+
 const createCourse = async (req, res) => {
   try {
     const { title, description, price, originalPrice, rating, thumbnail, paymentQr, isPublished } = req.body;
+    const prices = parsePrices(req.body.prices);
     const features = parseFeatures(req.body.features);
 
-    const sellingPrice = Number(price);
+    const sellingPrice = price === undefined || price === "" ? undefined : Number(price);
     const basePrice = originalPrice === undefined || originalPrice === "" ? sellingPrice : Number(originalPrice);
-    if (!title || !Number.isFinite(sellingPrice) || sellingPrice < 0 || !Number.isFinite(basePrice) || basePrice < sellingPrice) {
+    if (!title || (sellingPrice !== undefined && (!Number.isFinite(sellingPrice) || sellingPrice < 0 || !Number.isFinite(basePrice) || basePrice < sellingPrice)) || (isPublished === "true" || isPublished === true ? !Object.keys(prices || {}).length : false)) {
       return res.status(400).json({ message: "Enter a valid original price and a discounted price that is not higher than it." });
     }
 
@@ -108,6 +124,7 @@ const createCourse = async (req, res) => {
       description,
       price: sellingPrice,
       originalPrice: basePrice,
+      prices,
       features: features || [],
       rating: rating || 0,
       thumbnail: thumbnailUrl,
@@ -120,7 +137,7 @@ const createCourse = async (req, res) => {
 
     return res.status(201).json(course);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.status || 500).json({ message: error.message });
   }
 };
 
@@ -131,7 +148,7 @@ const getCourses = async (req, res) => {
 
     return res.status(200).json(await withCourseMetaList(courses));
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.status || 500).json({ message: error.message });
   }
 };
 
@@ -159,6 +176,7 @@ const getCourseById = async (req, res) => {
 const updateCourse = async (req, res) => {
   try {
     const { title, description, price, originalPrice, rating, thumbnail, paymentQr, isPublished } = req.body;
+    const suppliedPrices = parsePrices(req.body.prices);
     const features = parseFeatures(req.body.features);
     const course = await Course.findById(req.params.id);
 
@@ -166,17 +184,22 @@ const updateCourse = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    const nextPrice = price === undefined ? Number(course.price) : Number(price);
-    const nextOriginalPrice = originalPrice === undefined || originalPrice === "" ? Number(course.originalPrice ?? nextPrice) : Number(originalPrice);
-    if (!Number.isFinite(nextPrice) || nextPrice < 0 || !Number.isFinite(nextOriginalPrice) || nextOriginalPrice < nextPrice) {
+    const nextPrice = price === undefined ? course.price : (price === "" ? undefined : Number(price));
+    const nextOriginalPrice = originalPrice === undefined ? course.originalPrice : (originalPrice === "" ? nextPrice : Number(originalPrice));
+    if ((nextPrice !== undefined && (!Number.isFinite(nextPrice) || nextPrice < 0 || !Number.isFinite(nextOriginalPrice) || nextOriginalPrice < nextPrice)) || ((isPublished === "true" || isPublished === true || (isPublished === undefined && course.isPublished)) && suppliedPrices && !Object.keys(suppliedPrices).length)) {
       return res.status(400).json({ message: "Enter a valid original price and a discounted price that is not higher than it." });
     }
 
     if (title !== undefined) course.title = title;
     if (description !== undefined) course.description = description;
     if (features !== undefined) course.features = features;
+    const pricingChanged = (price !== undefined && Number(course.price) !== nextPrice)
+      || (originalPrice !== undefined && Number(course.originalPrice ?? course.price) !== nextOriginalPrice)
+      || (suppliedPrices !== undefined && JSON.stringify(course.prices?.toObject?.() || course.prices || {}) !== JSON.stringify(suppliedPrices));
     if (price !== undefined) course.price = nextPrice;
     if (originalPrice !== undefined) course.originalPrice = nextOriginalPrice;
+    if (suppliedPrices !== undefined) course.prices = suppliedPrices;
+    if (pricingChanged) course.mutationVersion = Number(course.mutationVersion || 0) + 1;
     if (rating !== undefined) course.rating = rating;
     if (thumbnail !== undefined) course.thumbnail = thumbnail;
     if (paymentQr !== undefined) course.paymentQr = paymentQr;

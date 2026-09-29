@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Myanmar:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap");
 /* stylelint-disable at-rule-no-unknown */
 @import "tailwindcss";
 /* stylelint-enable at-rule-no-unknown */
@@ -6,10 +6,22 @@
 :root {
   --font-body: "Inter", sans-serif;
   --font-heading: "Poppins", sans-serif;
+  --font-myanmar: "Noto Sans Myanmar", sans-serif;
+  --color-accent-text: #A94F00;
 }
 
 body {
   font-family: var(--font-body);
+}
+
+/* Apply Myanmar's script-appropriate font only to explicitly Burmese content. */
+.font-myanmar {
+  font-family: var(--font-myanmar);
+}
+
+/* Use this darker brand orange only when text needs AA contrast on light surfaces. */
+.text-brand-accent {
+  color: var(--color-accent-text);
 }
 
 /* Flashcard practice starts with the title; the decorative sparkle is omitted. */
@@ -24,6 +36,25 @@ main > .mx-auto.max-w-3xl > header.text-center > div:first-child {
   }
 }
 
+@media (max-width: 639px) and (max-height: 750px) {
+  .lesson-modal {
+    height: auto;
+    max-height: calc(100dvh - 6rem);
+  }
+
+  /* Keep lesson actions visible when Key Vocabulary is long on short phones. */
+  .lesson-key-vocabulary {
+    flex: none;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .lesson-key-vocabulary__scroll {
+    flex: none;
+    max-height: 9rem;
+  }
+}
+
 h1,
 h2,
 h3,
@@ -31,6 +62,21 @@ h4,
 h5,
 h6 {
   font-family: var(--font-heading);
+}
+
+.flashcard-flip-inner {
+  transition: transform 500ms ease;
+  transform: rotateY(0deg);
+}
+
+.flashcard-flip-inner--flipped {
+  transform: rotateY(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flashcard-flip-inner {
+    transition: none;
+  }
 }
 
 .benefits-snap-scroll {

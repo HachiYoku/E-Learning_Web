@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { io } from "socket.io-client";
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "../services/notificationService";
 import { useAuth } from "./AuthContext";
 
 const NotificationContext = createContext(null);
 
 export function NotificationProvider({ children }) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, token } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -36,9 +37,26 @@ export function NotificationProvider({ children }) {
 
     fetchNotifications();
 
-    const refreshInterval = setInterval(() => {
-      fetchNotifications();
-    }, 15000);
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL || "http://localhost:3000";
+    const socket = io(socketUrl, {
+      auth: { token },
+      withCredentials: true,
+    });
+
+    const handleNewNotification = (notification) => {
+      if (!notification?._id || String(notification.userId) !== String(user.id)) return;
+      setNotifications((current) => {
+        if (current.some((item) => item._id === notification._id)) return current;
+        return [notification, ...current].slice(0, 30);
+      });
+      if (!notification.isRead) setUnreadCount((count) => count + 1);
+    };
+
+    // A reconnect can happen after the user was offline. Fetching the source
+    // of truth recovers messages emitted while no socket was connected.
+    const handleReconnect = () => fetchNotifications();
+    socket.on("notification:new", handleNewNotification);
+    socket.on("connect", handleReconnect);
 
     const handleRefresh = () => fetchNotifications();
     const handleVisibilityChange = () => {
@@ -52,12 +70,14 @@ export function NotificationProvider({ children }) {
     window.addEventListener("notification:refresh", handleRefresh);
 
     return () => {
-      clearInterval(refreshInterval);
+      socket.off("notification:new", handleNewNotification);
+      socket.off("connect", handleReconnect);
+      socket.disconnect();
       window.removeEventListener("focus", handleRefresh);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("notification:refresh", handleRefresh);
     };
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, user?.id, token]);
 
   const markAsRead = async (notificationId) => {
     try {

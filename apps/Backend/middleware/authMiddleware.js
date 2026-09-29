@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const User = require("../models/userModel");
+const { authenticateAccessToken } = require("../services/accessTokenAuth");
 
 const extractUserFromHeader = (authHeader) => {
   if (!authHeader) {
@@ -27,13 +27,9 @@ const validateToken = async (req, res, next) => {
         .json({ message: "Authorization header is missing" });
     }
 
-    const payload = extractUserFromHeader(authHeader);
-    const user = await User.findById(payload.id).select("role isActive isVerified sessionVersion");
-    if (!user || !user.isActive || !user.isVerified || Number(user.sessionVersion || 0) !== Number(payload.sessionVersion || 0)) {
-      return res.status(401).json({ message: "Session is no longer valid" });
-    }
+    extractUserFromHeader(authHeader);
     // Authoritative database role prevents a stale token retaining admin access.
-    req.user = { id: user._id.toString(), role: user.role, sessionVersion: user.sessionVersion };
+    req.user = await authenticateAccessToken(authHeader.trim().split(/\s+/)[1]);
     return next();
   } catch (err) {
     if (err.message === "Authorization header must be in the format: Bearer <token>") {
@@ -57,11 +53,8 @@ const attachUserIfPresent = async (req, _res, next) => {
     const authHeader = req.headers.authorization;
 
     if (authHeader) {
-      const payload = extractUserFromHeader(authHeader);
-      const user = await User.findById(payload.id).select("role isActive isVerified sessionVersion");
-      if (user && user.isActive && user.isVerified && Number(user.sessionVersion || 0) === Number(payload.sessionVersion || 0)) {
-        req.user = { id: user._id.toString(), role: user.role, sessionVersion: user.sessionVersion };
-      }
+      extractUserFromHeader(authHeader);
+      req.user = await authenticateAccessToken(authHeader.trim().split(/\s+/)[1]);
     }
   } catch (_error) {
     req.user = undefined;

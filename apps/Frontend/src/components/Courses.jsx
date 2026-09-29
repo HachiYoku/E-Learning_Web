@@ -35,7 +35,7 @@ function Courses() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setEnrolledCourseIds(new Set())
+      Promise.resolve().then(() => setEnrolledCourseIds(new Set()))
       return
     }
 
@@ -103,28 +103,20 @@ function Courses() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
-            {courses.map((course) => (
-              <CourseCard
+            {courses.map((course) => {
+              return <CourseCard
                 key={course.id}
-                id={course.id}
-                image={course.image}
-                title={course.title}
-                description={course.description}
-                price={course.price}
-                originalPrice={course.originalPrice}
-                hasDiscount={course.hasDiscount}
-                rating={course.rating}
-                reviews={course.reviews}
+                course={course}
                 isEnrolled={enrolledCourseIds.has(course.id)}
               />
-            ))}
+            })}
           </div>
         )}
 
         <div className="flex justify-center mt-8 sm:mt-10 md:mt-12">
           <button 
             onClick={() => navigate('/courses')}
-            className="flex items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-2 font-semibold text-sm text-white shadow-lg shadow-[#2D2E30]/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#E58C1A] hover:shadow-xl sm:px-6 sm:py-2.5 sm:text-base md:px-8 md:py-3"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-2 font-semibold text-sm text-white shadow-lg shadow-[#2D2E30]/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#E58C1A] hover:shadow-xl sm:px-6 sm:py-2.5 sm:text-base md:px-8 md:py-3"
           >
             View All Courses
             <ArrowRight className="h-5 w-5" strokeWidth={2.25} aria-hidden="true" />

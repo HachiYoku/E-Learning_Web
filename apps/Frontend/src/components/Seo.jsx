@@ -15,7 +15,7 @@ function setMeta(selector, attributes) {
   Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
 }
 
-function Seo({ title, description, path = "/", image, type = "website", noIndex = false, structuredData }) {
+function Seo({ title, description, path = "/", image, type = "website", noIndex = false, robots, structuredData }) {
   useEffect(() => {
     const canonicalUrl = absoluteUrl(path);
     const imageUrl = absoluteUrl(image);
@@ -23,7 +23,7 @@ function Seo({ title, description, path = "/", image, type = "website", noIndex 
     const summary = description || "Learn practical Thai online with Arun Thai Language Center.";
     document.title = fullTitle;
     setMeta('meta[name="description"]', { name: "description", content: summary });
-    setMeta('meta[name="robots"]', { name: "robots", content: noIndex ? "noindex, nofollow" : "index, follow" });
+    setMeta('meta[name="robots"]', { name: "robots", content: robots || (noIndex ? "noindex, nofollow" : "index, follow") });
     setMeta('meta[property="og:title"]', { property: "og:title", content: fullTitle });
     setMeta('meta[property="og:description"]', { property: "og:description", content: summary });
     setMeta('meta[property="og:type"]', { property: "og:type", content: type });
@@ -42,7 +42,7 @@ function Seo({ title, description, path = "/", image, type = "website", noIndex 
       if (!schema) { schema = document.createElement("script"); schema.type = "application/ld+json"; schema.dataset.seoSchema = "true"; document.head.appendChild(schema); }
       schema.textContent = JSON.stringify(structuredData);
     } else if (schema) schema.remove();
-  }, [title, description, path, image, type, noIndex, structuredData]);
+  }, [title, description, path, image, type, noIndex, robots, structuredData]);
   return null;
 }
 

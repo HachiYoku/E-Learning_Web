@@ -10,6 +10,9 @@ import { fetchCourseById, fetchCourses } from "../services/courseService";
 import { fetchMyEnrollments } from "../services/enrollmentService";
 import { useAuth } from "../contexts/AuthContext";
 import Seo from "../components/Seo";
+import CatalogueCurrencySelector from "../components/CatalogueCurrencySelector";
+import { useCatalogueCurrency } from "../contexts/useCatalogueCurrency";
+import { getCataloguePrice } from "../utils/catalogueCurrency";
 
 const RELATED_COURSES_PER_PAGE = 4;
 
@@ -24,6 +27,7 @@ function CourseDetail() {
   const [enrolledCourseIds, setEnrolledCourseIds] = useState(() => new Set());
   const relatedCoursesRef = useRef(null);
   const { isAuthenticated } = useAuth();
+  const { currency, setCurrency } = useCatalogueCurrency();
 
   useEffect(() => {
     async function loadCourseData() {
@@ -130,6 +134,7 @@ function CourseDetail() {
     (course.features ?? []).length > 0
       ? course.features
       : ["No specific features listed for this course."];
+  const displayPrice = getCataloguePrice(course, currency);
 
   const courseSchema = { "@context": "https://schema.org", "@type": "Course", name: course.title, description: course.fullDescription || course.description, provider: { "@type": "EducationalOrganization", name: "Arun Thai Language Center", url: "https://arunthaiedu.com" } };
 
@@ -213,7 +218,7 @@ function CourseDetail() {
 
                 
                 <div className="flex flex-col gap-3 border-t border-[#2D2E30]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Course access</p><p className="mt-1 text-2xl font-bold text-[#C97112]">{course.price}</p>{course.hasDiscount ? <p className="mt-1 text-sm font-medium text-[#9B867C] line-through">{course.originalPrice}</p> : null}</div>
+                  <div><div className="flex flex-wrap items-center gap-3"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Course access</p><CatalogueCurrencySelector currency={currency} onChange={setCurrency} compact /></div>{displayPrice.available ? <><p className="mt-2 text-2xl font-bold text-[#C97112]">{displayPrice.price}</p>{displayPrice.hasDiscount ? <p className="mt-1 text-sm font-medium text-[#9B867C] line-through">{displayPrice.originalPrice}</p> : null}</> : <p className="mt-2 text-sm font-semibold text-[#765F55]">Not available in {currency}</p>}</div>
                   <button onClick={() => navigate(`/enroll/${course.id}`)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#2D2E30]/20 transition hover:bg-[#E58C1A]">Enroll now <PlayCircle className="h-4 w-4" aria-hidden="true" /></button>
                 </div>
                 
@@ -234,21 +239,13 @@ function CourseDetail() {
             <>
               {/* Grid: 1 col → 2 col → 3 col */}
               <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
-                {currentRelatedCourses.map((relatedCourse) => (
-                  <CourseCard
+                {currentRelatedCourses.map((relatedCourse) => {
+                  return <CourseCard
                     key={relatedCourse.id}
-                    id={relatedCourse.id}
-                    image={relatedCourse.image}
-                    title={relatedCourse.title}
-                    description={relatedCourse.description}
-                    price={relatedCourse.price}
-                    originalPrice={relatedCourse.originalPrice}
-                    hasDiscount={relatedCourse.hasDiscount}
-                    rating={relatedCourse.rating}
-                    reviews={relatedCourse.reviews}
+                    course={relatedCourse}
                     isEnrolled={enrolledCourseIds.has(relatedCourse.id)}
                   />
-                ))}
+                })}
               </div>
 
               {/* Pagination */}
@@ -315,7 +312,7 @@ function CourseDetail() {
               <div className="lg:sticky lg:top-28">
                 <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#C97112]">The Arun Thai difference</p>
                 <h2 className="mt-4 text-4xl font-bold leading-[1.02] tracking-tight text-[#2D2E30] sm:text-5xl">
-                  Learn the Thai you’ll <span className="font-serif font-normal italic text-[#B96128]">actually use.</span>
+                  Learn the Thai you’ll <span className="text-[#B96128]">actually use.</span>
                 </h2>
                 <p className="mt-5 max-w-md text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg">
                   Arun Thai is made for steady progress: clear guidance, useful practice, and the confidence to take Thai beyond the screen.

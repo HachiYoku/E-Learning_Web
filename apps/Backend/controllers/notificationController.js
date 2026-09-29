@@ -3,6 +3,7 @@ const User = require("../models/userModel");
 const Announcement = require("../models/announcementModel");
 const { writeAuditLog } = require("../services/auditLogger");
 const { normalizeNotificationLink } = require("../services/notificationLinkValidator");
+const { emitNotification } = require("../realtime/socketServer");
 
 const safeNotificationLink = (link) => {
   try {
@@ -85,7 +86,7 @@ const createNotification = async ({
 
   const safeLink = normalizeNotificationLink(link);
 
-  return Notification.create({
+  const notification = await Notification.create({
     userId,
     courseId,
     type,
@@ -94,6 +95,8 @@ const createNotification = async ({
     link: safeLink,
     isRead: false,
   });
+  emitNotification(notification);
+  return notification;
 };
 
 const broadcastNotificationToAllUsers = async (req, res) => {
@@ -143,6 +146,8 @@ const broadcastNotificationToAllUsers = async (req, res) => {
       await Announcement.deleteOne({ _id: announcement._id });
       throw error;
     }
+
+    result.forEach(emitNotification);
 
     return res.status(200).json({
       message: "Announcement sent to all users",

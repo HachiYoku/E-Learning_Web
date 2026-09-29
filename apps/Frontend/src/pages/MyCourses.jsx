@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { BookOpenCheck } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, BookOpenCheck } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import MyCourseCard from '../components/MyCourseCard'
@@ -35,7 +36,7 @@ function MyCourses() {
         <div className="mx-auto max-w-7xl text-center">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Your learning space</p>
           <h1 className="mt-3 text-[clamp(2rem,6vw,3.3rem)] font-bold leading-[1.08] tracking-tight text-[#2D2E30]">
-            Continue your <span className="font-serif font-normal italic text-[#B96128]">journey.</span>
+            Continue your <span className="text-[#B96128]">journey.</span>
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-[#765F55] sm:text-base">
             Everything you have unlocked, ready whenever you are.
@@ -71,6 +72,7 @@ function MyCourses() {
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-[#C97112] shadow-sm"><BookOpenCheck className="h-6 w-6" aria-hidden="true" /></div>
               <h3 className="text-lg font-bold text-[#2D2E30]">Your library is waiting</h3>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[#765F55]">You do not have any approved courses yet.</p>
+              <Link to="/app/explore" className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20">Explore courses <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">

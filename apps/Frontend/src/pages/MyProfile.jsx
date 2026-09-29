@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { Camera, CheckCircle2, Mail, Pencil, ShieldCheck, UserRound, X } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { AlertTriangle, Camera, CheckCircle2, Mail, Pencil, ShieldCheck, Trash2, UserRound, X } from "lucide-react"
 import { useAuth } from "../contexts/AuthContext"
 import { updateProfile } from "../services/authService"
 
@@ -10,14 +10,19 @@ function MyProfile() {
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState("info")
-  const { user, setUser } = useAuth()
+  const { user, setUser, confirmAccountDeletion, deleteAccount } = useAuth()
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState("")
+  const [scheduledDeletion, setScheduledDeletion] = useState(null)
+  const [deletionInProgress, setDeletionInProgress] = useState(false)
+  const deletionTimerRef = useRef(null)
+  const countdownTimerRef = useRef(null)
+  const deletionStateRef = useRef("idle")
+  const mountedRef = useRef(true)
   const userEmail = user?.email || "user@example.com"
   const userName = user?.name || "Student"
+  const deletionScheduledOrInProgress = Boolean(scheduledDeletion) || deletionInProgress
   const [formData, setFormData] = useState({ userName, avatarFile: null, avatarPreview: "" })
-
-  useEffect(() => {
-    setFormData({ userName, avatarFile: null, avatarPreview: "" })
-  }, [userEmail, userName])
 
   const profileImage = formData.avatarPreview || user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEmail}`
   const handleChange = (event) => setFormData((current) => ({ ...current, userName: event.target.value }))
@@ -50,6 +55,64 @@ function MyProfile() {
     }
   }
 
+  const clearScheduledDeletion = useCallback(() => {
+    if (deletionTimerRef.current) window.clearTimeout(deletionTimerRef.current)
+    if (countdownTimerRef.current) window.clearInterval(countdownTimerRef.current)
+    deletionTimerRef.current = null
+    countdownTimerRef.current = null
+  }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      clearScheduledDeletion()
+    }
+  }, [clearScheduledDeletion])
+
+  const cancelScheduledDeletion = useCallback(() => {
+    if (deletionStateRef.current !== "scheduled") return
+    clearScheduledDeletion()
+    deletionStateRef.current = "idle"
+    setScheduledDeletion(null)
+    setMessage("Account deletion cancelled.")
+    setMessageType("success")
+  }, [clearScheduledDeletion])
+
+  const scheduleAccountDeletion = useCallback((deletionConfirmationToken) => {
+    if (deletionStateRef.current !== "idle") return false
+
+    const endsAt = Date.now() + 5000
+    deletionStateRef.current = "scheduled"
+    setDeleteError("")
+    setDeleteOpen(false)
+    setScheduledDeletion({ secondsRemaining: 5 })
+
+    const updateCountdown = () => {
+      const secondsRemaining = Math.max(1, Math.ceil((endsAt - Date.now()) / 1000))
+      setScheduledDeletion({ secondsRemaining })
+    }
+    countdownTimerRef.current = window.setInterval(updateCountdown, 250)
+    deletionTimerRef.current = window.setTimeout(async () => {
+      clearScheduledDeletion()
+      deletionStateRef.current = "deleting"
+      if (mountedRef.current) {
+        setScheduledDeletion(null)
+        setDeletionInProgress(true)
+      }
+      try {
+        await deleteAccount(deletionConfirmationToken)
+      } catch (error) {
+        if (!mountedRef.current) return
+        deletionStateRef.current = "idle"
+        setDeletionInProgress(false)
+        setDeleteError(error.message || "Unable to delete your account.")
+        setDeleteOpen(true)
+      }
+    }, 5000)
+    return true
+  }, [clearScheduledDeletion, deleteAccount])
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-10">
       <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Account settings</p>
@@ -71,8 +134,38 @@ function MyProfile() {
           {isEditing ? <div className="mt-6 flex flex-wrap gap-3 border-t border-[#2D2E30]/10 pt-5"><button type="button" onClick={handleSave} disabled={isSaving} className="inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A] disabled:opacity-60"><CheckCircle2 className="h-4 w-4" />{isSaving ? "Saving…" : "Save changes"}</button><button type="button" onClick={handleCancel} className="inline-flex items-center gap-2 rounded-xl border border-[#2D2E30]/15 px-5 py-3 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF9EA]"><X className="h-4 w-4" />Cancel</button></div> : null}
         </section>
       </div>
+      <section className="mt-8 rounded-[1.75rem] border border-[#D78A86]/40 bg-[#FFF8F7] p-5 shadow-[0_18px_45px_-35px_rgba(80,48,19,0.35)] sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#A34D45]">Danger Zone</p><h2 className="mt-2 text-xl font-bold text-[#2D2E30]">Delete Account</h2><p className="mt-2 max-w-xl text-sm leading-relaxed text-[#765F55]">Permanently delete your account and personal learning data.</p></div><button type="button" onClick={() => { setDeleteError(""); setDeleteOpen(true) }} disabled={deletionScheduledOrInProgress} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#A34D45]/35 bg-white px-4 py-3 text-sm font-bold text-[#A34D45] transition hover:bg-[#FDE8E5] disabled:cursor-not-allowed disabled:opacity-60"><Trash2 className="h-4 w-4" />Delete Account</button></div>
+      </section>
+      {deleteOpen ? <DeleteAccountModal error={deleteError} onClose={() => setDeleteOpen(false)} onConfirmPassword={confirmAccountDeletion} onSchedule={scheduleAccountDeletion} /> : null}
+      {scheduledDeletion ? <ScheduledDeletionBanner secondsRemaining={scheduledDeletion.secondsRemaining} onUndo={cancelScheduledDeletion} /> : null}
+      {deletionInProgress ? <div role="status" aria-live="polite" className="fixed bottom-20 left-1/2 z-[100] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 rounded-2xl border border-[#A34D45]/35 bg-white p-4 shadow-2xl lg:bottom-6"><p className="font-bold text-[#2D2E30]">Deleting account…</p><p className="mt-1 text-sm text-[#765F55]">Your account deletion is in progress and can no longer be cancelled.</p></div> : null}
     </div>
   )
+}
+
+function DeleteAccountModal({ error: initialError, onClose, onConfirmPassword, onSchedule }) {
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [pending, setPending] = useState(false)
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!password.trim()) return setError("Enter your current password to continue.")
+    setPending(true); setError("")
+    try {
+      const deletionConfirmationToken = await onConfirmPassword(password)
+      onSchedule(deletionConfirmationToken)
+    } catch (requestError) {
+      setError(requestError.message || "Unable to confirm your password.")
+      setPending(false)
+    }
+  }
+  const displayedError = error || initialError
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D2E30]/60 p-4 backdrop-blur-[2px]" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="w-full max-w-md rounded-3xl bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-[#2D2E30]/10 p-5"><div className="flex min-w-0 gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDE8E5] text-[#A34D45]"><AlertTriangle className="h-5 w-5" /></span><div><h2 id="delete-account-title" className="text-xl font-bold text-[#2D2E30]">Delete your account?</h2><p className="mt-1 text-sm text-[#765F55]">This cannot be undone.</p></div></div><button type="button" onClick={onClose} disabled={pending} className="rounded-xl p-2 text-[#765F55] transition hover:bg-[#FFF1D0] disabled:opacity-60" aria-label="Close delete account dialog"><X className="h-5 w-5" /></button></div><form onSubmit={submit} className="p-5"><p className="text-sm leading-6 text-[#765F55]">This permanently deletes your account and personal learning data. Some transaction records may be retained for record-keeping purposes.</p><label className="mt-5 block text-sm font-bold text-[#2D2E30]">Current password<input autoFocus required type="password" autoComplete="current-password" value={password} onChange={(event) => { setPassword(event.target.value); setError("") }} className={`${inputClass} mt-2`} /></label>{displayedError ? <p role="alert" className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{displayedError}</p> : null}<div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" disabled={pending} onClick={onClose} className="min-h-11 rounded-xl border border-[#2D2E30]/15 px-4 text-sm font-bold text-[#765F55] disabled:opacity-60">Cancel</button><button disabled={pending || !password.trim()} className="min-h-11 rounded-xl bg-[#A34D45] px-4 text-sm font-bold text-white transition hover:bg-[#8E3E37] disabled:cursor-not-allowed disabled:opacity-60">Delete Account</button></div></form></section></div>
+}
+
+function ScheduledDeletionBanner({ secondsRemaining, onUndo }) {
+  return <div role="status" aria-live="polite" className="fixed bottom-20 left-1/2 z-[100] flex w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 flex-col gap-3 rounded-2xl border border-[#A34D45]/35 bg-white p-4 shadow-2xl sm:flex-row sm:items-center sm:justify-between lg:bottom-6"><div className="min-w-0"><p className="font-bold text-[#2D2E30]">Account deletion scheduled</p><p className="mt-1 text-sm leading-5 text-[#765F55]">Your account will be permanently deleted in {secondsRemaining} second{secondsRemaining === 1 ? "" : "s"}.</p></div><button type="button" onClick={onUndo} className="min-h-11 shrink-0 rounded-xl border border-[#A34D45]/35 px-4 text-sm font-bold text-[#A34D45] transition hover:bg-[#FDE8E5] focus:outline-none focus:ring-4 focus:ring-[#A34D45]/15">Undo</button></div>
 }
 
 export default MyProfile

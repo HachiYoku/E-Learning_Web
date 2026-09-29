@@ -1,12 +1,13 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCurrentUser, login as loginRequest, logout as logoutRequest } from "../services/authService";
+import { confirmOwnAccountDeletion as confirmOwnAccountDeletionRequest, deleteOwnAccount as deleteOwnAccountRequest, getCurrentUser, login as loginRequest, logout as logoutRequest } from "../services/authService";
 import {
   clearToken,
   getToken,
@@ -16,6 +17,14 @@ import { refreshAccessToken, SESSION_EXPIRED_EVENT } from "../api/client";
 import SessionExpiredModal from "../components/SessionExpiredModal";
 
 const AuthContext = createContext(null);
+
+function clearStudentSessionData(userId) {
+  if (!userId || typeof window === "undefined") return;
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith(`quiz-draft:${userId}:`)) localStorage.removeItem(key);
+  }
+}
 
 export function AuthProvider({ children }) {
   const [token, setTokenState] = useState(() => getToken());
@@ -75,15 +84,7 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  async function login(credentials) {
-    const response = await loginRequest(credentials);
-    storeToken(response.accessToken);
-    const me = await getCurrentUser();
-    setUser(me.user);
-    return me.user;
-  }
-
-  function storeToken(nextToken) {
+  const storeToken = useCallback((nextToken) => {
     setTokenState(nextToken);
 
     if (nextToken) {
@@ -92,15 +93,23 @@ export function AuthProvider({ children }) {
     }
 
     clearToken();
-  }
+  }, []);
 
-  function clearLocalSession() {
+  const clearLocalSession = useCallback(() => {
     clearToken();
     setTokenState(null);
     setUser(null);
-  }
+  }, []);
 
-  async function logout() {
+  const login = useCallback(async (credentials) => {
+    const response = await loginRequest(credentials);
+    storeToken(response.accessToken);
+    const me = await getCurrentUser();
+    setUser(me.user);
+    return me.user;
+  }, [storeToken]);
+
+  const logout = useCallback(async () => {
     clearLocalSession();
     try {
       await logoutRequest();
@@ -108,7 +117,20 @@ export function AuthProvider({ children }) {
       // Local state is still cleared. The server cookie expires naturally if
       // the network is unavailable, and is revoked on the next successful logout.
     }
-  }
+  }, [clearLocalSession]);
+
+  const confirmAccountDeletion = useCallback(async (currentPassword) => {
+    const response = await confirmOwnAccountDeletionRequest(currentPassword);
+    return response.deletionConfirmationToken;
+  }, []);
+
+  const deleteAccount = useCallback(async (deletionConfirmationToken) => {
+    const deletedUserId = user?.id;
+    await deleteOwnAccountRequest(deletionConfirmationToken);
+    clearStudentSessionData(deletedUserId);
+    clearLocalSession();
+    navigate("/", { replace: true });
+  }, [clearLocalSession, navigate, user?.id]);
 
   const value = useMemo(
     () => ({
@@ -118,10 +140,12 @@ export function AuthProvider({ children }) {
       isBootstrapping,
       login,
       logout,
+      confirmAccountDeletion,
+      deleteAccount,
       clearLocalSession,
       setUser,
     }),
-    [token, user, isBootstrapping]
+    [token, user, isBootstrapping, login, logout, confirmAccountDeletion, deleteAccount, clearLocalSession]
   );
 
   const handleLoginRedirect = () => {
@@ -141,6 +165,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
 

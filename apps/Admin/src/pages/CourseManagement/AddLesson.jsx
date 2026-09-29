@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { fetchCourseById } from '../../services/courseService'
 import { createLesson, fetchLessonsByCourse } from '../../services/lessonService'
+import KeyVocabularyEditor, { buildKeyVocabularyPayload, validateKeyVocabulary } from '../../components/KeyVocabularyEditor'
 
 function AddLesson() {
   const navigate = useNavigate()
@@ -10,6 +11,8 @@ function AddLesson() {
 
   const [course, setCourse] = useState(null)
   const [formData, setFormData] = useState({ title: '', videoUrl: '', order: 1 })
+  const [keyVocabulary, setKeyVocabulary] = useState([])
+  const [showVocabularyValidation, setShowVocabularyValidation] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -44,18 +47,25 @@ function AddLesson() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setShowVocabularyValidation(true)
     if (!formData.title || !formData.videoUrl) {
       setError('Please fill in all required fields.')
+      return
+    }
+    if (!validateKeyVocabulary(keyVocabulary).isValid) {
+      setError('Please correct the Key Vocabulary fields.')
       return
     }
     try {
       setSaving(true)
       setError('')
-      await createLesson(id, {
+      const payload = {
         title: formData.title,
         videoUrl: formData.videoUrl,
         order: Number(formData.order),
-      })
+      }
+      if (keyVocabulary.length > 0) payload.keyVocabulary = buildKeyVocabularyPayload(keyVocabulary)
+      await createLesson(id, payload)
       navigate(`/courses/${id}`)
     } catch (submitError) {
       setError(submitError.message)
@@ -130,6 +140,7 @@ function AddLesson() {
               <label className="block"><span className="text-sm font-bold text-[#2D2E30]">Video URL <span className="text-[#C97112]">*</span></span><span className="mt-1 block text-xs text-[#9B867C]">Use a secure YouTube, Google Drive, or hosted video link.</span><input type="url" name="videoUrl" value={formData.videoUrl} onChange={handleInputChange} placeholder="https://youtube.com/watch?v=..." className="mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] px-4 py-3 text-sm text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:bg-white focus:ring-4 focus:ring-[#E58C1A]/10" /></label>
               <label className="block max-w-xs"><span className="flex items-center gap-2 text-sm font-bold text-[#2D2E30]"><ListOrdered size={16} className="text-[#C97112]" /> Lesson order <span className="text-[#C97112]">*</span></span><input type="number" name="order" min="1" value={formData.order} onChange={handleInputChange} className="mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] px-4 py-3 text-sm text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:bg-white focus:ring-4 focus:ring-[#E58C1A]/10" /></label>
             </div>
+            <KeyVocabularyEditor value={keyVocabulary} onChange={setKeyVocabulary} showValidation={showVocabularyValidation} />
             <div className="mt-7 flex flex-col-reverse gap-3 border-t border-[#2D2E30]/10 pt-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => navigate(`/courses/${id}`)} className="rounded-xl px-4 py-3 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF9EA] hover:text-[#2D2E30]">Cancel</button><button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A] disabled:cursor-not-allowed disabled:opacity-60"><Plus size={17} /> {saving ? 'Creating...' : 'Create lesson'}</button></div>
           </section>
         </div>

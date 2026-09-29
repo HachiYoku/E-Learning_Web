@@ -1,7 +1,7 @@
 const logo = "/Nav/Arun-thai-web-logo.png"
 import { Bell, CheckCheck, ChevronDown, Menu, X } from "lucide-react"
-import { useNavigate, useLocation } from "react-router-dom"
-import { useEffect, useState } from "react"
+import { Link, useNavigate, useLocation } from "react-router-dom"
+import { useState } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import { useNotification } from "../contexts/NotificationContext"
 import { getSafeNotificationPath } from "../utils/notificationLink"
@@ -39,7 +39,7 @@ function NotificationBell({ compact = false }) {
       <button
         type="button"
         onClick={() => setNotificationOpen(!isNotificationOpen)}
-        className={`relative flex items-center justify-center rounded-full border border-[#2D2E30]/10 bg-white text-[#765F55] transition hover:border-[#E58C1A]/30 hover:bg-[#FFF4D8] hover:text-[#C97112] ${compact ? "h-10 w-10" : "h-11 w-11"}`}
+        className={`relative flex items-center justify-center rounded-full border border-[#2D2E30]/10 bg-white text-[#765F55] transition hover:border-[#E58C1A]/30 hover:bg-[#FFF4D8] hover:text-[#A94F00] ${compact ? "h-10 w-10" : "h-11 w-11"}`}
         aria-label="Notifications"
       >
         <Bell className={compact ? "h-4 w-4" : "h-5 w-5"} />
@@ -58,7 +58,7 @@ function NotificationBell({ compact = false }) {
               <button
                 type="button"
                 onClick={markAllRead}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-[#C97112] transition hover:text-[#E58C1A]"
+                className="text-brand-accent inline-flex items-center gap-1 text-xs font-semibold transition hover:text-[#9A4500]"
               >
                 <CheckCheck className="h-3.5 w-3.5" />
                 Mark all read
@@ -76,7 +76,7 @@ function NotificationBell({ compact = false }) {
                   className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
                     activeFilter === filter.key
                       ? "bg-[#2D2E30] text-white shadow-sm"
-                      : "bg-transparent text-[#765F55] hover:bg-[#FFF1D0] hover:text-[#C97112]"
+                      : "bg-transparent text-[#765F55] hover:bg-[#FFF1D0] hover:text-[#A94F00]"
                   }`}
                 >
                   {filter.label}
@@ -140,12 +140,12 @@ function Navbar() {
   const isActive = (path) => location.pathname === path
   const isPracticeActive = location.pathname === "/practice" || location.pathname.startsWith("/practice/") || location.pathname === "/flashcards"
 
-  useEffect(() => {
+  const closeNavigationMenus = () => {
     setShowMobileMenu(false)
     setShowProfileMenu(false)
     setShowPracticeMenu(false)
     setNotificationOpen(false)
-  }, [location.pathname, setNotificationOpen])
+  }
 
   const navItems = [
     { label: "Home", path: "/" },
@@ -164,8 +164,7 @@ function Navbar() {
 
   const goTo = (path) => {
     navigate(path)
-    setShowMobileMenu(false)
-    setShowPracticeMenu(false)
+    closeNavigationMenus()
   }
 
   const handleLogout = () => {
@@ -205,23 +204,25 @@ function Navbar() {
         </button>
 
         {/* Desktop Menu */}
-        <ul className="hidden md:flex gap-4 lg:gap-8 font-medium">
+        <ul className="hidden lg:flex gap-4 lg:gap-8 font-medium">
           {navItems.map((item) => item.label === "Practice" ? (
             <li key={item.path} className="relative">
-              <button type="button" onClick={() => setShowPracticeMenu((isOpen) => !isOpen)} aria-expanded={showPracticeMenu} className={`flex items-center gap-2.5 rounded-full px-4 py-2 font-semibold transition-all lg:px-6 ${isPracticeActive ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#C97112]"}`}>
+              <button type="button" onClick={() => setShowPracticeMenu((isOpen) => !isOpen)} aria-expanded={showPracticeMenu} className={`flex items-center gap-2.5 rounded-full px-4 py-2 font-semibold transition-all focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20 lg:px-6 ${isPracticeActive ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#A94F00]"}`}>
                 Practice <ChevronDown className={`h-3.5 w-3.5 transition ${showPracticeMenu ? "rotate-180" : ""}`} aria-hidden="true" />
               </button>
               {showPracticeMenu ? <div className="absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[#E58C1A]/20 bg-white p-2 shadow-[0_20px_40px_-24px_rgba(80,48,19,0.45)]">
-                {practiceItems.map((practiceItem) => practiceItem.path ? <button key={practiceItem.label} type="button" onClick={() => goTo(practiceItem.path)} className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${location.pathname === practiceItem.path ? "bg-[#FFF1D0] text-[#C97112]" : "text-[#2D2E30] hover:bg-[#FFF9EA]"}`}>{practiceItem.label}</button> : <div key={practiceItem.label} className="rounded-xl px-3 py-2.5 text-sm font-semibold text-[#765F55] opacity-50">{practiceItem.label} <span className="text-xs">Coming soon</span></div>)}
+                {practiceItems.map((practiceItem) => practiceItem.path ? <button key={practiceItem.label} type="button" onClick={() => goTo(practiceItem.path)} className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${location.pathname === practiceItem.path ? "bg-[#FFF1D0] text-brand-accent" : "text-[#2D2E30] hover:bg-[#FFF9EA]"}`}>{practiceItem.label}</button> : <div key={practiceItem.label} className="rounded-xl px-3 py-2.5 text-sm font-semibold text-[#765F55] opacity-50">{practiceItem.label} <span className="text-xs">Coming soon</span></div>)}
               </div> : null}
             </li>
           ) : (
-            <li key={item.path} onClick={() => goTo(item.path)} className={`cursor-pointer rounded-full px-4 py-2 font-semibold transition-all lg:px-6 ${isActive(item.path) ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#C97112]"}`}>{item.label}</li>
+            <li key={item.path}>
+              <Link to={item.path} onClick={closeNavigationMenus} className={`inline-flex rounded-full px-4 py-2 font-semibold transition-all focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20 lg:px-6 ${isActive(item.path) ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#A94F00]"}`}>{item.label}</Link>
+            </li>
           ))}
         </ul>
 
         {/* Desktop Login / Profile */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden lg:flex items-center gap-3">
           {!isAuthenticated ? (
             <button
               onClick={() => goTo('/login')}
@@ -263,7 +264,7 @@ function Navbar() {
                       goTo('/notifications')
                       setShowProfileMenu(false)
                     }}
-                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#A94F00]"
                   >
                     Notifications
                   </button>
@@ -273,7 +274,7 @@ function Navbar() {
                       goTo('/my-courses')
                       setShowProfileMenu(false)
                     }}
-                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#A94F00]"
                   >
                     My Courses
                   </button>
@@ -283,7 +284,7 @@ function Navbar() {
                       goTo('/my-course-order')
                       setShowProfileMenu(false)
                     }}
-                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#A94F00]"
                   >
                     My Course Order
                   </button>
@@ -293,7 +294,7 @@ function Navbar() {
                       goTo('/my-profile')
                       setShowProfileMenu(false)
                     }}
-                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                    className="w-full px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#A94F00]"
                   >
                     My Profile
                   </button>
@@ -316,7 +317,7 @@ function Navbar() {
         <button
           type="button"
           onClick={() => setShowMobileMenu((current) => !current)}
-          className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 text-gray-800 transition-colors hover:bg-gray-50 md:hidden"
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 text-gray-800 transition-colors hover:bg-gray-50 lg:hidden"
           aria-label={showMobileMenu ? "Close navigation menu" : "Open navigation menu"}
         >
           {showMobileMenu ? (
@@ -328,12 +329,12 @@ function Navbar() {
       </div>
 
       {showMobileMenu ? (
-        <div className="border-t border-gray-200 bg-white px-4 pb-4 pt-3 shadow-sm md:hidden">
+        <div className="border-t border-gray-200 bg-white px-4 pb-4 pt-3 shadow-sm lg:hidden">
           <div className="space-y-2">
             {navItems.map((item) => item.label === "Practice" ? <div key={item.path} className="rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-1">
-              <button type="button" onClick={() => setShowPracticeMenu((isOpen) => !isOpen)} aria-expanded={showPracticeMenu} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left font-bold transition-colors ${isPracticeActive ? "bg-[#2D2E30] text-white" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#C97112]"}`}>Practice <ChevronDown className={`h-4 w-4 transition ${showPracticeMenu ? "rotate-180" : ""}`} aria-hidden="true" /></button>
+              <button type="button" onClick={() => setShowPracticeMenu((isOpen) => !isOpen)} aria-expanded={showPracticeMenu} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left font-bold transition-colors ${isPracticeActive ? "bg-[#2D2E30] text-white" : "text-[#2D2E30] hover:bg-[#FFF4D8] hover:text-[#A94F00]"}`}>Practice <ChevronDown className={`h-4 w-4 transition ${showPracticeMenu ? "rotate-180" : ""}`} aria-hidden="true" /></button>
               {showPracticeMenu ? <div className="space-y-1 px-2 pb-2 pt-1">{practiceItems.map((practiceItem) => practiceItem.path ? <button key={practiceItem.label} type="button" onClick={() => goTo(practiceItem.path)} className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold ${location.pathname === practiceItem.path ? "bg-[#FFF1D0] text-[#C97112]" : "text-[#2D2E30] hover:bg-white"}`}>{practiceItem.label}</button> : <div key={practiceItem.label} className="px-3 py-2 text-sm font-semibold text-[#765F55] opacity-50">{practiceItem.label} <span className="text-xs">Coming soon</span></div>)}</div> : null}
-            </div> : <button key={item.path} onClick={() => goTo(item.path)} className={`w-full rounded-2xl border px-4 py-3 text-left font-bold transition-colors ${isActive(item.path) ? "border-[#2D2E30] bg-[#2D2E30] text-white" : "border-[#2D2E30]/10 bg-[#FFF9EA] text-[#2D2E30] hover:border-[#E58C1A]/35 hover:bg-[#FFF4D8] hover:text-[#C97112]"}`}>{item.label}</button>)}
+            </div> : <button key={item.path} onClick={() => goTo(item.path)} className={`w-full rounded-2xl border px-4 py-3 text-left font-bold transition-colors ${isActive(item.path) ? "border-[#2D2E30] bg-[#2D2E30] text-white" : "border-[#2D2E30]/10 bg-[#FFF9EA] text-[#2D2E30] hover:border-[#E58C1A]/35 hover:bg-[#FFF4D8] hover:text-[#A94F00]"}`}>{item.label}</button>)}
           </div>
 
           <div className="mt-4 border-t border-gray-200 pt-4">
@@ -364,28 +365,28 @@ function Navbar() {
 
                 <button
                   onClick={() => goTo('/notifications')}
-                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#A94F00]"
                 >
                   Notifications
                 </button>
 
                 <button
                   onClick={() => goTo('/my-courses')}
-                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#A94F00]"
                 >
                   My Courses
                 </button>
 
                 <button
                   onClick={() => goTo('/my-course-order')}
-                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#A94F00]"
                 >
                   My Course Order
                 </button>
 
                 <button
                   onClick={() => goTo('/my-profile')}
-                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#C97112]"
+                  className="w-full rounded-2xl bg-[#FFF9EA] px-4 py-3 text-left font-medium text-[#2D2E30] transition-colors hover:bg-[#FFF4D8] hover:text-[#A94F00]"
                 >
                   My Profile
                 </button>
