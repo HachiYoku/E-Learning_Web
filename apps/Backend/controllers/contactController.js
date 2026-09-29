@@ -3,6 +3,7 @@ const ContactEnquiry = require("../models/contactEnquiryModel");
 const sendEmail = require("../services/sendEmail");
 const jwt = require("jsonwebtoken");
 const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
+const { submitEnquiry, acquireLeadClaim, releaseLeadClaim, contactTransaction } = require("../services/contactLeadLifecycle");
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const escapeHtml = (value) => String(value)
@@ -76,21 +77,14 @@ const createContactLead = async (req, res) => {
       return res.status(201).json({ message: "Thank you. We will keep you updated." });
     }
 
-    const existingLead = await ContactLead.findOne({ email: normalizedEmail });
-    const existingConsent = currentConsent(existingLead);
     const explicitOptIn = marketingOptIn === true;
-    const { consent: marketingConsent, shouldSendConfirmation } = resolveConsentTransition(existingConsent, explicitOptIn);
-
-    const lead = existingLead || new ContactLead({ email: normalizedEmail, name: normalizedName });
-    lead.name = normalizedName;
-    lead.marketingConsent = marketingConsent;
-    await lead.save();
-
-    await ContactEnquiry.create({
-      contactLead: lead._id,
-      message: typeof message === "string" ? message.trim() : "",
-      isRead: false,
-    });
+    let lead; let shouldSendConfirmation = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const existingLead = await ContactLead.findOne({ email: normalizedEmail });
+      const transition = resolveConsentTransition(currentConsent(existingLead), explicitOptIn);
+      try { lead = await submitEnquiry({ email: normalizedEmail, name: normalizedName, message: typeof message === "string" ? message.trim() : "", consent: transition.consent }); shouldSendConfirmation = transition.shouldSendConfirmation; break; }
+      catch (error) { if (!error.retryable || attempt === 2) throw error; await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1))); }
+    }
 
     let confirmationSent = false;
     if (shouldSendConfirmation) {
@@ -135,16 +129,15 @@ const unsubscribeContactLead = async (req, res) => {
       return res.status(400).send("This unsubscribe link is invalid.");
     }
 
-    await ContactLead.findOneAndUpdate(
-      { email: payload.email.toLowerCase() },
-      {
-        $set: {
-          "marketingConsent.status": "unsubscribed",
-          "marketingConsent.withdrawnAt": new Date(),
-          "marketingConsent.withdrawalSource": "unsubscribe_link",
-        },
-      }
-    );
+    const lead = await ContactLead.findOne({ email: payload.email.toLowerCase() }).select("+operationClaim");
+    if (lead) {
+      const owned = await acquireLeadClaim(lead._id, "consent");
+      if (!owned) return res.status(409).type("html").send("<main><h1>Please try again shortly.</h1></main>");
+      try { await contactTransaction(async (session) => {
+        const result = await ContactLead.updateOne({ _id: lead._id, "operationClaim.token": owned.token }, { $set: { "marketingConsent.status": "unsubscribed", "marketingConsent.withdrawnAt": new Date(), "marketingConsent.withdrawalSource": "unsubscribe_link" }, $unset: { "marketingConsent.lastOptedInAt": 1, "marketingConsent.lastOptInSource": 1, operationClaim: 1 } }, { session });
+        if (!result.modifiedCount) throw new Error("Contact update is busy.");
+      }); } catch (error) { await releaseLeadClaim(lead._id, owned.token); throw error; }
+    }
     return res.status(200).type("html").send("<main style=\"font-family:Arial,sans-serif;padding:48px;color:#2d2e30\"><h1>You have been unsubscribed.</h1><p>You will no longer receive Arun Thai Academy marketing updates.</p></main>");
   } catch (_error) {
     return res.status(400).type("html").send("<main style=\"font-family:Arial,sans-serif;padding:48px;color:#2d2e30\"><h1>This unsubscribe link is invalid or has expired.</h1></main>");

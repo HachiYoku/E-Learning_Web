@@ -32,6 +32,7 @@
     "payments:cleanup-retained-proofs": "node scripts/cleanupExpiredPaymentProofs.js",
     "accounts:cleanup-assets": "node scripts/cleanupAccountAssets.js",
     "campaigns:cleanup-expired": "node scripts/cleanupExpiredCampaigns.js"
+    ,"contacts:cleanup-suppressions": "node scripts/cleanupContactLeadSuppressions.js"
   },
   "author": "",
   "license": "ISC",

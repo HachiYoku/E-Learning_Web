@@ -15,12 +15,19 @@ const marketingConsentSchema = new mongoose.Schema(
   },
   { _id: false }
 );
+const operationClaimSchema = new mongoose.Schema({
+  token: { type: String, required: true },
+  operation: { type: String, enum: ["submission", "consent", "cleanup"], required: true },
+  claimedAt: { type: Date, required: true },
+  expiresAt: { type: Date, required: true },
+}, { _id: false });
 
 const contactLeadSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 120 },
     email: { type: String, required: true, trim: true, lowercase: true, unique: true, index: true },
     marketingConsent: { type: marketingConsentSchema, default: () => ({}) },
+    operationClaim: { type: operationClaimSchema, default: undefined, select: false },
   },
   { timestamps: true }
 );
