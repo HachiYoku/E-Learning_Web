@@ -47,7 +47,7 @@ function ContactSection() {
         <div className="pt-2">
           <p className="text-brand-accent text-xs font-bold uppercase tracking-[0.24em]">Stay connected</p>
           <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
-            Let’s Talk About Your <span className="text-brand-accent">Thai Journey.</span>
+            Let’s Talk About Your <span className="text-[#E58C1A]">Thai Journey.</span>
           </h2>
           <p lang="my" className="font-myanmar mt-5 max-w-xl text-base leading-[1.85] text-[#765F55] sm:text-lg">
             သင်တန်းအကြောင်း သိချင်တာပဲဖြစ်ဖြစ်၊ ဘယ်သင်တန်းက သင့်အတွက် အသင့်တော်ဆုံးလဲ မေးချင်တာပဲဖြစ်ဖြစ် Arun Thai ကို အချိန်မရွေး ဆက်သွယ်မေးမြန်းနိုင်ပါတယ်။

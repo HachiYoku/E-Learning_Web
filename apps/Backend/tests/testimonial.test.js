@@ -9,9 +9,9 @@ function record({ id = "a", name = "Htet Linn Aung", avatar, preference = "first
 function mockFind(records, observed) { StudentFeedback.find = (query) => { observed.query = query; return { select(fields) { observed.fields = fields; return this; }, sort(sort) { observed.sort = sort; return this; }, limit(limit) { observed.limit = limit; return this; }, populate() { return this; }, lean: async () => records }; }; }
 afterEach(() => { StudentFeedback.find = originalFind; });
 
-test("public testimonials require no authentication and use both current eligibility conditions", async () => {
+test("public testimonials require no authentication and return all eligible published feedback by default", async () => {
   const observed = {}; mockFind([record()], observed); const res = response(); await getTestimonials({ query: {} }, res);
-  assert.equal(res.statusCode, 200); assert.deepEqual(observed.query, { "publicationConsent.status": "permitted", "publication.status": "published" }); assert.equal(observed.fields, "_id originalFeedback studentId publicationConsent.namePreference publicationConsent.allowProfileImage"); assert.equal(observed.limit, 6); assert.deepEqual(observed.sort, { "publication.publishedAt": -1, _id: -1 });
+  assert.equal(res.statusCode, 200); assert.deepEqual(observed.query, { "publicationConsent.status": "permitted", "publication.status": "published" }); assert.equal(observed.fields, "_id originalFeedback studentId publicationConsent.namePreference publicationConsent.allowProfileImage"); assert.equal(observed.limit, undefined); assert.deepEqual(observed.sort, { "publication.publishedAt": -1, _id: -1 });
 });
 
 test("returns only the explicit public DTO with exact feedback and derived names", async () => {
@@ -20,9 +20,9 @@ test("returns only the explicit public DTO with exact feedback and derived names
   for (const item of res.body.testimonials) for (const field of ["studentId", "email", "courseId", "namePreference", "publicationConsent", "publication", "reviewedBy"]) assert.equal(Object.hasOwn(item, field), false);
 });
 
-test("uses a bounded validated public limit", async () => {
-  const observed = {}; mockFind([record()], observed); const res = response(); await getTestimonials({ query: { limit: "12" } }, res); assert.equal(res.statusCode, 200); assert.equal(observed.limit, 12);
-  for (const limit of ["0", "13", "nope"]) { const invalid = response(); await getTestimonials({ query: { limit } }, invalid); assert.equal(invalid.statusCode, 400); }
+test("supports an optional bounded public limit", async () => {
+  const observed = {}; mockFind([record()], observed); const res = response(); await getTestimonials({ query: { limit: "100" } }, res); assert.equal(res.statusCode, 200); assert.equal(observed.limit, 100);
+  for (const limit of ["0", "101", "nope"]) { const invalid = response(); await getTestimonials({ query: { limit } }, invalid); assert.equal(invalid.statusCode, 400); }
 });
 
 test("returns a profile image only for explicit first-name photo consent and never leaks the avatar field", async () => {

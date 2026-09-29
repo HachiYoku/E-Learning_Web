@@ -31,7 +31,7 @@ function Benefits() {
         <div className="max-w-3xl">
           <p className="text-brand-accent text-[10px] font-bold uppercase tracking-[0.18em] sm:text-xs sm:tracking-[0.24em]">Your New Beginning Starts Here</p>
           <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
-            Step Into a Brighter <span className="text-brand-accent">Tomorrow.</span>
+            Step Into a Brighter <span className="text-[#E58C1A]">Tomorrow.</span>
           </h2>
           <p lang="my" className="font-myanmar mt-5 max-w-3xl text-base leading-[1.85] text-[#765F55] sm:text-lg">
             ထိုင်းနိုင်ငံမှာ အသစ်စတင်မယ့် သင့်ရဲ့ဘဝခရီးလမ်းအတွက် အားကိုးရဆုံး အဖော်မွန်အဖြစ် Arun Thai က အမြဲရှိနေပါတယ်။
