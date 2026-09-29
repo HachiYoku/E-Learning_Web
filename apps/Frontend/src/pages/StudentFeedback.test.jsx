@@ -83,8 +83,13 @@ describe("StudentFeedback", () => {
     expect(screen.getByRole("radio", { name: "Anonymous learner" }).checked).toBe(false);
     expect(screen.getByRole("button", { name: "Allow Sharing" }).disabled).toBe(true);
     await user.click(screen.getByRole("button", { name: "Keep Private" }));
+    expect(await screen.findByRole("heading", { name: "Thank you for your feedback!" })).toBeTruthy();
+    expect(screen.getByText("Your feedback has been saved privately and will help us improve the learning experience.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByText("Your Feedback")).toBeTruthy();
+    const feedbackHeading = screen.getByRole("heading", { name: "Your Feedback" });
+    expect(feedbackHeading).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(feedbackHeading));
     expect(screen.getByText("Private")).toBeTruthy();
   });
 
@@ -100,6 +105,8 @@ describe("StudentFeedback", () => {
     expect(screen.getByRole("button", { name: "Allow Sharing" }).disabled).toBe(true);
     await user.click(firstName); await user.click(screen.getByRole("button", { name: "Allow Sharing" }));
     await waitFor(() => expect(updateStudentFeedbackPublicationConsent).toHaveBeenCalledWith("feedback-1", { status: "permitted", namePreference: "first_name" }));
+    expect(await screen.findByRole("heading", { name: "Thank you for sharing your experience!" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Done" }));
     expect(await screen.findByText("Awaiting website review")).toBeTruthy();
   });
 
@@ -117,6 +124,8 @@ describe("StudentFeedback", () => {
     await user.click(screen.getByRole("radio", { name: "Anonymous learner" }));
     await user.click(screen.getByRole("button", { name: "Allow Sharing" }));
     await waitFor(() => expect(updateStudentFeedbackPublicationConsent).toHaveBeenCalledWith("feedback-new", { status: "permitted", namePreference: "anonymous" }));
+    expect(await screen.findByRole("heading", { name: "Thank you for sharing your experience!" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Done" }));
     expect(await screen.findByText("Awaiting website review")).toBeTruthy();
   });
 
