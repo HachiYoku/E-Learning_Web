@@ -105,14 +105,16 @@ test("enforces one feedback submission per student and course and isolates owner
 
 test("requires valid separate consent and withdraws publication immediately without deleting feedback", async () => {
   const student = await createUser(); const token = await login(student); const enrolledCourse = await course(); await enroll(student, enrolledCourse); const created = await json(await submit(token, enrolledCourse)); const id = created.feedback._id;
-  for (const body of [{ status: "private" }, { status: "permitted" }, { status: "permitted", namePreference: "full_name" }, { status: "permitted", namePreference: "first_name_initial" }, { status: "withdrawn", namePreference: "anonymous" }, { status: "permitted", namePreference: "anonymous", reviewedBy: student._id }]) {
+  for (const body of [{ status: "private" }, { status: "permitted" }, { status: "permitted", namePreference: "full_name" }, { status: "permitted", namePreference: "first_name_initial" }, { status: "withdrawn", namePreference: "anonymous" }, { status: "permitted", namePreference: "anonymous", reviewedBy: student._id }, { status: "permitted", namePreference: "anonymous", allowProfileImage: true }]) {
     assert.equal((await request(`/student-feedback/${id}/publication-consent`, { method: "PATCH", token, body })).status, 400);
   }
   const permitted = await request(`/student-feedback/${id}/publication-consent`, { method: "PATCH", token, body: { status: "permitted", namePreference: "first_name" } });
-  assert.equal(permitted.status, 200); let stored = await StudentFeedback.findById(id); assert.equal(stored.publicationConsent.status, "permitted"); assert.equal(stored.publicationConsent.namePreference, "first_name"); assert.ok(stored.publicationConsent.permittedAt); assert.equal(stored.publicationConsent.withdrawnAt, null); assert.equal(stored.publication.status, "awaiting_review");
+  assert.equal(permitted.status, 200); let stored = await StudentFeedback.findById(id); assert.equal(stored.publicationConsent.status, "permitted"); assert.equal(stored.publicationConsent.namePreference, "first_name"); assert.equal(stored.publicationConsent.allowProfileImage, false); assert.ok(stored.publicationConsent.permittedAt); assert.equal(stored.publicationConsent.withdrawnAt, null); assert.equal(stored.publication.status, "awaiting_review");
+  const photoAllowed = await request(`/student-feedback/${id}/publication-consent`, { method: "PATCH", token, body: { status: "permitted", namePreference: "first_name", allowProfileImage: true } });
+  assert.equal(photoAllowed.status, 200); stored = await StudentFeedback.findById(id); assert.equal(stored.publicationConsent.allowProfileImage, true);
   await StudentFeedback.updateOne({ _id: id }, { $set: { "publication.status": "published", "publication.publishedAt": new Date() } });
   const withdrawn = await request(`/student-feedback/${id}/publication-consent`, { method: "PATCH", token, body: { status: "withdrawn" } });
-  assert.equal(withdrawn.status, 200); stored = await StudentFeedback.findById(id); assert.equal(stored.publicationConsent.status, "withdrawn"); assert.ok(stored.publicationConsent.withdrawnAt); assert.equal(stored.publication.status, "withdrawn"); assert.equal(stored.publication.publishedAt, null); assert.match(stored.originalFeedback, /practical/);
+  assert.equal(withdrawn.status, 200); stored = await StudentFeedback.findById(id); assert.equal(stored.publicationConsent.status, "withdrawn"); assert.equal(stored.publicationConsent.allowProfileImage, false); assert.ok(stored.publicationConsent.withdrawnAt); assert.equal(stored.publication.status, "withdrawn"); assert.equal(stored.publication.publishedAt, null); assert.match(stored.originalFeedback, /practical/);
 });
 
 test("derives only limited future public names server-side", () => {

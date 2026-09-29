@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const publicationConsentSchema = new mongoose.Schema({
   status: { type: String, enum: ["private", "permitted", "withdrawn"], required: true, default: "private" },
   namePreference: { type: String, enum: ["first_name", "anonymous", null], default: null },
+  allowProfileImage: { type: Boolean, default: false },
   permittedAt: { type: Date, default: null },
   withdrawnAt: { type: Date, default: null },
 }, { _id: false });

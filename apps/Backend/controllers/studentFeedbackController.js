@@ -62,17 +62,19 @@ async function getMyStudentFeedback(req, res) {
 async function updatePublicationConsent(req, res) {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ message: "A valid feedback id is required." });
-    if (!hasOnlyKeys(req.body, new Set(["status", "namePreference"]))) {
+    if (!hasOnlyKeys(req.body, new Set(["status", "namePreference", "allowProfileImage"]))) {
       return res.status(400).json({ message: "Only publication consent fields may be updated." });
     }
 
-    const { status, namePreference } = req.body || {};
+    const { status, namePreference, allowProfileImage = false } = req.body || {};
     if (status !== "permitted" && status !== "withdrawn") {
       return res.status(400).json({ message: "Consent status must be permitted or withdrawn." });
     }
     if (status === "permitted" && !NAME_PREFERENCES.has(namePreference)) {
       return res.status(400).json({ message: "A valid name preference is required for publication permission." });
     }
+    if (status === "permitted" && typeof allowProfileImage !== "boolean") return res.status(400).json({ message: "Profile image permission must be true or false." });
+    if (status === "permitted" && namePreference === "anonymous" && allowProfileImage) return res.status(400).json({ message: "Anonymous sharing cannot include a profile image." });
     if (status === "withdrawn" && namePreference !== undefined) {
       return res.status(400).json({ message: "Name preference cannot be changed while withdrawing permission." });
     }
@@ -84,6 +86,7 @@ async function updatePublicationConsent(req, res) {
     if (status === "permitted") {
       feedback.publicationConsent.status = "permitted";
       feedback.publicationConsent.namePreference = namePreference;
+      feedback.publicationConsent.allowProfileImage = namePreference === "first_name" ? allowProfileImage : false;
       feedback.publicationConsent.permittedAt = now;
       feedback.publicationConsent.withdrawnAt = null;
       feedback.publication.status = "awaiting_review";
@@ -92,6 +95,7 @@ async function updatePublicationConsent(req, res) {
       feedback.publication.publishedAt = null;
     } else {
       feedback.publicationConsent.status = "withdrawn";
+      feedback.publicationConsent.allowProfileImage = false;
       feedback.publicationConsent.withdrawnAt = now;
       feedback.publication.status = "withdrawn";
       feedback.publication.publishedAt = null;

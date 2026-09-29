@@ -104,10 +104,85 @@ describe("StudentFeedback", () => {
     expect(firstName.checked).toBe(false); expect(anonymous.checked).toBe(false);
     expect(screen.getByRole("button", { name: "Allow Sharing" }).disabled).toBe(true);
     await user.click(firstName); await user.click(screen.getByRole("button", { name: "Allow Sharing" }));
-    await waitFor(() => expect(updateStudentFeedbackPublicationConsent).toHaveBeenCalledWith("feedback-1", { status: "permitted", namePreference: "first_name" }));
+    await waitFor(() => expect(updateStudentFeedbackPublicationConsent).toHaveBeenCalledWith("feedback-1", { status: "permitted", namePreference: "first_name", allowProfileImage: false }));
     expect(await screen.findByRole("heading", { name: "Thank you for sharing your experience!" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Done" }));
     expect(await screen.findByText("Awaiting website review")).toBeTruthy();
+  });
+
+  it("sends explicit profile-photo consent only for a first-name preference with an existing avatar", async () => {
+    const user = userEvent.setup();
+    useAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { avatar: "https://cdn.example.test/student-avatar.jpg" },
+    });
+    fetchMyStudentFeedback.mockResolvedValue([privateFeedback]);
+    updateStudentFeedbackPublicationConsent.mockResolvedValue({
+      ...privateFeedback,
+      publicationConsent: {
+        status: "permitted",
+        namePreference: "first_name",
+        allowProfileImage: true,
+      },
+      publication: { status: "awaiting_review" },
+    });
+
+    renderFeedback();
+    await user.click(
+      await screen.findByRole("button", { name: /choose sharing preference/i })
+    );
+    await user.click(screen.getByRole("radio", { name: "First name" }));
+
+    const photoConsent = screen.getByRole("checkbox", {
+      name: "Show my profile photo with my feedback",
+    });
+    expect(photoConsent.checked).toBe(false);
+    await user.click(photoConsent);
+
+    // Anonymous consent must clear photo consent; returning to First name
+    // intentionally starts unchecked rather than restoring an old choice.
+    await user.click(screen.getByRole("radio", { name: "Anonymous learner" }));
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    await user.click(screen.getByRole("radio", { name: "First name" }));
+    expect(
+      screen.getByRole("checkbox", {
+        name: "Show my profile photo with my feedback",
+      }).checked
+    ).toBe(false);
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Show my profile photo with my feedback",
+      })
+    );
+    await user.click(screen.getByRole("button", { name: "Allow Sharing" }));
+
+    await waitFor(() =>
+      expect(updateStudentFeedbackPublicationConsent).toHaveBeenCalledWith(
+        "feedback-1",
+        {
+          status: "permitted",
+          namePreference: "first_name",
+          allowProfileImage: true,
+        }
+      )
+    );
+  });
+
+  it("does not offer profile-photo consent when the authenticated student has no avatar", async () => {
+    const user = userEvent.setup();
+    useAuth.mockReturnValue({ isAuthenticated: true, user: {} });
+    fetchMyStudentFeedback.mockResolvedValue([privateFeedback]);
+    renderFeedback();
+    await user.click(
+      await screen.findByRole("button", { name: /choose sharing preference/i })
+    );
+    await user.click(screen.getByRole("radio", { name: "First name" }));
+    expect(
+      screen.queryByRole("checkbox", {
+        name: "Show my profile photo with my feedback",
+      })
+    ).toBeNull();
   });
 
   it("opens sharing choices after a new private save and updates that record after consent", async () => {
@@ -123,7 +198,7 @@ describe("StudentFeedback", () => {
     expect(await screen.findByRole("dialog", { name: "Share your experience publicly?" })).toBeTruthy();
     await user.click(screen.getByRole("radio", { name: "Anonymous learner" }));
     await user.click(screen.getByRole("button", { name: "Allow Sharing" }));
-    await waitFor(() => expect(updateStudentFeedbackPublicationConsent).toHaveBeenCalledWith("feedback-new", { status: "permitted", namePreference: "anonymous" }));
+    await waitFor(() => expect(updateStudentFeedbackPublicationConsent).toHaveBeenCalledWith("feedback-new", { status: "permitted", namePreference: "anonymous", allowProfileImage: false }));
     expect(await screen.findByRole("heading", { name: "Thank you for sharing your experience!" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Done" }));
     expect(await screen.findByText("Awaiting website review")).toBeTruthy();
@@ -136,7 +211,7 @@ describe("StudentFeedback", () => {
     renderFeedback(); await user.click(await screen.findByRole("button", { name: /choose sharing preference/i }));
     expect(screen.queryByText(/full name/i)).toBeNull();
     await user.click(screen.getByRole("radio", { name: "Anonymous learner" })); await user.click(screen.getByRole("button", { name: "Allow Sharing" }));
-    await waitFor(() => expect(updateStudentFeedbackPublicationConsent).toHaveBeenCalledWith("feedback-1", { status: "permitted", namePreference: "anonymous" }));
+    await waitFor(() => expect(updateStudentFeedbackPublicationConsent).toHaveBeenCalledWith("feedback-1", { status: "permitted", namePreference: "anonymous", allowProfileImage: false }));
   });
 
   it("closes new-feedback sharing choices with Close or Escape and leaves feedback private", async () => {

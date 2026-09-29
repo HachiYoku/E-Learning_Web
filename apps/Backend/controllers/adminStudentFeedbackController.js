@@ -23,7 +23,7 @@ function preview(feedback, includeReviewDetails = true) {
   const course = feedback.courseId || {};
   const result = {
     _id: feedback._id,
-    student: { id: student._id || null, name: student.name || "Student unavailable", ...(includeReviewDetails ? { email: student.email || "" } : {}) },
+    student: { id: student._id || null, name: student.name || "Student unavailable", ...(includeReviewDetails ? { email: student.email || "", profileImage: feedback.publicationConsent?.status === "permitted" && feedback.publicationConsent?.namePreference === "first_name" && feedback.publicationConsent?.allowProfileImage === true && student.avatar ? student.avatar : null } : {}) },
     course: { id: course._id || null, title: course.title || "Course unavailable" },
     createdAt: feedback.createdAt,
     publicationConsent: feedback.publicationConsent,
@@ -36,7 +36,7 @@ function preview(feedback, includeReviewDetails = true) {
 
 function populateAdmin(query) {
   return query
-    .populate("studentId", "name email")
+    .populate("studentId", "name email avatar")
     .populate("courseId", "title")
     .populate("publication.reviewedBy", "name email");
 }
@@ -80,7 +80,11 @@ async function updateAdminStudentFeedbackPublication(req, res) {
   try {
     const feedback = await StudentFeedback.findById(req.params.id);
     if (!feedback) return res.status(404).json({ message: "Feedback not found." });
-    if (feedback.publicationConsent.status !== "permitted" || feedback.publication.status !== "awaiting_review") {
+    const currentStatus = feedback.publication.status;
+    const canPublish = req.body.status === "published" && ["awaiting_review", "not_selected"].includes(currentStatus);
+    const canRemove = req.body.status === "not_selected" && currentStatus === "published";
+    const canInitialNotSelected = req.body.status === "not_selected" && currentStatus === "awaiting_review";
+    if (feedback.publicationConsent.status !== "permitted" || !(canPublish || canRemove || canInitialNotSelected)) {
       return res.status(409).json({ message: "This feedback is no longer eligible for a publication decision. Refresh and review its current status." });
     }
     const now = new Date();
@@ -89,7 +93,7 @@ async function updateAdminStudentFeedbackPublication(req, res) {
     feedback.publication.reviewedAt = now;
     feedback.publication.publishedAt = req.body.status === "published" ? now : null;
     await feedback.save();
-    await writeAuditLog({ actorId: req.user.id, action: `student_feedback.${req.body.status}`, targetType: "student_feedback", targetId: feedback._id, metadata: { feedbackId: String(feedback._id), courseId: String(feedback.courseId), resultingPublicationStatus: req.body.status } });
+    await writeAuditLog({ actorId: req.user.id, action: req.body.status === "not_selected" && currentStatus === "published" ? "student_feedback.removed_from_website" : `student_feedback.${req.body.status}`, targetType: "student_feedback", targetId: feedback._id, metadata: { feedbackId: String(feedback._id), courseId: String(feedback.courseId), resultingPublicationStatus: req.body.status } });
     const updated = await populateAdmin(StudentFeedback.findById(feedback._id)).lean();
     return res.json({ feedback: preview(updated) });
   } catch (_error) {

@@ -111,8 +111,24 @@ test("rejects an invalid publication status", async () => {
   assert.equal((await request(`/admin/student-feedback/${feedback._id}/publication`, { method: "PATCH", token: adminToken, body: { status: "private" } })).status, 400);
 });
 
-test("rejects a second publication decision after the first decision", async () => {
+test("removes a published story without withdrawing the student's sharing permission", async () => {
   const admin = await user("admin"); const adminToken = await token(admin); const feedback = await record();
   assert.equal((await request(`/admin/student-feedback/${feedback._id}/publication`, { method: "PATCH", token: adminToken, body: { status: "published" } })).status, 200);
-  assert.equal((await request(`/admin/student-feedback/${feedback._id}/publication`, { method: "PATCH", token: adminToken, body: { status: "not_selected" } })).status, 409);
+  const response = await request(`/admin/student-feedback/${feedback._id}/publication`, { method: "PATCH", token: adminToken, body: { status: "not_selected" } });
+  assert.equal(response.status, 200);
+  const stored = await StudentFeedback.findById(feedback._id);
+  assert.equal(stored.publication.status, "not_selected");
+  assert.equal(stored.publication.publishedAt, null);
+  assert.equal(stored.publicationConsent.status, "permitted");
+});
+
+test("republishes a permitted not-selected story with fresh publication metadata", async () => {
+  const admin = await user("admin"); const adminToken = await token(admin); const feedback = await record();
+  assert.equal((await request(`/admin/student-feedback/${feedback._id}/publication`, { method: "PATCH", token: adminToken, body: { status: "not_selected" } })).status, 200);
+  const response = await request(`/admin/student-feedback/${feedback._id}/publication`, { method: "PATCH", token: adminToken, body: { status: "published" } });
+  assert.equal(response.status, 200);
+  const stored = await StudentFeedback.findById(feedback._id);
+  assert.equal(stored.publication.status, "published");
+  assert.ok(stored.publication.publishedAt);
+  assert.equal(stored.publicationConsent.status, "permitted");
 });

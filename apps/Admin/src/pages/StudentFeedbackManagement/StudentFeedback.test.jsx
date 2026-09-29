@@ -58,6 +58,30 @@ describe("StudentFeedback admin review", () => {
     expect(await screen.findByText(/Display as:/)).toBeTruthy(); expect(screen.getByText("Htet")).toBeTruthy();
   });
 
+  it("renders only the backend-authoritative photo permission and safe image preview", async () => {
+    const user = userEvent.setup();
+    fetchAdminStudentFeedbackDetail.mockResolvedValue({
+      feedback: {
+        ...awaiting,
+        publicationConsent: {
+          status: "permitted",
+          namePreference: "first_name",
+          allowProfileImage: true,
+        },
+        student: {
+          ...awaiting.student,
+          profileImage: "https://cdn.example.test/approved-avatar.jpg",
+        },
+      },
+    });
+    render(<StudentFeedback />);
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    expect(await screen.findByText("Allowed")).toBeTruthy();
+    expect(screen.getByAltText("").getAttribute("src")).toBe(
+      "https://cdn.example.test/approved-avatar.jpg"
+    );
+  });
+
   it("does not expose publication actions for private feedback", async () => {
     fetchAdminStudentFeedbackDetail.mockResolvedValue({ feedback: { ...awaiting, publicationConsent: { status: "private" }, publication: { status: "private" } } });
     const user = userEvent.setup(); render(<StudentFeedback />); await user.click(await screen.findByRole("button", { name: "Review" }));
@@ -109,5 +133,62 @@ describe("StudentFeedback admin review", () => {
     const user = userEvent.setup(); updateAdminStudentFeedbackPublication.mockRejectedValue(new Error("Unable to keep private")); render(<StudentFeedback />);
     await user.click(await screen.findByRole("button", { name: "Review" })); await user.click(screen.getByRole("button", { name: "Keep Private" })); await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Keep Private" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Unable to keep private"); expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("removes a published story through confirmation and keeps the student consent unchanged", async () => {
+    const user = userEvent.setup();
+    const published = {
+      ...awaiting,
+      publication: { status: "published" },
+    };
+    fetchAdminStudentFeedbackDetail.mockResolvedValue({ feedback: published });
+    updateAdminStudentFeedbackPublication.mockResolvedValue({
+      feedback: { ...published, publication: { status: "not_selected" } },
+    });
+    render(<StudentFeedback />);
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    await user.click(screen.getByRole("button", { name: "Remove from Website" }));
+    const dialog = screen.getByRole("dialog", {
+      name: "Remove this student story from the website?",
+    });
+    expect(dialog.textContent).toContain(
+      "sharing permission will remain unchanged"
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Remove from Website" })
+    );
+    await waitFor(() =>
+      expect(updateAdminStudentFeedbackPublication).toHaveBeenCalledWith(
+        "feedback-1",
+        "not_selected"
+      )
+    );
+    expect(await screen.findByRole("button", { name: "Publish on Website" })).toBeTruthy();
+  });
+
+  it("allows a permitted not-selected story to be published again", async () => {
+    const user = userEvent.setup();
+    const notSelected = {
+      ...awaiting,
+      publication: { status: "not_selected" },
+    };
+    fetchAdminStudentFeedbackDetail.mockResolvedValue({ feedback: notSelected });
+    updateAdminStudentFeedbackPublication.mockResolvedValue({
+      feedback: { ...notSelected, publication: { status: "published" } },
+    });
+    render(<StudentFeedback />);
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    await user.click(screen.getByRole("button", { name: "Publish on Website" }));
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "Publish this student story?" })
+      ).getByRole("button", { name: "Publish on Website" })
+    );
+    await waitFor(() =>
+      expect(updateAdminStudentFeedbackPublication).toHaveBeenCalledWith(
+        "feedback-1",
+        "published"
+      )
+    );
   });
 });
