@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 
-const sixMonthsFromNow = () => {
+const twelveMonthsFromNow = () => {
   const date = new Date();
-  date.setMonth(date.getMonth() + 6);
+  date.setMonth(date.getMonth() + 12);
   return date;
 };
 
@@ -25,7 +25,10 @@ const campaignSchema = new mongoose.Schema(
     imagePublicId: String,
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     sentAt: Date,
-    expiresAt: { type: Date, required: true, default: sixMonthsFromNow, expires: 0 },
+    // Explicitly processed by the campaign lifecycle worker; deliberately not a
+    // MongoDB TTL index because an image may require durable external cleanup.
+    expiresAt: { type: Date, required: true, default: twelveMonthsFromNow },
+    cleanupState: { type: String, enum: ["active", "claimed"], default: "active", index: true },
   },
   { timestamps: true }
 );
