@@ -4,16 +4,11 @@ const User = require("../models/userModel");
 const sendEmail = require("../services/sendEmail");
 const { uploadStream } = require("../services/uploadStream");
 const cloudinary = require("../config/cloudinary");
+const { campaignExpiry, isOwnedCampaignAsset, queueCampaignAssetCleanup } = require("../services/campaignLifecycle");
 
 const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[character]));
-
-const sixMonthsFrom = (date) => {
-  const expiry = new Date(date);
-  expiry.setMonth(expiry.getMonth() + 6);
-  return expiry;
-};
 
 const uniqueRecipientsByEmail = (recipients) => {
   const seenEmails = new Set();
@@ -79,7 +74,7 @@ const createCampaign = async (req, res) => {
     const contactIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("contact:")).map((key) => key.slice(8));
     const [systemUsers, optedInLeads] = await Promise.all([
       User.find({ _id: { $in: systemIds }, role: "user", isVerified: true }).select("_id name email"),
-      ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("_id name email"),
+      ContactLead.find({ _id: { $in: contactIds }, "marketingConsent.status": "subscribed" }).select("_id name email"),
     ]);
     const selectedRecipients = uniqueRecipientsByEmail([
       ...systemUsers.map((user) => ({ recordType: "system", recipientId: user._id, name: user.name, email: user.email })),
@@ -102,6 +97,7 @@ const createCampaign = async (req, res) => {
       image,
       imagePublicId,
       createdBy: req.user.id,
+      expiresAt: campaignExpiry(),
     });
     return res.status(201).json(campaign);
   } catch (_error) {
@@ -129,7 +125,7 @@ const sendCampaign = async (req, res) => {
     const contactIds = selectedRecipients.filter((item) => item.recordType === "contact").map((item) => item.recipientId);
     const [systemUsers, leads] = await Promise.all([
       User.find({ _id: { $in: systemIds }, role: "user", isActive: true, isVerified: true }).select("name email"),
-      ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("name email"),
+      ContactLead.find({ _id: { $in: contactIds }, "marketingConsent.status": "subscribed" }).select("name email"),
     ]);
     const recipients = uniqueRecipientsByEmail([
       ...systemUsers.map((user) => ({ name: user.name, email: user.email, recordType: "system" })),
@@ -155,7 +151,7 @@ const sendCampaign = async (req, res) => {
     campaign.failedCount = failedCount;
     campaign.status = failedCount === 0 ? "sent" : sentCount > 0 ? "partial" : "failed";
     campaign.sentAt = new Date();
-    campaign.expiresAt = sixMonthsFrom(campaign.sentAt);
+    campaign.expiresAt = campaignExpiry(campaign.sentAt);
     await campaign.save();
 
     return res.status(200).json(campaign);
@@ -170,9 +166,7 @@ const deleteDraftCampaign = async (req, res) => {
     if (!campaign) return res.status(404).json({ message: "Campaign not found." });
     if (campaign.status !== "draft") return res.status(409).json({ message: "Only drafts can be deleted." });
 
-    if (campaign.imagePublicId) {
-      await cloudinary.uploader.destroy(campaign.imagePublicId).catch(() => undefined);
-    }
+    if (campaign.imagePublicId && isOwnedCampaignAsset(campaign.imagePublicId)) await queueCampaignAssetCleanup(campaign._id, campaign.imagePublicId, { removeCampaign: false });
     await campaign.deleteOne();
     return res.status(200).json({ message: "Draft deleted successfully." });
   } catch (_error) {
@@ -200,7 +194,7 @@ const updateDraftCampaign = async (req, res) => {
     const contactIds = recipientKeys.filter((key) => typeof key === "string" && key.startsWith("contact:")).map((key) => key.slice(8));
     const [systemUsers, optedInLeads] = await Promise.all([
       User.find({ _id: { $in: systemIds }, role: "user", isVerified: true }).select("_id name email"),
-      ContactLead.find({ _id: { $in: contactIds }, marketingOptIn: true }).select("_id name email"),
+      ContactLead.find({ _id: { $in: contactIds }, "marketingConsent.status": "subscribed" }).select("_id name email"),
     ]);
     const selectedRecipients = uniqueRecipientsByEmail([
       ...systemUsers.map((user) => ({ recordType: "system", recipientId: user._id, name: user.name, email: user.email })),
@@ -211,11 +205,20 @@ const updateDraftCampaign = async (req, res) => {
     campaign.subject = subject;
     campaign.message = message;
     campaign.selectedRecipients = selectedRecipients;
+    campaign.expiresAt = campaignExpiry();
     if (req.file?.buffer) {
       const uploaded = await uploadStream(req.file.buffer, "english_kafe/campaigns");
-      if (campaign.imagePublicId) await cloudinary.uploader.destroy(campaign.imagePublicId).catch(() => undefined);
+      const previousPublicId = campaign.imagePublicId;
       campaign.image = uploaded.secure_url;
       campaign.imagePublicId = uploaded.public_id;
+      try {
+        await campaign.save();
+      } catch (error) {
+        await cloudinary.uploader.destroy(uploaded.public_id, { resource_type: "image", type: "upload", invalidate: true }).catch(() => undefined);
+        throw error;
+      }
+      if (previousPublicId && isOwnedCampaignAsset(previousPublicId)) await queueCampaignAssetCleanup(campaign._id, previousPublicId);
+      return res.status(200).json(campaign);
     }
     await campaign.save();
     return res.status(200).json(campaign);

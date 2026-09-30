@@ -29,6 +29,6 @@ export async function approvePayment(paymentId, adminPassword) {
   return apiClient.patch(`/payments/${paymentId}/approve`, { adminPassword });
 }
 
-export async function rejectPayment(paymentId, rejectReason, adminPassword) {
-  return apiClient.patch(`/payments/${paymentId}/reject`, { rejectReason, adminPassword });
+export async function rejectPayment(paymentId, rejectionReasonCode, rejectionNote, adminPassword) {
+  return apiClient.patch(`/payments/${paymentId}/reject`, { rejectionReasonCode, rejectionNote, adminPassword });
 }

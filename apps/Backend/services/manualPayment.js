@@ -98,12 +98,12 @@ async function submitManualPayment({ userId, courseId, paymentMethodId, courseMu
   }
 }
 
-async function reviewManualPayment({ paymentId, adminId, status, rejectReason }) {
+async function reviewManualPayment({ paymentId, adminId, status, rejectionReasonCode, rejectionNote }) {
   return paymentTransaction(async (session) => {
     const payment = await Payment.findOneAndUpdate(
       { _id: paymentId, status: "pending" },
-      { $set: { status, reviewedBy: adminId, reviewedAt: new Date(), ...(status === "rejected" ? { rejectReason } : {}) },
-        ...(status === "approved" ? { $unset: { rejectReason: 1 } } : {}) },
+      { $set: { status, reviewedBy: adminId, reviewedAt: new Date(), ...(status === "rejected" ? { rejectionReasonCode, rejectionNote } : {}) },
+        ...(status === "approved" ? { $unset: { rejectReason: 1, rejectionReasonCode: 1, rejectionNote: 1 } } : {}) },
       { session, returnDocument: "after", runValidators: true },
     );
     if (!payment) {

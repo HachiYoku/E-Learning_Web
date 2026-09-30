@@ -4,10 +4,12 @@ const Payment = require("../models/paymentModel");
 const User = require("../models/userModel");
 const { uploadStream } = require("../services/uploadStream");
 const { writeAuditLog } = require("../services/auditLogger");
+const { PREFIX, queue } = require("../services/paymentMethodQrCleanup");
 
 const TYPES = ["qr", "bank_transfer", "wallet"];
 const CURRENCIES = ["THB", "MMK"];
 const clean = (value) => String(value || "").trim();
+const validQr = (qr) => Boolean(qr?.url && typeof qr.publicId === "string" && qr.publicId.startsWith(PREFIX));
 
 async function verifyAdminPassword(userId, adminPassword) {
   if (typeof adminPassword !== "string" || !adminPassword.trim()) throw Object.assign(new Error("Admin password is required to manage payment methods."), { status: 400 });
@@ -33,36 +35,55 @@ exports.listPaymentMethods = async (_req, res) => {
 };
 
 exports.createPaymentMethod = async (req, res) => {
+  let uploaded;
   try {
     await verifyAdminPassword(req.user.id, req.body.adminPassword);
     const fields = methodFields(req.body);
     if (req.file?.buffer) {
-      const upload = await uploadStream(req.file.buffer, "arun_thai/payment_method_qr_codes");
-      fields.qrImage = { url: upload.secure_url, publicId: upload.public_id };
+      uploaded = await uploadStream(req.file.buffer, "arun_thai/payment_method_qr_codes");
+      fields.qrImage = { url: uploaded.secure_url, publicId: uploaded.public_id };
     }
-    const method = await PaymentMethod.create({ ...fields, isActive: req.body.isActive !== "false" && req.body.isActive !== false, createdBy: req.user.id, updatedBy: req.user.id });
+    const isActive = req.body.isActive !== "false" && req.body.isActive !== false;
+    if (fields.type === "qr" && isActive && !validQr(fields.qrImage)) {
+      if (uploaded?.public_id) await queue(uploaded.public_id);
+      return res.status(400).json({ message: "An active QR payment method requires a valid QR image." });
+    }
+    const method = await PaymentMethod.create({ ...fields, isActive, createdBy: req.user.id, updatedBy: req.user.id });
     await writeAuditLog({ actorId: req.user.id, action: "payment_method.created", targetType: "payment_method", targetId: method._id, metadata: { currency: method.currency, type: method.type, provider: method.provider } });
     return res.status(201).json(method);
-  } catch (error) { return res.status(error.status || 400).json({ message: error.message || "Unable to create payment method" }); }
+  } catch (error) { if (uploaded?.public_id) await queue(uploaded.public_id); return res.status(error.status || 400).json({ message: error.message || "Unable to create payment method" }); }
 };
 
 exports.updatePaymentMethod = async (req, res) => {
+  let uploaded;
   try {
     await verifyAdminPassword(req.user.id, req.body.adminPassword);
-    const method = await PaymentMethod.findById(req.params.id);
+    let method = await PaymentMethod.findById(req.params.id);
     if (!method) return res.status(404).json({ message: "Payment method not found" });
     const fields = methodFields(req.body);
     if (req.file?.buffer) {
-      const upload = await uploadStream(req.file.buffer, "arun_thai/payment_method_qr_codes");
-      fields.qrImage = { url: upload.secure_url, publicId: upload.public_id };
+      uploaded = await uploadStream(req.file.buffer, "arun_thai/payment_method_qr_codes");
+      fields.qrImage = { url: uploaded.secure_url, publicId: uploaded.public_id };
     }
-    const changed = JSON.stringify({ name: method.name, currency: method.currency, type: method.type, provider: method.provider, instructions: method.instructions, recipient: method.recipient?.toObject?.() || method.recipient, qrImage: method.qrImage?.toObject?.() || method.qrImage }) !== JSON.stringify({ ...fields, qrImage: fields.qrImage || (method.qrImage?.toObject?.() || method.qrImage) });
-    Object.assign(method, fields, { updatedBy: req.user.id });
-    if (changed) method.mutationVersion = Number(method.mutationVersion || 0) + 1;
-    await method.save();
-    await writeAuditLog({ actorId: req.user.id, action: "payment_method.updated", targetType: "payment_method", targetId: method._id, metadata: { currency: method.currency, type: method.type, mutationVersion: method.mutationVersion } });
-    return res.json(method);
-  } catch (error) { return res.status(error.status || 400).json({ message: error.message || "Unable to update payment method" }); }
+    // A QR asset is owned only by its current PaymentMethod reference.  Old
+    // assets are queued only after this compare-and-set update commits.
+    const nextQr = fields.type === "qr" ? (fields.qrImage || method.qrImage) : { url: "", publicId: "" };
+    if (fields.type === "qr" && method.isActive && !validQr(nextQr)) return res.status(400).json({ message: "An active QR payment method requires a valid QR image." });
+    const previousQr = method.qrImage?.publicId;
+    const current = { name: method.name, currency: method.currency, type: method.type, provider: method.provider, instructions: method.instructions, recipient: method.recipient?.toObject?.() || method.recipient, qrImage: method.qrImage?.toObject?.() || method.qrImage };
+    const replacement = { ...fields, qrImage: nextQr };
+    const changed = JSON.stringify(current) !== JSON.stringify(replacement);
+    if (!changed) return res.json(method);
+    const updated = await PaymentMethod.findOneAndUpdate(
+      { _id: method._id, mutationVersion: Number(method.mutationVersion || 0) },
+      { $set: { ...replacement, updatedBy: req.user.id }, $inc: { mutationVersion: 1 } },
+      { returnDocument: "after", runValidators: true },
+    );
+    if (!updated) throw Object.assign(new Error("Payment method was changed by another administrator. Reload and try again."), { status: 409 });
+    if (previousQr && previousQr !== updated.qrImage?.publicId) await queue(previousQr);
+    await writeAuditLog({ actorId: req.user.id, action: "payment_method.updated", targetType: "payment_method", targetId: updated._id, metadata: { currency: updated.currency, type: updated.type, mutationVersion: updated.mutationVersion } });
+    return res.json(updated);
+  } catch (error) { if (uploaded?.public_id) await queue(uploaded.public_id); return res.status(error.status || 400).json({ message: error.message || "Unable to update payment method" }); }
 };
 
 exports.setPaymentMethodActive = async (req, res) => {
@@ -71,27 +92,48 @@ exports.setPaymentMethodActive = async (req, res) => {
     if (typeof req.body.isActive !== "boolean") return res.status(400).json({ message: "isActive must be a boolean" });
     const method = await PaymentMethod.findById(req.params.id);
     if (!method) return res.status(404).json({ message: "Payment method not found" });
-    if (method.isActive !== req.body.isActive) { method.isActive = req.body.isActive; method.updatedBy = req.user.id; method.mutationVersion = Number(method.mutationVersion || 0) + 1; await method.save(); }
-    await writeAuditLog({ actorId: req.user.id, action: `payment_method.${method.isActive ? "activated" : "deactivated"}`, targetType: "payment_method", targetId: method._id, metadata: { mutationVersion: method.mutationVersion } });
-    return res.json(method);
+    if (req.body.isActive && method.type === "qr" && !validQr(method.qrImage)) return res.status(400).json({ message: "Upload a valid QR image before activating this payment method." });
+    let updated = method;
+    if (method.isActive !== req.body.isActive) {
+      const previousQr = method.qrImage?.publicId;
+      updated = await PaymentMethod.findOneAndUpdate(
+        { _id: method._id, mutationVersion: Number(method.mutationVersion || 0) },
+        { $set: { isActive: req.body.isActive, ...(req.body.isActive ? {} : { qrImage: {} }), updatedBy: req.user.id }, $inc: { mutationVersion: 1 } },
+        { returnDocument: "after", runValidators: true },
+      );
+      if (!updated) throw Object.assign(new Error("Payment method was changed by another administrator. Reload and try again."), { status: 409 });
+      if (!req.body.isActive && previousQr) await queue(previousQr);
+    }
+    await writeAuditLog({ actorId: req.user.id, action: `payment_method.${updated.isActive ? "activated" : "deactivated"}`, targetType: "payment_method", targetId: updated._id, metadata: { mutationVersion: updated.mutationVersion } });
+    return res.json(updated);
   } catch (error) { return res.status(error.status || 400).json({ message: error.message || "Unable to update payment method" }); }
 };
 
 exports.deletePaymentMethod = async (req, res) => {
   try {
     await verifyAdminPassword(req.user.id, req.body.adminPassword);
-    const method = await PaymentMethod.findById(req.params.id);
+    let method = await PaymentMethod.findById(req.params.id);
     if (!method) return res.status(404).json({ message: "Payment method not found" });
     const hasHistory = Boolean(await Payment.exists({ $or: [{ paymentMethodId: method._id }, { "paymentMethodSnapshot.methodId": method._id }] }));
     if (hasHistory) {
-      if (method.isActive) {
-        method.isActive = false;
-        method.updatedBy = req.user.id;
-        method.mutationVersion = Number(method.mutationVersion || 0) + 1;
-        await method.save();
+      if (method.isActive || method.qrImage?.publicId) {
+        const previousQr = method.qrImage?.publicId;
+        const updated = await PaymentMethod.findOneAndUpdate(
+          { _id: method._id, mutationVersion: Number(method.mutationVersion || 0) },
+          { $set: { isActive: false, qrImage: {}, updatedBy: req.user.id }, $inc: { mutationVersion: 1 } },
+          { returnDocument: "after", runValidators: true },
+        );
+        if (!updated) throw Object.assign(new Error("Payment method was changed by another administrator. Reload and try again."), { status: 409 });
+        method = updated;
+        if (previousQr) await queue(previousQr);
       }
     }
-    else await method.deleteOne();
+    else {
+      const previousQr = method.qrImage?.publicId;
+      const deleted = await PaymentMethod.findOneAndDelete({ _id: method._id, mutationVersion: Number(method.mutationVersion || 0) });
+      if (!deleted) throw Object.assign(new Error("Payment method was changed by another administrator. Reload and try again."), { status: 409 });
+      if (previousQr) await queue(previousQr);
+    }
     await writeAuditLog({ actorId: req.user.id, action: hasHistory ? "payment_method.deactivated_with_history" : "payment_method.deleted", targetType: "payment_method", targetId: method._id });
     return res.json({ deleted: !hasHistory, deactivated: hasHistory, method });
   } catch (error) { return res.status(error.status || 400).json({ message: error.message || "Unable to delete payment method" }); }

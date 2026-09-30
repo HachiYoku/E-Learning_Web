@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import { useNotification } from "../contexts/NotificationContext"
 import LogoutConfirmModal from "../components/LogoutConfirmModal"
+import Avatar from "../components/Avatar"
 
 const logo = "/Nav/Arun-thai-web-logo.png"
 
@@ -43,7 +44,7 @@ function StudentLayout() {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
   const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false)
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
-  const profileImage = user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || "student"}`
+  const profileImage = user?.avatar || ""
   const isPracticeArea = location.pathname === "/app/practice" || location.pathname.startsWith("/app/practice/")
 
   const confirmLogout = () => {
@@ -69,9 +70,9 @@ function StudentLayout() {
 
         <div className="relative lg:hidden">
           <button type="button" onClick={() => setIsMobileProfileOpen((current) => !current)} className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#F8C56A] bg-white p-1 shadow-sm shadow-[#E58C1A]/15 transition hover:-translate-y-0.5 hover:border-[#E58C1A] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/15" aria-expanded={isMobileProfileOpen} aria-haspopup="menu" aria-label="Open account menu">
-            <img src={profileImage} alt="" className="h-full w-full rounded-full object-cover" />
+            <Avatar src={profileImage} name={user?.name} className="h-full w-full rounded-full object-cover" fallbackClassName="h-full w-full rounded-full bg-[#F4CD7D] text-sm font-semibold text-[#2D2E30]" />
           </button>
-          {isMobileProfileOpen ? <div className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-[1.5rem] border border-[#E58C1A]/20 bg-white shadow-[0_24px_55px_-25px_rgba(45,46,48,0.35)]" role="menu"><div className="bg-[#2D2E30] p-4 text-white"><div className="flex items-center gap-3"><img src={profileImage} alt="" className="h-11 w-11 rounded-xl border-2 border-[#F8C56A] object-cover" /><div className="min-w-0"><p className="truncate text-sm font-bold">{user?.name || "Student"}</p><p className="mt-0.5 truncate text-xs text-white/65">{user?.email}</p><span className="mt-2 inline-block rounded-full bg-[#F8C56A] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#2D2E30]">Student account</span></div></div></div><div className="p-2"><NavLink to="/app/profile" onClick={() => setIsMobileProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#FFF1D0]" role="menuitem"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFF1D0] text-[#C97112]"><CircleUserRound className="h-4 w-4" /></span>View profile</NavLink><button type="button" onClick={requestLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-[#A34D45] transition hover:bg-red-50" role="menuitem"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFF0EE]"><LogOut className="h-4 w-4" /></span>Log out</button></div></div> : null}
+          {isMobileProfileOpen ? <div className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-[1.5rem] border border-[#E58C1A]/20 bg-white shadow-[0_24px_55px_-25px_rgba(45,46,48,0.35)]" role="menu"><div className="bg-[#2D2E30] p-4 text-white"><div className="flex items-center gap-3"><Avatar src={profileImage} name={user?.name} className="h-11 w-11 rounded-xl border-2 border-[#F8C56A] object-cover" fallbackClassName="h-11 w-11 rounded-xl border-2 border-[#F8C56A] bg-[#F4CD7D] text-sm font-semibold text-[#2D2E30]" /><div className="min-w-0"><p className="truncate text-sm font-bold">{user?.name || "Student"}</p><p className="mt-0.5 truncate text-xs text-white/65">{user?.email}</p><span className="mt-2 inline-block rounded-full bg-[#F8C56A] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#2D2E30]">Student account</span></div></div></div><div className="p-2"><NavLink to="/app/profile" onClick={() => setIsMobileProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#FFF1D0]" role="menuitem"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFF1D0] text-[#C97112]"><CircleUserRound className="h-4 w-4" /></span>View profile</NavLink><button type="button" onClick={requestLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-[#A34D45] transition hover:bg-red-50" role="menuitem"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFF0EE]"><LogOut className="h-4 w-4" /></span>Log out</button></div></div> : null}
         </div>
 
         <button type="button" onClick={() => setIsSidebarExpanded((current) => !current)} className="absolute -right-4 top-7 hidden h-8 w-8 items-center justify-center rounded-full border border-[#E58C1A]/20 bg-[#FFFDF8] text-[#765F55] shadow-sm transition hover:bg-[#FFF1D0] hover:text-[#C97112] lg:flex" aria-label={isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"} title={isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}>
@@ -92,7 +93,7 @@ function StudentLayout() {
 
         <div className="hidden border-t border-[#2D2E30]/10 pt-4 lg:block">
           <NavLink to="/app/profile" title={!isSidebarExpanded ? "Profile" : ""} className={`flex items-center rounded-xl p-2 transition hover:bg-[#FFF1D0] ${isSidebarExpanded ? "gap-2.5" : "justify-center"}`}>
-            <img src={profileImage} alt="" className="h-9 w-9 rounded-full border-2 border-[#E58C1A]/20 object-cover" />
+            <Avatar src={profileImage} name={user?.name} className="h-9 w-9 rounded-full border-2 border-[#E58C1A]/20 object-cover" fallbackClassName="h-9 w-9 rounded-full border-2 border-[#E58C1A]/20 bg-[#F4CD7D] text-xs font-semibold text-[#2D2E30]" />
             {isSidebarExpanded ? <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-bold">{user?.name || "Student"}</span><span className="block truncate text-[11px] text-[#765F55]">Student account</span></span> : null}
           </NavLink>
           <button type="button" onClick={requestLogout} title={!isSidebarExpanded ? "Log out" : ""} className={`mt-2 flex w-full items-center rounded-xl py-2 text-[13px] font-bold text-[#765F55] transition hover:bg-red-50 hover:text-red-700 ${isSidebarExpanded ? "gap-2.5 px-3" : "justify-center px-0"}`}><LogOut className="h-4 w-4" />{isSidebarExpanded ? "Log out" : null}</button>

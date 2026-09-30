@@ -15,6 +15,7 @@ function ReviewPayment() {
   const [approving, setApproving] = useState(false)
   const [denyReasonModalOpen, setDenyReasonModalOpen] = useState(false)
   const [denyReason, setDenyReason] = useState('')
+  const [denyReasonCode, setDenyReasonCode] = useState('receipt_unverifiable')
   const [selectedDenyPaymentId, setSelectedDenyPaymentId] = useState(null)
   const [denyAdminPassword, setDenyAdminPassword] = useState('')
   const [denyError, setDenyError] = useState('')
@@ -52,17 +53,13 @@ function ReviewPayment() {
   const handleDenyClick = (paymentId) => {
     setSelectedDenyPaymentId(paymentId)
     setDenyReason('')
+    setDenyReasonCode('receipt_unverifiable')
     setDenyAdminPassword('')
     setDenyError('')
     setDenyReasonModalOpen(true)
   }
 
   const handleConfirmDeny = async () => {
-    if (!denyReason.trim()) {
-      setDenyError('Please enter a reason for denying this payment.')
-      return
-    }
-
     if (!denyAdminPassword.trim()) {
       setDenyError('Please enter your admin password to deny this payment.')
       return
@@ -71,7 +68,7 @@ function ReviewPayment() {
     try {
       setDenying(true)
       setDenyError('')
-      await rejectPayment(selectedDenyPaymentId, denyReason, denyAdminPassword)
+      await rejectPayment(selectedDenyPaymentId, denyReasonCode, denyReason, denyAdminPassword)
       setPayments((currentPayments) =>
         currentPayments.map((payment) =>
           payment.id === selectedDenyPaymentId
@@ -283,10 +280,15 @@ function ReviewPayment() {
             <div className="p-4 sm:p-6">
               <p className="mb-4 text-sm leading-6 text-[#765F55]">Explain what needs to be corrected. The learner will receive this message with their payment update.</p>
               {denyError ? <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">{denyError}</div> : null}
+              <label className="mb-2 block text-xs font-bold text-[#2D2E30] sm:text-sm">Reason code</label>
+              <select value={denyReasonCode} onChange={(e) => setDenyReasonCode(e.target.value)} className="mb-3 w-full rounded-xl border border-[#2D2E30]/15 px-3 py-3 text-sm" disabled={denying}>
+                <option value="receipt_unreadable">Receipt is not readable</option><option value="receipt_incomplete">Receipt is incomplete</option><option value="receipt_unverifiable">Receipt cannot be verified</option>
+              </select>
               <textarea
                 value={denyReason}
                 onChange={(e) => setDenyReason(e.target.value)}
-                placeholder="Write your reason here ..."
+                placeholder="Optional short note — do not include unnecessary personal or sensitive information."
+                maxLength="300"
                 className="w-full resize-none rounded-xl border border-[#2D2E30]/15 px-3 py-3 text-sm outline-none focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10"
                 rows="4"
                 disabled={denying}

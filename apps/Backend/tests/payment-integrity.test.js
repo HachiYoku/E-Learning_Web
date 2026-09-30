@@ -53,7 +53,11 @@ const Promo = require("../models/promoCodeModel");
 const PaymentMethod = require("../models/paymentMethodModel");
 const Redemption = require("../models/promoRedemptionModel");
 const Cleanup = require("../models/paymentProofCleanupModel");
+const PaymentProofRetentionCleanup = require("../models/paymentProofRetentionCleanupModel");
+const AuditLog = require("../models/auditLogModel");
 const { cleanFailedProof } = require("../services/paymentProofCleanup");
+const { processExpiredPaymentProofs, recoverStalePaymentProofRetentionClaims } = require("../services/paymentProofRetention");
+const { processPaymentSnapshotMinimization } = require("../services/paymentSnapshotMinimization");
 let server, mongo, directory, base, admin, adminToken, mongoPort;
 const password = "PaymentTestPassword123";
 let serial = 0;
@@ -91,7 +95,7 @@ async function submit(f) {
   return request(`/payments/course/${f.course._id}`, { method: "POST", access: token(f.student), body });
 }
 const review = (id, action, access = adminToken) => request(`/payments/${id}/${action}`, {
-  method: "PATCH", access, body: { adminPassword: password, rejectReason: "Wrong receipt" },
+  method: "PATCH", access, body: { adminPassword: password, rejectionReasonCode: "receipt_unverifiable", rejectionNote: "Wrong receipt" },
 });
 async function pending(f) {
   const result = await submit(f);
@@ -299,6 +303,127 @@ test("failed proof deletion remains durable for retry after a failed submission"
   await cleanFailedProof(job.publicId);
   assert.equal(await Cleanup.countDocuments(), 0);
   assert.equal(proofs.has(job.publicId), false);
+});
+
+test("admin proof-retention holds record 12-month audit events and block proof cleanup until resolved", async () => {
+  const f = await fixture({ withPromo: false });
+  const payment = await Payment.create({
+    userId: f.student._id, courseId: f.course._id, amount: 3000, status: "approved",
+    reviewedAt: new Date("2024-02-29T10:00:00.000Z"),
+    paymentProofPublicId: "arun_thai/payment_proofs/held-retention-proof", paymentProofFormat: "png", paymentProofStorage: "authenticated",
+  });
+  const opened = await request(`/payments/${payment._id}/proof-retention-hold`, { method: "POST", body: { reason: "dispute" } });
+  assert.equal(opened.status, 200, JSON.stringify(opened.body));
+  let stored = await Payment.findById(payment._id).select("+paymentProofPublicId +proofRetentionHold");
+  assert.equal(stored.proofRetentionHold.active, true);
+  assert.equal(stored.proofRetentionHold.reason, "dispute");
+  assert.equal(String(stored.proofRetentionHold.openedBy), String(admin._id));
+  await processExpiredPaymentProofs({ now: new Date("2025-02-28T10:00:00.000Z") });
+  assert.equal((await Payment.findById(payment._id).select("+paymentProofPublicId")).paymentProofPublicId, "arun_thai/payment_proofs/held-retention-proof");
+
+  const resolved = await request(`/payments/${payment._id}/proof-retention-hold/resolve`, { method: "PATCH" });
+  assert.equal(resolved.status, 200, JSON.stringify(resolved.body));
+  stored = await Payment.findById(payment._id).select("+proofRetentionHold");
+  assert.equal(stored.proofRetentionHold.active, false);
+  assert.equal(String(stored.proofRetentionHold.resolvedBy), String(admin._id));
+  const events = await AuditLog.find({ targetId: payment._id }).sort({ createdAt: 1 });
+  assert.deepEqual(events.map((event) => event.action), ["payment.proof_retention_hold_opened", "payment.proof_retention_hold_resolved"]);
+  assert.deepEqual(events.map((event) => event.metadata.reason), ["dispute", "dispute"]);
+  assert.ok(events.every((event) => event.expiresAt.getTime() > event.createdAt.getTime()));
+
+  await processExpiredPaymentProofs({ now: new Date("2025-02-28T10:00:00.000Z") });
+  const cleared = await Payment.findById(payment._id).select("+paymentProofPublicId +paymentProofFormat +paymentProofStorage");
+  assert.equal(cleared.paymentProofPublicId, undefined);
+  assert.equal(cleared.paymentProofFormat, undefined);
+  assert.equal(cleared.paymentProofStorage, undefined);
+  assert.equal(await PaymentProofRetentionCleanup.countDocuments({ paymentId: payment._id }), 0);
+});
+
+test("payment-proof retention cleanup retains retry state when Cloudinary deletion fails", async () => {
+  const f = await fixture({ withPromo: false });
+  const payment = await Payment.create({
+    userId: f.student._id, courseId: f.course._id, amount: 3000, status: "rejected",
+    reviewedAt: new Date("2024-01-31T10:00:00.000Z"),
+    paymentProofPublicId: "arun_thai/payment_proofs/retry-retention-proof", paymentProofFormat: "png", paymentProofStorage: "authenticated",
+  });
+  cleanupFails = true;
+  await processExpiredPaymentProofs({ now: new Date("2025-01-31T10:00:00.000Z") });
+  let job = await PaymentProofRetentionCleanup.findOne({ paymentId: payment._id });
+  assert.equal(job.state, "failed");
+  assert.equal(job.attempts, 1);
+  assert.ok(job.nextAttemptAt);
+  assert.equal((await Payment.findById(payment._id).select("+paymentProofPublicId")).paymentProofPublicId, "arun_thai/payment_proofs/retry-retention-proof");
+  cleanupFails = false;
+  await processExpiredPaymentProofs({ now: new Date("2025-02-01T10:00:00.000Z") });
+  job = await PaymentProofRetentionCleanup.findOne({ paymentId: payment._id });
+  assert.equal(job, null);
+  assert.equal((await Payment.findById(payment._id).select("+paymentProofPublicId")).paymentProofPublicId, undefined);
+});
+
+test("snapshot minimization preserves financial history and respects reviewedAt holds", async () => {
+  const f = await fixture({ withPromo: false });
+  const snapshot = { schemaVersion: 1, kind: "method", methodId: f.method._id, methodVersion: 0, name: "Saved method", currency: "THB", type: "qr", provider: "manual", instructions: "private instructions", recipient: { accountName: "Receiver", accountNumber: "123", phoneNumber: "09" }, qrImage: { url: "https://example.test/qr", publicId: "qr" } };
+  const payment = await Payment.create({ userId: f.student._id, courseId: f.course._id, amount: 100, originalAmount: 120, discountAmount: 20, status: "approved", reviewedAt: new Date("2024-02-29T00:00:00Z"), paymentMethodId: f.method._id, paymentMethodSnapshot: snapshot });
+  await processPaymentSnapshotMinimization({ now: new Date("2025-02-27T00:00:00Z") });
+  assert.equal((await Payment.findById(payment._id)).paymentMethodSnapshot.instructions, "private instructions");
+  await processPaymentSnapshotMinimization({ now: new Date("2025-02-28T00:00:00Z") });
+  let stored = await Payment.findById(payment._id);
+  assert.equal(stored.paymentMethodSnapshot.instructions, ""); assert.equal(stored.paymentMethodSnapshot.recipient.accountNumber, ""); assert.equal(stored.paymentMethodSnapshot.qrImage.url, "");
+  assert.equal(stored.paymentMethodSnapshot.name, "Saved method"); assert.equal(stored.amount, 100); assert.equal(stored.discountAmount, 20);
+  const held = await Payment.create({ userId: f.student._id, courseId: new mongoose.Types.ObjectId(), amount: 1, status: "rejected", reviewedAt: new Date("2024-01-01"), paymentMethodId: f.method._id, paymentMethodSnapshot: snapshot, proofRetentionHold: { active: true, reason: "dispute" } });
+  await processPaymentSnapshotMinimization({ now: new Date("2025-01-02") });
+  assert.equal((await Payment.findById(held._id)).paymentMethodSnapshot.instructions, "private instructions");
+});
+
+test("an active cleanup claim rejects a hold without creating an audit event", async () => {
+  const f = await fixture({ withPromo: false });
+  const payment = await Payment.create({
+    userId: f.student._id, courseId: f.course._id, amount: 3000, status: "approved", reviewedAt: new Date(),
+    paymentProofPublicId: "arun_thai/payment_proofs/claimed-hold-proof", paymentProofFormat: "png", paymentProofStorage: "authenticated",
+    proofRetentionCleanupClaim: {
+      token: "live-cleanup-claim", publicId: "arun_thai/payment_proofs/claimed-hold-proof", storage: "authenticated",
+      claimedAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  const before = await AuditLog.countDocuments({ targetId: payment._id, action: "payment.proof_retention_hold_opened" });
+  const result = await request(`/payments/${payment._id}/proof-retention-hold`, { method: "POST", body: { reason: "investigation" } });
+  assert.equal(result.status, 409);
+  const stored = await Payment.findById(payment._id).select("+proofRetentionHold +proofRetentionCleanupClaim");
+  assert.equal(stored.proofRetentionHold, undefined);
+  assert.equal(stored.proofRetentionCleanupClaim.token, "live-cleanup-claim");
+  assert.equal(await AuditLog.countDocuments({ targetId: payment._id, action: "payment.proof_retention_hold_opened" }), before);
+});
+
+test("only one retention worker obtains a live claim and an expired claim safely recovers offline", async () => {
+  const f = await fixture({ withPromo: false });
+  const firstId = "arun_thai/payment_proofs/one-worker-proof";
+  const first = await Payment.create({
+    userId: f.student._id, courseId: f.course._id, amount: 3000, status: "rejected", reviewedAt: new Date("2024-01-01T00:00:00.000Z"),
+    paymentProofPublicId: firstId, paymentProofFormat: "png", paymentProofStorage: "authenticated",
+  });
+  await Promise.all([
+    processExpiredPaymentProofs({ now: new Date("2025-01-01T00:00:00.000Z") }),
+    processExpiredPaymentProofs({ now: new Date("2025-01-01T00:00:00.000Z") }),
+  ]);
+  assert.equal(deleted.filter((id) => id === firstId).length, 1);
+  assert.equal((await Payment.findById(first._id).select("+paymentProofPublicId +proofRetentionCleanupClaim")).paymentProofPublicId, undefined);
+
+  const secondId = "arun_thai/payment_proofs/recovered-claim-proof";
+  const second = await Payment.create({
+    userId: f.student._id, courseId: new mongoose.Types.ObjectId(), amount: 3000, status: "approved", reviewedAt: new Date("2024-01-01T00:00:00.000Z"),
+    paymentProofPublicId: secondId, paymentProofFormat: "png", paymentProofStorage: "authenticated",
+    proofRetentionCleanupClaim: {
+      token: "crashed-worker", publicId: secondId, storage: "authenticated",
+      claimedAt: new Date("2025-01-01T00:00:00.000Z"), expiresAt: new Date("2025-01-01T00:01:00.000Z"),
+    },
+  });
+  await processExpiredPaymentProofs({ now: new Date("2025-01-02T00:00:00.000Z") });
+  assert.equal((await Payment.findById(second._id).select("+paymentProofPublicId")).paymentProofPublicId, secondId);
+  assert.equal(await recoverStalePaymentProofRetentionClaims({ now: new Date("2025-01-02T00:00:00.000Z") }), 1);
+  await processExpiredPaymentProofs({ now: new Date("2025-01-02T00:00:00.000Z") });
+  const recovered = await Payment.findById(second._id).select("+paymentProofPublicId +proofRetentionCleanupClaim");
+  assert.equal(recovered.paymentProofPublicId, undefined);
+  assert.equal(recovered.proofRetentionCleanupClaim, undefined);
 });
 
 test("simultaneous submissions cannot consume the final promo slot twice", async () => {

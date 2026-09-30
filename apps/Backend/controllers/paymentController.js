@@ -22,6 +22,9 @@ const escapeHtml = (value = "") =>
     .replace(/'/g, "&#039;");
 
 const PAYMENT_PROOF_FIELDS = "+paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage";
+const PAYMENT_PROOF_HOLD_FIELDS = `${PAYMENT_PROOF_FIELDS} +proofRetentionHold +proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim +paymentFinalDeletionClaim`;
+const PAYMENT_PROOF_HOLD_REASONS = new Set(["dispute", "refund", "investigation"]);
+const REJECTION_REASON_LABELS = { receipt_unreadable: "The receipt is not readable.", receipt_incomplete: "The receipt is incomplete.", receipt_unverifiable: "We could not verify the receipt." };
 
 const serializePayment = (payment, coursePaymentState = null) => {
   const value = typeof payment.toObject === "function" ? payment.toObject() : { ...payment };
@@ -32,6 +35,7 @@ const serializePayment = (payment, coursePaymentState = null) => {
   delete value.paymentProofPublicId;
   delete value.paymentProofFormat;
   delete value.paymentProofStorage;
+  delete value.proofRetentionHold;
   return { ...value, hasPaymentProof, proofStorage, ...(coursePaymentState ? { coursePaymentState } : {}) };
 };
 
@@ -334,11 +338,99 @@ const getPendingPaymentCount = async (_req, res) => {
   }
 };
 
+const openPaymentProofRetentionHold = async (req, res) => {
+  try {
+    const reason = req.body?.reason;
+    if (!PAYMENT_PROOF_HOLD_REASONS.has(reason)) {
+      return res.status(400).json({ message: "A valid proof-retention hold reason is required" });
+    }
+    let payment = await Payment.findById(req.params.paymentId).select(PAYMENT_PROOF_HOLD_FIELDS);
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
+    if (!['approved', 'rejected'].includes(payment.status)) {
+      return res.status(409).json({ message: "Proof-retention holds are available only after payment review" });
+    }
+    if (!payment.paymentProofPublicId && !payment.paymentImagePublicId) {
+      return res.status(409).json({ message: "This payment has no retained proof to place on hold" });
+    }
+    if (payment.proofRetentionHold?.active) return res.status(409).json({ message: "A proof-retention hold is already active" });
+
+    const now = new Date();
+    const proofCondition = payment.paymentProofPublicId
+      ? { paymentProofPublicId: payment.paymentProofPublicId, paymentProofStorage: "authenticated" }
+      : { paymentImagePublicId: payment.paymentImagePublicId, paymentProofStorage: { $in: ["legacy", null] } };
+    // This atomic update is the other side of the worker claim boundary. A
+    // destructive claim wins. Stale claims are recovered only by the explicit
+    // offline recovery command after all backend writers are stopped.
+    const hold = {
+      active: true,
+      reason,
+      openedAt: now,
+      openedBy: req.user.id,
+      // Keep prior resolution metadata when a historical hold is reopened;
+      // it is replaced only by the resolution for this latest opening.
+      resolvedAt: payment.proofRetentionHold?.resolvedAt || null,
+      resolvedBy: payment.proofRetentionHold?.resolvedBy || null,
+    };
+    const protectedPayment = await Payment.findOneAndUpdate({
+      _id: payment._id,
+      status: { $in: ["approved", "rejected"] },
+      "proofRetentionHold.active": { $ne: true },
+      ...proofCondition,
+      "proofRetentionCleanupClaim.token": { $exists: false },
+      "paymentMethodSnapshotMinimizationClaim.token": { $exists: false },
+      "paymentFinalDeletionClaim.token": { $exists: false },
+    }, { $set: { proofRetentionHold: hold }, $unset: { proofRetentionCleanupClaim: 1 } }, { returnDocument: "after" }).select(PAYMENT_PROOF_HOLD_FIELDS);
+    if (!protectedPayment) {
+      const current = await Payment.findById(payment._id).select("+proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim +paymentFinalDeletionClaim");
+      if (current?.proofRetentionCleanupClaim?.token || current?.paymentMethodSnapshotMinimizationClaim?.token || current?.paymentFinalDeletionClaim?.token) {
+        return res.status(409).json({ message: "Payment proof cleanup is already in progress; reload the payment before opening a hold" });
+      }
+      return res.status(409).json({ message: "Payment proof changed; reload the payment before opening a hold" });
+    }
+    await afterPaymentCommit(() => writeAuditLog({
+      actorId: req.user.id,
+      action: "payment.proof_retention_hold_opened",
+      targetType: "payment",
+      targetId: protectedPayment._id,
+      metadata: { reason },
+    }));
+    return res.status(200).json({ message: "Payment proof retention hold opened", payment: serializePayment(protectedPayment) });
+  } catch (error) {
+    return res.status(error.name === "CastError" ? 404 : 500).json({ message: error.name === "CastError" ? "Payment not found" : "Unable to open payment proof retention hold" });
+  }
+};
+
+const resolvePaymentProofRetentionHold = async (req, res) => {
+  try {
+    let payment = await Payment.findById(req.params.paymentId).select(PAYMENT_PROOF_HOLD_FIELDS);
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
+    if (!payment.proofRetentionHold?.active) return res.status(409).json({ message: "No active proof-retention hold exists" });
+    const reason = payment.proofRetentionHold.reason;
+    const resolvedAt = new Date();
+    const resolved = await Payment.findOneAndUpdate({ _id: payment._id, "proofRetentionHold.active": true, "paymentFinalDeletionClaim.token": { $exists: false }, "proofRetentionCleanupClaim.token": { $exists: false }, "paymentMethodSnapshotMinimizationClaim.token": { $exists: false } }, { $set: { "proofRetentionHold.active": false, "proofRetentionHold.resolvedAt": resolvedAt, "proofRetentionHold.resolvedBy": req.user.id } }, { returnDocument: "after" }).select(PAYMENT_PROOF_HOLD_FIELDS);
+    if (!resolved) return res.status(409).json({ message: "Payment retention cleanup is already in progress; reload the payment before resolving a hold" });
+    payment = resolved;
+    await afterPaymentCommit(() => writeAuditLog({
+      actorId: req.user.id,
+      action: "payment.proof_retention_hold_resolved",
+      targetType: "payment",
+      targetId: payment._id,
+      metadata: { reason },
+    }));
+    return res.status(200).json({ message: "Payment proof retention hold resolved", payment: serializePayment(payment) });
+  } catch (error) {
+    return res.status(error.name === "CastError" ? 404 : 500).json({ message: error.name === "CastError" ? "Payment not found" : "Unable to resolve payment proof retention hold" });
+  }
+};
+
 const reviewPayment = (status) => async (req, res) => {
   try {
-    const { adminPassword, rejectReason } = req.body || {};
-    if (status === "rejected" && (typeof rejectReason !== "string" || !rejectReason.trim())) {
-      return res.status(400).json({ message: "Reject reason is required" });
+    const { adminPassword, rejectionReasonCode, rejectionNote } = req.body || {};
+    if (status === "rejected" && !REJECTION_REASON_LABELS[rejectionReasonCode]) {
+      return res.status(400).json({ message: "A valid rejection reason code is required" });
+    }
+    if (status === "rejected" && (rejectionNote != null && (typeof rejectionNote !== "string" || rejectionNote.trim().length > 300))) {
+      return res.status(400).json({ message: "Rejection note must be a short message of 300 characters or fewer" });
     }
     if (typeof adminPassword !== "string" || !adminPassword.trim()) {
       return res.status(400).json({ message: "Admin password is required to review a payment" });
@@ -347,12 +439,13 @@ const reviewPayment = (status) => async (req, res) => {
     if (!admin || !bcrypt.compareSync(adminPassword, admin.password)) return res.status(403).json({ message: "Invalid admin password" });
     const { payment, enrollment, course } = await reviewManualPayment({
       paymentId: req.params.paymentId, adminId: req.user.id, status,
-      rejectReason: typeof rejectReason === "string" ? rejectReason.trim() : undefined,
+      rejectionReasonCode: status === "rejected" ? rejectionReasonCode : undefined,
+      rejectionNote: status === "rejected" ? String(rejectionNote || "").trim() : undefined,
     });
     await afterPaymentCommit(async () => emitAdminEvent("admin:payment-updated"));
     await afterPaymentCommit(() => writeAuditLog({
       actorId: req.user.id, action: `payment.${status}`, targetType: "payment", targetId: payment._id,
-      metadata: { userId: payment.userId, courseId: payment.courseId, amount: payment.amount, rejectReason: payment.rejectReason },
+      metadata: { userId: payment.userId, courseId: payment.courseId, amount: payment.amount, ...(payment.rejectionReasonCode ? { rejectionReasonCode: payment.rejectionReasonCode } : {}) },
     }));
     await afterPaymentCommit(() => createNotification({
       userId: payment.userId, courseId: payment.courseId, type: "payment",
@@ -364,7 +457,7 @@ const reviewPayment = (status) => async (req, res) => {
     }));
     await afterPaymentCommit(async () => {
       const user = await User.findById(payment.userId).select("name email").lean();
-      await sendPaymentReviewEmail({ user, courseTitle: course?.title, status, rejectReason: payment.rejectReason });
+      await sendPaymentReviewEmail({ user, courseTitle: course?.title, status, rejectReason: payment.rejectionReasonCode ? `${REJECTION_REASON_LABELS[payment.rejectionReasonCode]}${payment.rejectionNote ? ` ${payment.rejectionNote}` : ""}` : payment.rejectReason });
     });
     return res.status(200).json({
       message: status === "approved" ? "Payment approved and enrollment created successfully" : "Payment rejected successfully",
@@ -388,6 +481,8 @@ module.exports = {
   getPaymentProofAccess,
   streamAuthorizedPaymentProof,
   streamStudentRejectedPaymentProof,
+  openPaymentProofRetentionHold,
+  resolvePaymentProofRetentionHold,
   approvePayment,
   rejectPayment,
 };

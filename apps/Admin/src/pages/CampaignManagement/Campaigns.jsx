@@ -20,7 +20,7 @@ function Campaigns() {
   const [status, setStatus] = useState({ type: "", message: "" }); const [saving, setSaving] = useState(false); const [sendingId, setSendingId] = useState(""); const [draftToDelete, setDraftToDelete] = useState(null); const [announcementToDelete, setAnnouncementToDelete] = useState(null); const [expandedId, setExpandedId] = useState("");
 
   const students = useMemo(() => systemUsers.map((item) => ({ id: `system:${item.id}`, name: item.name, email: item.email, group: "Student" })), [systemUsers]);
-  const subscribers = useMemo(() => leads.filter((lead) => lead.marketingOptIn).map((item) => ({ id: `contact:${item._id}`, name: item.name, email: item.email, group: "Subscriber" })), [leads]);
+  const subscribers = useMemo(() => leads.filter((lead) => lead.marketingConsent?.status === "subscribed").map((item) => ({ id: `contact:${item._id}`, name: item.name, email: item.email, group: "Subscriber" })), [leads]);
   const recipients = useMemo(() => [...students, ...subscribers], [students, subscribers]);
   const selectedRecipients = useMemo(() => recipients.filter((item) => selectedIds.includes(item.id)), [recipients, selectedIds]);
   const activeRecipients = recipientTab === "students" ? students : subscribers;

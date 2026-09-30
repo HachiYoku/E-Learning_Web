@@ -1,6 +1,6 @@
 import { apiClient } from "../api/client";
 
-function normalizeUser(user) {
+export function normalizeUser(user) {
   if (!user) {
     return null;
   }
@@ -16,9 +16,7 @@ function normalizeUser(user) {
     recordType: user.recordType || "system",
     marketingOptIn: Boolean(user.marketingOptIn),
     message: user.message || "",
-    avatar:
-      user.avatar ||
-      `https://ui-avatars.com/api/?background=f8b2c0&color=111827&name=${encodeURIComponent(user.name || "User")}`,
+    avatar: user.avatar || "",
   };
 }
 

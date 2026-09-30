@@ -82,7 +82,7 @@ async function fixture({ promo, thb = 3000, mmk = 120000 } = {}) {
       name: `${currency} method ${id}`, currency, type: "qr", provider: "manual", isActive: true,
       instructions: `Pay ${currency} for ${id}`,
       recipient: { accountName: `${currency} recipient ${id}`, accountNumber: `${id}123` },
-      qrImage: { url: `https://example.test/${currency}-${id}.png`, publicId: `${currency}-${id}` },
+      qrImage: { url: `https://example.test/${currency}-${id}.png`, publicId: `arun_thai/payment_method_qr_codes/${currency}-${id}` },
       createdBy: admin._id, updatedBy: admin._id,
     });
   }
@@ -110,7 +110,7 @@ async function submit(f, currency, { promoCode = f.promo?.code, courseVersion = 
 
 async function review(paymentId, action) {
   return request(`/payments/${paymentId}/${action}`, {
-    method: "PATCH", body: { adminPassword: password, rejectReason: "Receipt could not be verified" },
+    method: "PATCH", body: { adminPassword: password, rejectionReasonCode: "receipt_unverifiable" },
   });
 }
 

@@ -2,9 +2,10 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const AccountAssetCleanup = require("../models/accountAssetCleanupModel");
 const { retryPendingAccountAssets } = require("../services/accountAssetCleanup");
+const { assertRetentionJobEnvironment } = require("../services/retentionJobGuard");
 
 async function main() {
-  await mongoose.connect(process.env.MONGO_DB);
+  assertRetentionJobEnvironment(); await mongoose.connect(process.env.MONGO_DB);
   const results = await retryPendingAccountAssets({ limit: Number(process.env.ACCOUNT_ASSET_CLEANUP_LIMIT || 50) });
   const remaining = await AccountAssetCleanup.countDocuments();
   console.log(JSON.stringify({ attempted: results.length, remainingAccountAssetCleanupRecords: remaining }));
