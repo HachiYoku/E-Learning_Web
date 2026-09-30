@@ -51,6 +51,9 @@ const proofRetentionCleanupClaimSchema = new mongoose.Schema({
   expiresAt: { type: Date, required: true },
 }, { _id: false });
 const snapshotMinimizationClaimSchema = new mongoose.Schema({ token: { type: String, required: true }, claimedAt: { type: Date, required: true }, expiresAt: { type: Date, required: true } }, { _id: false });
+// Final financial-record deletion has no automatic lease recovery. A paused
+// destructive operation must be reconciled explicitly with writers stopped.
+const finalDeletionClaimSchema = new mongoose.Schema({ token: { type: String, required: true }, claimedAt: { type: Date, required: true } }, { _id: false });
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -127,6 +130,7 @@ const paymentSchema = new mongoose.Schema(
     proofRetentionHold: { type: proofRetentionHoldSchema, default: undefined, select: false },
     proofRetentionCleanupClaim: { type: proofRetentionCleanupClaimSchema, default: undefined, select: false },
     paymentMethodSnapshotMinimizationClaim: { type: snapshotMinimizationClaimSchema, default: undefined, select: false },
+    paymentFinalDeletionClaim: { type: finalDeletionClaimSchema, default: undefined, select: false },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],

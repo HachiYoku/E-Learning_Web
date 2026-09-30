@@ -3,7 +3,7 @@ const PaymentProofRetentionCleanup = require("../models/paymentProofRetentionCle
 const { deletePaymentProof } = require("./paymentProofStorage");
 const { randomUUID } = require("node:crypto");
 
-const PAYMENT_PROOF_FIELDS = "+paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage +proofRetentionHold +proofRetentionCleanupClaim";
+const PAYMENT_PROOF_FIELDS = "+paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage +proofRetentionHold +proofRetentionCleanupClaim +paymentFinalDeletionClaim";
 const TERMINAL_STATUSES = new Set(["approved", "rejected"]);
 const PROOF_CLEANUP_CLAIM_MS = 10 * 60 * 1000;
 
@@ -64,6 +64,7 @@ async function acquirePaymentProofRetentionClaim(job, payment, proof, now) {
     status: { $in: [...TERMINAL_STATUSES] },
     reviewedAt: payment.reviewedAt,
     "proofRetentionHold.active": { $ne: true },
+    "paymentFinalDeletionClaim.token": { $exists: false },
     ...expectedProofQuery(proof),
     ...claimAvailableQuery(),
   }, { $set: { proofRetentionCleanupClaim: claim } }, { returnDocument: "after" }).select(PAYMENT_PROOF_FIELDS).read("primary").readConcern("majority");
@@ -156,6 +157,7 @@ async function processExpiredPaymentProofs({ limit = 50, now = new Date() } = {}
     status: { $in: [...TERMINAL_STATUSES] },
     reviewedAt: { $exists: true, $lte: now },
     "proofRetentionHold.active": { $ne: true },
+    "paymentFinalDeletionClaim.token": { $exists: false },
     $or: [{ paymentProofPublicId: { $exists: true, $ne: "" } }, { paymentImagePublicId: { $exists: true, $ne: "" } }],
   }).sort({ reviewedAt: 1, _id: 1 }).select(PAYMENT_PROOF_FIELDS).limit(limit)) {
     await queuePaymentProofRetentionCleanup(payment);
@@ -173,7 +175,7 @@ async function processExpiredPaymentProofs({ limit = 50, now = new Date() } = {}
 // The offline script calls this only after all backend writers are stopped.
 async function recoverStalePaymentProofRetentionClaims({ now = new Date() } = {}) {
   const result = await Payment.updateMany(
-    { "proofRetentionCleanupClaim.expiresAt": { $lte: now } },
+    { "proofRetentionCleanupClaim.expiresAt": { $lte: now }, "paymentFinalDeletionClaim.token": { $exists: false } },
     { $unset: { proofRetentionCleanupClaim: 1 } },
   );
   return result.modifiedCount;

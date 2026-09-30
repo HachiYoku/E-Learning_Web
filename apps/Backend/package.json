@@ -34,7 +34,8 @@
     "campaigns:cleanup-expired": "node scripts/cleanupExpiredCampaigns.js",
     "contacts:cleanup-suppressions": "node scripts/cleanupContactLeadSuppressions.js",
     "payments:minimize-snapshots": "node scripts/minimizePaymentMethodSnapshots.js",
-    "payment-methods:cleanup-qrs": "node scripts/cleanupPaymentMethodQrs.js"
+    "payment-methods:cleanup-qrs": "node scripts/cleanupPaymentMethodQrs.js",
+    "payments:cleanup-expired": "node scripts/cleanupExpiredPayments.js"
   },
   "author": "",
   "license": "ISC",

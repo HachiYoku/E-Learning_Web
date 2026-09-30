@@ -22,7 +22,7 @@ const escapeHtml = (value = "") =>
     .replace(/'/g, "&#039;");
 
 const PAYMENT_PROOF_FIELDS = "+paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage";
-const PAYMENT_PROOF_HOLD_FIELDS = `${PAYMENT_PROOF_FIELDS} +proofRetentionHold +proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim`;
+const PAYMENT_PROOF_HOLD_FIELDS = `${PAYMENT_PROOF_FIELDS} +proofRetentionHold +proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim +paymentFinalDeletionClaim`;
 const PAYMENT_PROOF_HOLD_REASONS = new Set(["dispute", "refund", "investigation"]);
 const REJECTION_REASON_LABELS = { receipt_unreadable: "The receipt is not readable.", receipt_incomplete: "The receipt is incomplete.", receipt_unverifiable: "We could not verify the receipt." };
 
@@ -344,7 +344,7 @@ const openPaymentProofRetentionHold = async (req, res) => {
     if (!PAYMENT_PROOF_HOLD_REASONS.has(reason)) {
       return res.status(400).json({ message: "A valid proof-retention hold reason is required" });
     }
-    const payment = await Payment.findById(req.params.paymentId).select(PAYMENT_PROOF_HOLD_FIELDS);
+    let payment = await Payment.findById(req.params.paymentId).select(PAYMENT_PROOF_HOLD_FIELDS);
     if (!payment) return res.status(404).json({ message: "Payment not found" });
     if (!['approved', 'rejected'].includes(payment.status)) {
       return res.status(409).json({ message: "Proof-retention holds are available only after payment review" });
@@ -378,10 +378,11 @@ const openPaymentProofRetentionHold = async (req, res) => {
       ...proofCondition,
       "proofRetentionCleanupClaim.token": { $exists: false },
       "paymentMethodSnapshotMinimizationClaim.token": { $exists: false },
+      "paymentFinalDeletionClaim.token": { $exists: false },
     }, { $set: { proofRetentionHold: hold }, $unset: { proofRetentionCleanupClaim: 1 } }, { returnDocument: "after" }).select(PAYMENT_PROOF_HOLD_FIELDS);
     if (!protectedPayment) {
-      const current = await Payment.findById(payment._id).select("+proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim");
-      if (current?.proofRetentionCleanupClaim?.token || current?.paymentMethodSnapshotMinimizationClaim?.token) {
+      const current = await Payment.findById(payment._id).select("+proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim +paymentFinalDeletionClaim");
+      if (current?.proofRetentionCleanupClaim?.token || current?.paymentMethodSnapshotMinimizationClaim?.token || current?.paymentFinalDeletionClaim?.token) {
         return res.status(409).json({ message: "Payment proof cleanup is already in progress; reload the payment before opening a hold" });
       }
       return res.status(409).json({ message: "Payment proof changed; reload the payment before opening a hold" });
@@ -401,14 +402,14 @@ const openPaymentProofRetentionHold = async (req, res) => {
 
 const resolvePaymentProofRetentionHold = async (req, res) => {
   try {
-    const payment = await Payment.findById(req.params.paymentId).select(PAYMENT_PROOF_HOLD_FIELDS);
+    let payment = await Payment.findById(req.params.paymentId).select(PAYMENT_PROOF_HOLD_FIELDS);
     if (!payment) return res.status(404).json({ message: "Payment not found" });
     if (!payment.proofRetentionHold?.active) return res.status(409).json({ message: "No active proof-retention hold exists" });
     const reason = payment.proofRetentionHold.reason;
-    payment.proofRetentionHold.active = false;
-    payment.proofRetentionHold.resolvedAt = new Date();
-    payment.proofRetentionHold.resolvedBy = req.user.id;
-    await payment.save();
+    const resolvedAt = new Date();
+    const resolved = await Payment.findOneAndUpdate({ _id: payment._id, "proofRetentionHold.active": true, "paymentFinalDeletionClaim.token": { $exists: false }, "proofRetentionCleanupClaim.token": { $exists: false }, "paymentMethodSnapshotMinimizationClaim.token": { $exists: false } }, { $set: { "proofRetentionHold.active": false, "proofRetentionHold.resolvedAt": resolvedAt, "proofRetentionHold.resolvedBy": req.user.id } }, { returnDocument: "after" }).select(PAYMENT_PROOF_HOLD_FIELDS);
+    if (!resolved) return res.status(409).json({ message: "Payment retention cleanup is already in progress; reload the payment before resolving a hold" });
+    payment = resolved;
     await afterPaymentCommit(() => writeAuditLog({
       actorId: req.user.id,
       action: "payment.proof_retention_hold_resolved",
