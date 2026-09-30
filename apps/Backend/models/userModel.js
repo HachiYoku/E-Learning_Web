@@ -47,6 +47,11 @@ const userSchema = new mongoose.Schema(
   avatar: String,
   avatarPublicId: String,
 
+  // Minimal age eligibility record: no date of birth or parent identity.
+  ageGroup: { type: String, enum: ["13_17", "18_plus"], default: undefined },
+  ageConfirmedAt: { type: Date, default: null },
+  guardianPermissionAt: { type: Date, default: null },
+
   isActive: {
     type: Boolean,
     default: true

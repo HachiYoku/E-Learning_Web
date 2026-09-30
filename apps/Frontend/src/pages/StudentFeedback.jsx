@@ -289,6 +289,7 @@ function StudentFeedback() {
             </p>
           ) : null}
           <SharePreferenceModal
+            key={sharingFeedbackId || "closed"}
             feedback={feedback.find((item) => item._id === sharingFeedbackId)}
             onClose={closeSharingModal}
             onDone={finishSharingModal}

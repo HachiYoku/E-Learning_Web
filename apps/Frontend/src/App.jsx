@@ -36,7 +36,7 @@ import StudentPractice from "./pages/StudentPractice"
 import StudentExplore from "./pages/StudentExplore"
 import StudentSupport from "./pages/StudentSupport"
 import StudentFeedback from "./pages/StudentFeedback"
-import { CookiePolicy, PrivacyPolicy } from "./pages/LegalPolicy"
+import { CookiePolicy, PrivacyPolicy, Terms } from "./pages/LegalPolicy"
 
 const privateRoutePrefixes = ["/app", "/login", "/register", "/forgot-password", "/verification-help", "/reset-password", "/enroll", "/payment", "/my-courses", "/my-course-order", "/my-profile", "/notifications", "/order-status", "/course-lessons", "/course-quiz"]
 
@@ -66,9 +66,10 @@ export function RouteMetadata() {
     "/flashcards": ["Thai Flashcards", "Practice Thai vocabulary with free interactive flashcards from Arun Thai Language Center."],
     "/privacy-policy": ["Privacy Policy", "Privacy information for Arun Thai Language Center."],
     "/cookie-policy": ["Cookie Policy", "Cookie information for Arun Thai Language Center."],
+    "/terms-and-conditions": ["Terms & Conditions", "Terms for Arun Thai Language Center."],
   }
   const page = publicPages[pathname]
-  if (pathname === "/privacy-policy" || pathname === "/cookie-policy") return <Seo title={page[0]} description={page[1]} path={pathname} robots="noindex, follow" />
+  if (["/privacy-policy", "/cookie-policy", "/terms-and-conditions"].includes(pathname)) return <Seo title={page[0]} description={page[1]} path={pathname} robots="noindex, follow" />
   if (page) return <Seo title={page[0]} description={page[1]} path={pathname} />
   if (pathname.startsWith("/practice/")) return <Seo title="Thai Language Practice" description="Practice Thai consonants and vowels with free interactive learning resources." path={pathname} />
   if (pathname.startsWith("/courses/")) return <Seo title="Thai Course" description="Learn practical Thai online with Arun Thai Language Center." path={pathname} />
@@ -98,6 +99,8 @@ function App() {
         <Route path="/about" element={<About />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/cookie-policy" element={<CookiePolicy />} />
+        <Route path="/terms-and-conditions" element={<Terms />} />
+        <Route path="/terms" element={<Navigate to="/terms-and-conditions" replace />} />
         <Route element={<RequireAuth />}>
           <Route path="/app" element={<StudentLayout />}>
             <Route index element={<StudentDashboard />} />
