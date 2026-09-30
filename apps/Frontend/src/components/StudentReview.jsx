@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, UserRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchTestimonials } from "../services/testimonialService";
 
 function pageSizeForViewport() {
@@ -7,6 +7,79 @@ function pageSizeForViewport() {
   if (window.innerWidth >= 1024) return 3;
   if (window.innerWidth >= 768) return 2;
   return 1;
+}
+
+function TestimonialCard({ id, quote, displayName, profileImage }) {
+  const [expanded, setExpanded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const quoteRef = useRef(null);
+  const quoteId = `testimonial-${id}-quote`;
+
+  useEffect(() => {
+    if (expanded) return undefined;
+
+    const updateTruncation = () => {
+      const element = quoteRef.current;
+      if (!element) return;
+      setIsTruncated(element.scrollHeight > element.clientHeight + 1);
+    };
+
+    const frame = window.requestAnimationFrame(updateTruncation);
+    const observer = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(updateTruncation);
+
+    if (observer && quoteRef.current) observer.observe(quoteRef.current);
+    window.addEventListener("resize", updateTruncation);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener("resize", updateTruncation);
+    };
+  }, [expanded, quote]);
+
+  return (
+    <article className="flex h-full flex-col rounded-2xl border border-white/15 bg-white/[0.06] p-5 sm:p-6 lg:min-h-[20.5rem]">
+      <div className="lg:min-h-[10.5rem]">
+        <blockquote
+          ref={quoteRef}
+          id={quoteId}
+          data-testid={`testimonial-quote-${id}`}
+          className={`whitespace-pre-wrap break-words text-base font-medium leading-7 text-[#FFF9EA] lg:text-[17px] lg:leading-7 ${expanded ? "" : "line-clamp-6"}`}
+        >
+          “{quote}”
+        </blockquote>
+      </div>
+      <div className="mt-2 min-h-11">
+        {isTruncated ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+            aria-expanded={expanded}
+            aria-controls={quoteId}
+            className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-bold text-[#F4CD7D] transition hover:bg-white/10 hover:text-[#FFF9EA] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#2D2E30]"
+          >
+            {expanded ? "Show less" : "Read more"}
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-auto flex items-center gap-2.5 pt-4">
+        {profileImage ? (
+          <img src={profileImage} alt="" className="h-9 w-9 rounded-full object-cover sm:h-10 sm:w-10" />
+        ) : displayName === "Anonymous learner" ? (
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-[#F4CD7D] sm:h-10 sm:w-10">
+            <UserRound className="h-4 w-4" aria-hidden="true" />
+          </span>
+        ) : (
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F4CD7D] text-sm font-semibold text-[#2D2E30] sm:h-10 sm:w-10">
+            {displayName.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <p className="text-sm font-medium text-[#E7DCCE]">{displayName}</p>
+      </div>
+    </article>
+  );
 }
 
 function StudentReview() {
@@ -63,30 +136,15 @@ function StudentReview() {
           </p>
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-3">
+        <div className="mt-8 grid items-stretch gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-3">
           {visibleTestimonials.map(({ id, quote, displayName, profileImage }) => (
-            <article
-              key={id}
-              className="flex flex-col rounded-2xl border border-white/15 bg-white/[0.06] p-5 sm:p-6"
-            >
-              <blockquote className="whitespace-pre-wrap break-words text-base font-medium leading-7 text-[#FFF9EA] lg:text-[17px] lg:leading-7">
-                “{quote}”
-              </blockquote>
-              <div className="mt-5 flex items-center gap-2.5">
-                {profileImage ? (
-                  <img src={profileImage} alt="" className="h-9 w-9 rounded-full object-cover sm:h-10 sm:w-10" />
-                ) : displayName === "Anonymous learner" ? (
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-[#F4CD7D] sm:h-10 sm:w-10">
-                    <UserRound className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                ) : (
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F4CD7D] text-sm font-semibold text-[#2D2E30] sm:h-10 sm:w-10">
-                    {displayName.slice(0, 1).toUpperCase()}
-                  </span>
-                )}
-                <p className="text-sm font-medium text-[#E7DCCE]">{displayName}</p>
-              </div>
-            </article>
+            <TestimonialCard
+              key={`${id}:${quote}`}
+              id={id}
+              quote={quote}
+              displayName={displayName}
+              profileImage={profileImage}
+            />
           ))}
         </div>
         {totalPages > 1 ? (
