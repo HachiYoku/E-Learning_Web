@@ -19,6 +19,9 @@ const Payment = require("../models/paymentModel");
 const PromoCode = require("../models/promoCodeModel");
 const PromoRedemption = require("../models/promoRedemptionModel");
 const AuditLog = require("../models/auditLogModel");
+const PaymentMethodQrCleanup = require("../models/paymentMethodQrCleanupModel");
+const cloudinary = require("../config/cloudinary");
+const { processPaymentMethodQrCleanup, queue } = require("../services/paymentMethodQrCleanup");
 
 const PASSWORD = "AdminManagementPassword123";
 const oid = () => new mongoose.Types.ObjectId();
@@ -38,7 +41,7 @@ const request = async (route, { method = "GET", body, access = token(admin) } = 
   return { status: response.status, body: await response.json() };
 };
 const adminMethod = (overrides = {}) => ({
-  name: "Manual method", currency: "THB", type: "qr", provider: "manual", instructions: "Use the stated reference", recipient: { accountName: "Arun Thai", accountNumber: "123" }, adminPassword: PASSWORD, ...overrides,
+  name: "Manual method", currency: "THB", type: "bank_transfer", provider: "manual", instructions: "Use the stated reference", recipient: { accountName: "Arun Thai", accountNumber: "123" }, adminPassword: PASSWORD, ...overrides,
 });
 const courseFields = (prices, extra = {}) => ({ title: `Course ${Date.now()}-${Math.random()}`, isPublished: true, prices, ...extra });
 
@@ -52,15 +55,15 @@ before(async () => {
   server = app.listen(0, "127.0.0.1"); await new Promise((resolve) => server.once("listening", resolve)); base = `http://127.0.0.1:${server.address().port}`;
 });
 beforeEach(async () => {
-  await Promise.all([Payment.deleteMany({}), PromoRedemption.deleteMany({}), Course.deleteMany({}), PaymentMethod.deleteMany({}), PromoCode.deleteMany({}), AuditLog.deleteMany({}), User.deleteMany({})]);
+  await Promise.all([Payment.deleteMany({}), PromoRedemption.deleteMany({}), Course.deleteMany({}), PaymentMethod.deleteMany({}), PaymentMethodQrCleanup.deleteMany({}), PromoCode.deleteMany({}), AuditLog.deleteMany({}), User.deleteMany({})]);
   admin = await User.create({ name: "Admin", email: "admin-management@example.test", password: await bcrypt.hash(PASSWORD, 4), role: "admin", isActive: true, isVerified: true });
   student = await User.create({ name: "Student", email: "student-management@example.test", password: "student", isActive: true, isVerified: true });
 });
 after(async () => { if (server) await new Promise((resolve) => server.close(resolve)); await mongoose.disconnect(); await stop(mongo); if (directory) await fs.rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); });
 
-test("admin manages THB QR, MMK wallet and bank-transfer methods with validation, password and audit safeguards", async () => {
+test("admin manages manual payment methods with validation, password and audit safeguards", async () => {
   let result = await request("/payment-methods/admin", { method: "POST", body: adminMethod() });
-  assert.equal(result.status, 201); const thb = result.body; assert.equal(thb.currency, "THB"); assert.equal(thb.type, "qr"); assert.equal(thb.provider, "manual");
+  assert.equal(result.status, 201); const thb = result.body; assert.equal(thb.currency, "THB"); assert.equal(thb.type, "bank_transfer"); assert.equal(thb.provider, "manual");
   result = await request("/payment-methods/admin", { method: "POST", body: adminMethod({ name: "MMK wallet", currency: "MMK", type: "wallet" }) }); assert.equal(result.status, 201);
   result = await request("/payment-methods/admin", { method: "POST", body: adminMethod({ name: "MMK bank", currency: "MMK", type: "bank_transfer" }) }); assert.equal(result.status, 201);
   result = await request("/payment-methods/admin", { method: "POST", body: adminMethod({ currency: "USD" }) }); assert.equal(result.status, 400);
@@ -95,9 +98,80 @@ test("payment-method deletion deletes unused methods but archives history-bearin
 
 test("student method endpoint exposes checkout-safe data only", async () => {
   const course = await Course.create({ title: "Public", price: 100, createdBy: admin._id, isPublished: true, prices: { THB: { price: 100, originalPrice: 100 } } });
-  await PaymentMethod.create({ name: "Safe", currency: "THB", type: "qr", provider: "manual", recipient: { accountNumber: "123" }, createdBy: admin._id, updatedBy: admin._id });
+  await PaymentMethod.create({ name: "Safe", currency: "THB", type: "qr", provider: "manual", recipient: { accountNumber: "123" }, qrImage: { url: "https://res.cloudinary.com/example/image/upload/arun_thai/payment_method_qr_codes/safe.png", publicId: "arun_thai/payment_method_qr_codes/safe" }, createdBy: admin._id, updatedBy: admin._id });
   const result = await request(`/payments/course/${course._id}/methods`, { access: token(student) });
   assert.equal(result.status, 200); assert.equal(result.body.length, 1); assert.equal("createdBy" in result.body[0], false); assert.equal("updatedBy" in result.body[0], false); assert.equal("createdAt" in result.body[0], false);
+});
+
+test("QR readiness blocks invalid activation and independently excludes inconsistent active QR methods from checkout", async () => {
+  const course = await Course.create({ title: "QR readiness", price: 100, createdBy: admin._id, isPublished: true, prices: { THB: { price: 100, originalPrice: 100 } } });
+  const invalid = await PaymentMethod.create({ name: "Legacy invalid QR", currency: "THB", type: "qr", provider: "manual", isActive: true, createdBy: admin._id, updatedBy: admin._id });
+  let result = await request(`/payment-methods/admin/${invalid._id}/active`, { method: "PATCH", body: { adminPassword: PASSWORD, isActive: false } });
+  assert.equal(result.status, 200);
+  result = await request(`/payment-methods/admin/${invalid._id}/active`, { method: "PATCH", body: { adminPassword: PASSWORD, isActive: true } });
+  assert.equal(result.status, 400); assert.match(result.body.message, /valid QR image/i);
+  result = await request(`/payments/course/${course._id}/methods`, { access: token(student) });
+  assert.deepEqual(result.body, []);
+  const valid = await PaymentMethod.create({ name: "Valid QR", currency: "THB", type: "qr", provider: "manual", isActive: false, qrImage: { url: "https://res.cloudinary.com/example/image/upload/arun_thai/payment_method_qr_codes/valid.png", publicId: "arun_thai/payment_method_qr_codes/valid" }, createdBy: admin._id, updatedBy: admin._id });
+  result = await request(`/payment-methods/admin/${valid._id}/active`, { method: "PATCH", body: { adminPassword: PASSWORD, isActive: true } });
+  assert.equal(result.status, 200);
+  result = await request(`/payments/course/${course._id}/methods`, { access: token(student) });
+  assert.deepEqual(result.body.map((method) => method.id), [String(valid._id)]);
+});
+
+test("QR deactivation clears the current asset, cleanup ignores snapshots, and a new QR is required to reactivate", async () => {
+  const publicId = "arun_thai/payment_method_qr_codes/deactivate";
+  const method = await PaymentMethod.create({ name: "Deactivate QR", currency: "THB", type: "qr", provider: "manual", isActive: true, qrImage: { url: "https://res.cloudinary.com/example/deactivate.png", publicId }, createdBy: admin._id, updatedBy: admin._id });
+  const course = await Course.create({ title: "QR history", price: 100, createdBy: admin._id });
+  await Payment.create({ userId: student._id, courseId: course._id, amount: 100, originalAmount: 100, discountAmount: 0, currency: "THB", paymentMethodId: method._id, paymentMethodSnapshot: { schemaVersion: 1, kind: "method", methodId: method._id, methodVersion: 0, name: method.name, currency: "THB", type: "qr", provider: "manual", qrImage: { url: "https://historical.example/qr.png", publicId } } });
+  let result = await request(`/payment-methods/admin/${method._id}/active`, { method: "PATCH", body: { adminPassword: PASSWORD, isActive: false } });
+  assert.equal(result.status, 200); assert.equal(result.body.qrImage.publicId, "");
+  assert.ok(await PaymentMethodQrCleanup.exists({ publicId }));
+  const originalDestroy = cloudinary.uploader.destroy; const calls = [];
+  cloudinary.uploader.destroy = async (id) => { calls.push(id); return { result: "not found" }; };
+  try {
+    assert.deepEqual(await processPaymentMethodQrCleanup(), [{ cleaned: true }]);
+    assert.deepEqual(calls, [publicId]);
+  } finally { cloudinary.uploader.destroy = originalDestroy; }
+  result = await request(`/payment-methods/admin/${method._id}/active`, { method: "PATCH", body: { adminPassword: PASSWORD, isActive: true } });
+  assert.equal(result.status, 400);
+  await PaymentMethod.updateOne({ _id: method._id }, { $set: { qrImage: { url: "https://res.cloudinary.com/example/new.png", publicId: "arun_thai/payment_method_qr_codes/new" } } });
+  result = await request(`/payment-methods/admin/${method._id}/active`, { method: "PATCH", body: { adminPassword: PASSWORD, isActive: true } });
+  assert.equal(result.status, 200); assert.equal(result.body.isActive, true);
+});
+
+test("cleanup work is single-claimed and never deletes a QR still current after concurrent mutation", async () => {
+  const oldId = "arun_thai/payment_method_qr_codes/old";
+  const newId = "arun_thai/payment_method_qr_codes/new-current";
+  const method = await PaymentMethod.create({ name: "Concurrent QR", currency: "THB", type: "qr", provider: "manual", isActive: true, qrImage: { url: "https://res.cloudinary.com/example/old.png", publicId: oldId }, createdBy: admin._id, updatedBy: admin._id });
+  await PaymentMethodQrCleanup.create({ publicId: oldId });
+  await PaymentMethod.updateOne({ _id: method._id }, { $set: { qrImage: { url: "https://res.cloudinary.com/example/new.png", publicId: newId } } });
+  const originalDestroy = cloudinary.uploader.destroy; const calls = [];
+  cloudinary.uploader.destroy = async (id) => { calls.push(id); return { result: "ok" }; };
+  try {
+    await Promise.all([processPaymentMethodQrCleanup(), processPaymentMethodQrCleanup()]);
+    assert.deepEqual(calls, [oldId]);
+    assert.equal((await PaymentMethod.findById(method._id)).qrImage.publicId, newId);
+    await PaymentMethodQrCleanup.create({ publicId: newId });
+    assert.deepEqual(await processPaymentMethodQrCleanup(), [{ preserved: true }]);
+    assert.deepEqual(calls, [oldId]);
+  } finally { cloudinary.uploader.destroy = originalDestroy; }
+});
+
+test("QR cleanup retries Cloudinary failures and refuses unknown external asset IDs", async () => {
+  const publicId = "arun_thai/payment_method_qr_codes/retry";
+  assert.equal(await queue("external-provider/unsafe"), false);
+  assert.equal(await queue(publicId), true);
+  const originalDestroy = cloudinary.uploader.destroy; let attempts = 0;
+  cloudinary.uploader.destroy = async () => { attempts += 1; if (attempts === 1) throw new Error("temporary Cloudinary outage"); return { result: "ok" }; };
+  try {
+    assert.deepEqual(await processPaymentMethodQrCleanup(), [{ retryable: true }]);
+    const retry = await PaymentMethodQrCleanup.findOne({ publicId });
+    assert.equal(retry.state, "failed"); assert.equal(retry.attempts, 1); assert.ok(retry.nextAttemptAt);
+    await PaymentMethodQrCleanup.updateOne({ _id: retry._id }, { $set: { nextAttemptAt: new Date(0) } });
+    assert.deepEqual(await processPaymentMethodQrCleanup(), [{ cleaned: true }]);
+    assert.equal(await PaymentMethodQrCleanup.exists({ publicId }), null);
+  } finally { cloudinary.uploader.destroy = originalDestroy; }
 });
 
 test("course admin supports independent THB/MMK availability and changes pricing versions only for changed pricing", async () => {

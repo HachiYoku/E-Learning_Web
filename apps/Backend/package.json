@@ -31,9 +31,10 @@
     "payments:cleanup-proofs": "node scripts/cleanupPaymentProofs.js",
     "payments:cleanup-retained-proofs": "node scripts/cleanupExpiredPaymentProofs.js",
     "accounts:cleanup-assets": "node scripts/cleanupAccountAssets.js",
-    "campaigns:cleanup-expired": "node scripts/cleanupExpiredCampaigns.js"
-    ,"contacts:cleanup-suppressions": "node scripts/cleanupContactLeadSuppressions.js"
-    ,"payments:minimize-snapshots": "node scripts/minimizePaymentMethodSnapshots.js"
+    "campaigns:cleanup-expired": "node scripts/cleanupExpiredCampaigns.js",
+    "contacts:cleanup-suppressions": "node scripts/cleanupContactLeadSuppressions.js",
+    "payments:minimize-snapshots": "node scripts/minimizePaymentMethodSnapshots.js",
+    "payment-methods:cleanup-qrs": "node scripts/cleanupPaymentMethodQrs.js"
   },
   "author": "",
   "license": "ISC",
