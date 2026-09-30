@@ -4,7 +4,6 @@ const PaymentMethod = require("../models/paymentMethodModel");
 const Cleanup = require("../models/paymentMethodQrCleanupModel");
 
 const PREFIX = "arun_thai/payment_method_qr_codes/";
-const CLAIM_STALE_MS = 15 * 60 * 1000;
 const owned = (id) => typeof id === "string" && id.startsWith(PREFIX);
 const retryAt = (attempts) => new Date(Date.now() + Math.min(86400000, 60000 * (2 ** Math.min(attempts, 10))));
 
@@ -20,7 +19,6 @@ async function claimNext(now) {
     { $or: [
       { state: "pending" },
       { state: "failed", nextAttemptAt: { $lte: now } },
-      { state: "processing", "claim.claimedAt": { $lte: new Date(now.getTime() - CLAIM_STALE_MS) } },
     ] },
     { $set: { state: "processing", claim: { token, claimedAt: now } } },
     { sort: { createdAt: 1 }, returnDocument: "after" },
@@ -57,4 +55,18 @@ async function processPaymentMethodQrCleanup({ limit = 50, now = new Date() } = 
   return results;
 }
 
-module.exports = { PREFIX, owned, queue, processPaymentMethodQrCleanup, processClaimed, CLAIM_STALE_MS };
+async function recoverStalePaymentMethodQrClaims({ writersStopped = false } = {}) {
+  if (!writersStopped) throw new Error("QR cleanup claim recovery requires writersStopped: true after all backend writers are stopped.");
+  let recovered = 0;
+  for await (const job of Cleanup.find({ state: "processing" }).select("+claim")) {
+    if (!owned(job.publicId) || await PaymentMethod.exists({ "qrImage.publicId": job.publicId })) {
+      await Cleanup.deleteOne({ _id: job._id, state: "processing", "claim.token": job.claim?.token });
+    } else {
+      const result = await Cleanup.updateOne({ _id: job._id, state: "processing", "claim.token": job.claim?.token }, { $set: { state: "pending" }, $unset: { claim: 1 } });
+      recovered += result.modifiedCount;
+    }
+  }
+  return recovered;
+}
+
+module.exports = { PREFIX, owned, queue, processPaymentMethodQrCleanup, processClaimed, recoverStalePaymentMethodQrClaims };

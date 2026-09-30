@@ -104,6 +104,25 @@ async function processExpiredPayments({ limit = 50, now = new Date() } = {}) {
   return results;
 }
 
+async function inspectExpiredPayments({ limit = 50, now = new Date() } = {}) {
+  const results = [];
+  for await (const payment of Payment.find({}).sort({ createdAt: 1, _id: 1 }).select(FINAL_CLAIM_FIELDS).limit(limit)) {
+    let reason = "eligible";
+    if (!TERMINAL.includes(payment.status)) reason = "non_terminal";
+    else if (!deadline(payment) || deadline(payment) > now) reason = "too_young";
+    else if (payment.proofRetentionHold?.active) reason = "active_hold";
+    else if (payment.proofRetentionCleanupClaim?.token || payment.paymentMethodSnapshotMinimizationClaim?.token || payment.paymentFinalDeletionClaim?.token) reason = "conflicting_claim";
+    else if (payment.paymentProofPublicId || payment.paymentImagePublicId || payment.paymentImage) reason = "proof_dependency";
+    else if (await PaymentProofRetentionCleanup.exists({ paymentId: payment._id })) reason = "proof_cleanup_dependency";
+    else {
+      const relation = await relatedRedemption(payment, null);
+      if (relation.inconsistent) reason = relation.inconsistent;
+    }
+    results.push({ paymentId: String(payment._id), status: payment.status, createdAt: payment.createdAt, reason });
+  }
+  return results;
+}
+
 // Explicitly offline only. Normal workers never steal a paused final-delete
 // claim because doing so could race its transaction or a hold operation.
 async function recoverStaleFinalDeletionClaims({ writersStopped = false } = {}) {
@@ -112,4 +131,4 @@ async function recoverStaleFinalDeletionClaims({ writersStopped = false } = {}) 
   return result.modifiedCount;
 }
 
-module.exports = { TERMINAL, FINAL_CLAIM_FIELDS, addCalendarYears, deadline, retentionEligible, availableClaim, acquireClaim, deleteClaimedPayment, processExpiredPayments, recoverStaleFinalDeletionClaims };
+module.exports = { TERMINAL, FINAL_CLAIM_FIELDS, addCalendarYears, deadline, retentionEligible, availableClaim, acquireClaim, deleteClaimedPayment, processExpiredPayments, inspectExpiredPayments, recoverStaleFinalDeletionClaims };

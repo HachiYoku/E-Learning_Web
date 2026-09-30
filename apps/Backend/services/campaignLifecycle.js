@@ -51,4 +51,20 @@ async function processExpiredCampaigns({ limit = 50, now = new Date() } = {}) {
   return results;
 }
 
-module.exports = { CAMPAIGN_ASSET_PREFIX, campaignExpiry, isOwnedCampaignAsset, processExpiredCampaigns, queueCampaignAssetCleanup };
+async function recoverStaleCampaignClaims({ writersStopped = false, now = new Date() } = {}) {
+  if (!writersStopped) throw new Error("Campaign claim recovery requires writersStopped: true after all backend writers are stopped.");
+  let recovered = 0;
+  for await (const campaign of Campaign.find({ cleanupState: "claimed", expiresAt: { $lte: now } })) {
+    if (!campaign.imagePublicId) {
+      const result = await Campaign.deleteOne({ _id: campaign._id, cleanupState: "claimed", expiresAt: { $lte: now } }); recovered += result.deletedCount; continue;
+    }
+    const existingJob = await Cleanup.exists({ publicId: campaign.imagePublicId });
+    if (!existingJob) {
+      const queued = await queueCampaignAssetCleanup(campaign._id, campaign.imagePublicId, { removeCampaign: true });
+      recovered += Number(queued.queued);
+    }
+  }
+  return recovered;
+}
+
+module.exports = { CAMPAIGN_ASSET_PREFIX, campaignExpiry, isOwnedCampaignAsset, processExpiredCampaigns, queueCampaignAssetCleanup, recoverStaleCampaignClaims };
