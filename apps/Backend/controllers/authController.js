@@ -114,7 +114,7 @@ const buildAuthEmail = ({ name, actionUrl, type }) => {
 
 const register = async (req, res) => {
   try {
-    const { name, username, email, password } = req.body;
+    const { name, username, email, password, ageGroup, ageConfirmed, guardianPermission } = req.body;
     const displayName = name || username;
     const normalizedEmail = normalizeEmail(email);
 
@@ -126,6 +126,12 @@ const register = async (req, res) => {
     }
     if (!isStrongPassword(password)) {
       return res.status(400).json({ message: "Use a password with at least 12 characters, including uppercase, lowercase, and a number." });
+    }
+    if (!["13_17", "18_plus"].includes(ageGroup) || ageConfirmed !== true) {
+      return res.status(400).json({ message: "Arun Thai accounts are available to learners aged 13 and over. Please confirm your age group." });
+    }
+    if (ageGroup === "13_17" && guardianPermission !== true) {
+      return res.status(400).json({ message: "Learners aged 13–17 need permission from a parent or legal guardian." });
     }
 
     const existUser = await User.findOne({ email: normalizedEmail });
@@ -145,6 +151,9 @@ const register = async (req, res) => {
       verificationTokenExpires: Date.now() + 1000 * 60 * 60, // 1 hour
       unverifiedExpiresAt: Date.now() + UNVERIFIED_ACCOUNT_RETENTION_MS,
       isVerified: false,
+      ageGroup,
+      ageConfirmedAt: new Date(),
+      guardianPermissionAt: ageGroup === "13_17" ? new Date() : null,
     });
     
     const verifyLink = buildVerificationUrl(verificationToken);

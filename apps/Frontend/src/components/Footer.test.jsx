@@ -13,10 +13,13 @@ describe("Footer", () => {
 
     const privacy = screen.getByRole("link", { name: "Privacy Policy" });
     const cookies = screen.getByRole("link", { name: "Cookie Policy" });
+    const terms = screen.getByRole("link", { name: "Terms & Conditions" });
     expect(privacy.getAttribute("href")).toBe("/privacy-policy");
     expect(cookies.getAttribute("href")).toBe("/cookie-policy");
+    expect(terms.getAttribute("href")).toBe("/terms-and-conditions");
     expect(privacy.className).toContain("min-h-11");
     expect(cookies.className).toContain("min-h-11");
+    expect(terms.className).toContain("min-h-11");
   });
 
   it("remains absent inside the student application", () => {

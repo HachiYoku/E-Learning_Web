@@ -18,6 +18,8 @@ function Footer() {
             <Link to="/privacy-policy" className="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#2D2E30] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/15">Privacy Policy</Link>
             <span className="text-[#B9A79D]" aria-hidden="true">|</span>
             <Link to="/cookie-policy" className="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#2D2E30] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/15">Cookie Policy</Link>
+            <span className="text-[#B9A79D]" aria-hidden="true">|</span>
+            <Link to="/terms-and-conditions" className="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#2D2E30] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/15">Terms & Conditions</Link>
           </div>
         </div>
       </div>
