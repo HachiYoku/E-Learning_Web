@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Enrollment = require("../models/enrollmentModel");
 const StudentFeedback = require("../models/studentFeedbackModel");
+const User = require("../models/userModel");
 
 const MIN_FEEDBACK_LENGTH = 20;
 const MAX_FEEDBACK_LENGTH = 2000;
@@ -84,9 +85,11 @@ async function updatePublicationConsent(req, res) {
 
     const now = new Date();
     if (status === "permitted") {
+      const student = await User.findById(req.user.id).select("avatar").lean();
+      const canAllowProfileImage = namePreference === "first_name" && Boolean(student?.avatar);
       feedback.publicationConsent.status = "permitted";
       feedback.publicationConsent.namePreference = namePreference;
-      feedback.publicationConsent.allowProfileImage = namePreference === "first_name" ? allowProfileImage : false;
+      feedback.publicationConsent.allowProfileImage = canAllowProfileImage ? allowProfileImage : false;
       feedback.publicationConsent.permittedAt = now;
       feedback.publicationConsent.withdrawnAt = null;
       feedback.publication.status = "awaiting_review";

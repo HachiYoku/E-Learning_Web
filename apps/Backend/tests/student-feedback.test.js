@@ -110,6 +110,9 @@ test("requires valid separate consent and withdraws publication immediately with
   }
   const permitted = await request(`/student-feedback/${id}/publication-consent`, { method: "PATCH", token, body: { status: "permitted", namePreference: "first_name" } });
   assert.equal(permitted.status, 200); let stored = await StudentFeedback.findById(id); assert.equal(stored.publicationConsent.status, "permitted"); assert.equal(stored.publicationConsent.namePreference, "first_name"); assert.equal(stored.publicationConsent.allowProfileImage, false); assert.ok(stored.publicationConsent.permittedAt); assert.equal(stored.publicationConsent.withdrawnAt, null); assert.equal(stored.publication.status, "awaiting_review");
+  const noAvatarPhotoPermission = await request(`/student-feedback/${id}/publication-consent`, { method: "PATCH", token, body: { status: "permitted", namePreference: "first_name", allowProfileImage: true } });
+  assert.equal(noAvatarPhotoPermission.status, 200); stored = await StudentFeedback.findById(id); assert.equal(stored.publicationConsent.allowProfileImage, false);
+  await User.updateOne({ _id: student._id }, { $set: { avatar: "https://res.cloudinary.com/example/image/upload/student-avatar.jpg" } });
   const photoAllowed = await request(`/student-feedback/${id}/publication-consent`, { method: "PATCH", token, body: { status: "permitted", namePreference: "first_name", allowProfileImage: true } });
   assert.equal(photoAllowed.status, 200); stored = await StudentFeedback.findById(id); assert.equal(stored.publicationConsent.allowProfileImage, true);
   await StudentFeedback.updateOne({ _id: id }, { $set: { "publication.status": "published", "publication.publishedAt": new Date() } });

@@ -185,6 +185,53 @@ describe("StudentFeedback", () => {
     ).toBeNull();
   });
 
+  it("resets temporary sharing choices when the modal is closed and reopened", async () => {
+    const user = userEvent.setup();
+    useAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { avatar: "https://cdn.example.test/student-avatar.jpg" },
+    });
+    fetchMyStudentFeedback.mockResolvedValue([privateFeedback]);
+    renderFeedback();
+
+    const trigger = await screen.findByRole("button", { name: /choose sharing preference/i });
+    await user.click(trigger);
+    await user.click(screen.getByRole("radio", { name: "First name" }));
+    await user.click(screen.getByRole("checkbox", { name: "Show my profile photo with my feedback" }));
+    await user.click(screen.getByRole("button", { name: "Close sharing options" }));
+
+    await user.click(trigger);
+    expect(screen.getByRole("radio", { name: "First name" }).checked).toBe(false);
+    expect(screen.getByRole("radio", { name: "Anonymous learner" }).checked).toBe(false);
+    expect(screen.queryByRole("checkbox", { name: "Show my profile photo with my feedback" })).toBeNull();
+  });
+
+  it("does not leak temporary sharing choices between different feedback records", async () => {
+    const user = userEvent.setup();
+    const secondFeedback = { ...privateFeedback, _id: "feedback-2", courseId: "course-2" };
+    useAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { avatar: "https://cdn.example.test/student-avatar.jpg" },
+    });
+    fetchMyEnrollments.mockResolvedValue([
+      eligibleEnrollment,
+      { ...eligibleEnrollment, course: { id: "course-2", title: "Thai Conversations" } },
+    ]);
+    fetchMyStudentFeedback.mockResolvedValue([privateFeedback, secondFeedback]);
+    renderFeedback();
+
+    const triggers = await screen.findAllByRole("button", { name: /choose sharing preference/i });
+    await user.click(triggers[0]);
+    await user.click(screen.getByRole("radio", { name: "First name" }));
+    await user.click(screen.getByRole("checkbox", { name: "Show my profile photo with my feedback" }));
+    await user.click(screen.getByRole("button", { name: "Close sharing options" }));
+
+    await user.click(triggers[1]);
+    expect(screen.getByRole("radio", { name: "First name" }).checked).toBe(false);
+    expect(screen.getByRole("radio", { name: "Anonymous learner" }).checked).toBe(false);
+    expect(screen.queryByRole("checkbox", { name: "Show my profile photo with my feedback" })).toBeNull();
+  });
+
   it("opens sharing choices after a new private save and updates that record after consent", async () => {
     const user = userEvent.setup();
     const created = { ...privateFeedback, _id: "feedback-new" };
