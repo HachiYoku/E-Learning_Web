@@ -6,7 +6,7 @@ import ArticleCard from "../components/ArticleCard";
 import ContactSection from "../components/ContactSection";
 import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { fetchBlogs } from "../services/blogService";
+import { buildExcerpt, fetchBlogs } from "../services/blogService";
 import { sanitizeHtmlContent } from "../utils/sanitizeHtmlContent";
 import Seo from "../components/Seo";
 
@@ -79,6 +79,11 @@ function Blog() {
     [blogs, featuredBlog]
   );
 
+  const featuredPreview = useMemo(
+    () => buildExcerpt(featuredBlog?.content, 1200),
+    [featuredBlog?.content],
+  );
+
   const totalInsightPages = Math.max(1, Math.ceil(insightBlogs.length / INSIGHTS_PER_PAGE));
   const activePage = Math.min(currentPage, totalInsightPages);
 
@@ -143,8 +148,8 @@ function Blog() {
                 </h2>
 
                 {!isExpanded ? (
-                  <p className="mb-6 text-sm leading-relaxed text-[#765F55] sm:text-base md:text-lg break-words">
-                    {featuredBlog.excerpt}
+                  <p className="mb-6 text-sm leading-relaxed text-[#765F55] sm:text-base md:line-clamp-8 md:text-lg lg:line-clamp-[10] break-words">
+                    {featuredPreview}
                   </p>
                 ) : null}
 

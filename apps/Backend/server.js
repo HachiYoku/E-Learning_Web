@@ -224,6 +224,9 @@ app.use('/testimonials', testimonialRoutes)
 const campaignRoutes = require('./routes/campaign')
 app.use('/campaigns', campaignRoutes)
 
+const reelRoutes = require('./routes/reel')
+app.use('/reels', reelRoutes)
+
 const reportRoutes = require('./routes/report')
 app.use('/reports', reportRoutes)
 

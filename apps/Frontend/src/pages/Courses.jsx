@@ -2,14 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, BookOpen, RefreshCw } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import CourseCard from '../components/CourseCard'
-import TestimonialVideo from '../components/TestimonialVideo'
+import SocialReels from '../components/SocialReels'
 import ContactSection from '../components/ContactSection'
 import Footer from '../components/Footer'
 import { fetchCourses } from '../services/courseService'
 import { fetchMyEnrollments } from '../services/enrollmentService'
 import { useAuth } from '../contexts/AuthContext'
-import image1 from '../assets/courses/IELTS speaking.jpg'
-import image2 from '../assets/courses/daily english.jpg'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Seo from '../components/Seo'
 import CatalogueCurrencySelector from '../components/CatalogueCurrencySelector'
@@ -187,56 +185,19 @@ function Courses() {
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#E58C1A] to-transparent" aria-hidden="true" />
         <div className="flex justify-center">
           <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-[#F8C56A]">Built for real progress</p>
-            <h2 className="text-2xl font-bold leading-snug text-white sm:text-3xl lg:text-4xl">
-              Master Thai faster with expert-guided video courses designed for<br className="hidden sm:block" />practical speaking, grammar, and everyday communication.
+            <p lang="my" className="font-myanmar mb-3 text-xs font-bold tracking-[0.22em] text-[#F8C56A]">ထိရောက်ဆန်းသစ်သော သင်ယူမှု</p>
+            <h2 lang="my" className="font-myanmar text-2xl font-bold leading-snug text-white sm:text-3xl lg:text-4xl">
+              လုပ်ငန်းခွင်နှင့် နေ့စဉ်ဘဝသုံး ထိုင်းစကားကို ကျွမ်းကျင်ဆရာများ၏ အနီးကပ် လမ်းညွှန်မှု၊ ဗီဒီယို သင်ခန်းစာများနှင့်အတူ စနစ်တကျ လေ့လာလိုက်ပါ။
             </h2>
             <div className="mx-auto mt-6 h-1 w-20 rounded-full bg-[#E58C1A] sm:w-28" />
           </div>
         </div>
-        <p className="mx-auto mt-5 max-w-3xl text-sm leading-relaxed text-white/70 sm:text-base lg:text-lg">
-          Learn smarter, progress faster, and speak with confidence.
+        <p lang="my" className="font-myanmar mx-auto mt-5 max-w-3xl text-sm leading-relaxed text-white/70 sm:text-base lg:text-lg">
+          လွယ်ကူစွာ လေ့လာပါ၊ လျင်မြန်စွာ တိုးတက်ပါ၊ ရဲရဲဝံ့ဝံ့ စကားပြောလိုက်ပါ။
         </p>
       </section>
 
-      <section className="bg-white px-4 py-14 sm:px-6 sm:py-16 md:px-10 md:py-20">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-8 text-center sm:mb-10 md:mb-12">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Try before you begin</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl md:text-5xl">
-              Free course previews
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-[#765F55] sm:text-base lg:text-lg">
-              Explore sample lessons that show how our courses teach step by step.<br className="hidden sm:block" />
-              Learn practical tips, clear explanations, and real examples
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-7 md:gap-8">
-            <div>
-              <h3 className="mb-3 text-lg font-bold text-[#2D2E30] sm:text-xl">
-                <span className="font-bold">Speak Thai with Confidence</span>
-                <span className="text-gray-600 font-normal text-sm sm:text-base"> (Free to learn)</span>
-              </h3>
-              <TestimonialVideo 
-                image={image1} src="https://youtu.be/PXO2x2GDCFY?si=0n7RxcjldQTaI2cx"
-                backgroundColor="bg-green-500"
-              />
-            </div>
-
-            <div>
-              <h3 className="mb-3 text-lg font-bold text-[#2D2E30] sm:text-xl">
-                <span className="font-bold">Thai Basic – Free Starter Course</span>
-                <span className="text-gray-600 font-normal text-sm sm:text-base"> (Free to learn)</span>
-              </h3>
-              <TestimonialVideo 
-                image={image2} src="https://youtu.be/9n7s8Xo2l3c?si=0n7RxcjldQTaI2cx"
-                backgroundColor="bg-yellow-400"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
+      <SocialReels />
 
       <ContactSection />
       <Footer />
