@@ -46,6 +46,7 @@ CLOUDINARY_API_KEY=<cloudinary_api_key>
 CLOUDINARY_API_SECRET=<cloudinary_api_secret>
 RESEND_API_KEY=<resend_api_key>
 EMAIL_FROM=<from_email_address>
+ADMIN_PAYMENT_NOTIFICATION_EMAIL=<payment_review_notification_recipient>
 ```
 
 ## Run

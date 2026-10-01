@@ -12,6 +12,7 @@ const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
 const { uploadPaymentProof, migrateLegacyPaymentProof, streamPaymentProof, deletePaymentProof } = require("../services/paymentProofStorage");
 const { PAYMENT_PROOF_ACCESS_TTL_SECONDS, issuePaymentProofAccessToken, verifyPaymentProofAccessToken } = require("../services/paymentProofAccess");
 const { courseKey, deriveCoursePaymentStates } = require("../services/paymentCourseState");
+const { sendAdminPaymentReviewNotification } = require("../services/paymentReviewNotification");
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -154,6 +155,10 @@ const createPayment = async (req, res) => {
       message: `Your payment proof for ${course.title} is under review. We'll notify you once it has been approved or rejected.`,
       link: `/app/orders/${payment._id}`,
     }));
+    await afterPaymentCommit(async () => {
+      const student = await User.findById(payment.userId).select("name").lean();
+      await sendAdminPaymentReviewNotification({ payment, studentName: student?.name, courseTitle: course.title });
+    });
     return res.status(201).json(serializePayment(payment));
   } catch (error) {
     return res.status(error.status || 500).json({ message: error.status ? error.message : "Unable to submit payment" });

@@ -16,6 +16,8 @@ export default defineConfig({
       'src/pages/StudentFeedbackManagement/StudentFeedback.test.jsx',
       'src/pages/ContactManagement/ContactLeads.test.jsx',
       'src/pages/ReelManagement/Reels.test.jsx',
+      'src/pages/Payment/reviewPaymentDeepLink.test.js',
+      'src/utils/adminReturnDestination.test.js',
     ],
   },
   server: {

@@ -124,7 +124,7 @@ async function readJavaScriptFiles(directory) {
   const contents = await Promise.all(entries.map(async (entry) => {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) return readJavaScriptFiles(entryPath);
-    if (/\.(js|jsx)$/.test(entry.name)) return fs.readFile(entryPath, "utf8");
+    if (/\.(js|jsx)$/.test(entry.name) && !/\.(test|spec)\.(js|jsx)$/.test(entry.name)) return fs.readFile(entryPath, "utf8");
     return [];
   }));
   return contents.flat();
@@ -217,7 +217,14 @@ test("registration enforces the minimal 13+ age and guardian attestation flow", 
 
 test("admin source has no persistent auth/user storage writes", async () => {
   const adminSources = (await readJavaScriptFiles(path.join(projectDirectory, "apps/Admin/src"))).join("\n");
-  assert.doesNotMatch(adminSources, /(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|getItem)/);
+  const returnDestinationSource = await fs.readFile(path.join(projectDirectory, "apps/Admin/src/utils/adminReturnDestination.js"), "utf8");
+  const adminSourcesWithoutReturnDestination = adminSources.replace(returnDestinationSource, "");
+
+  // The sole sessionStorage exception preserves a validated internal route after reauthentication.
+  // It does not contain an access token, user record, or other credential.
+  assert.match(returnDestinationSource, /window\.sessionStorage\.setItem\(ADMIN_RETURN_DESTINATION_KEY, destination\)/);
+  assert.match(returnDestinationSource, /window\.sessionStorage\.getItem\(ADMIN_RETURN_DESTINATION_KEY\)/);
+  assert.doesNotMatch(adminSourcesWithoutReturnDestination, /(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|getItem)/);
   assert.doesNotMatch(adminSources, /indexedDB/);
   assert.match(adminSources, /localStorage\.removeItem\(key\)/);
 });

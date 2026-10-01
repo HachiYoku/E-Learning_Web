@@ -17,11 +17,17 @@ process.env.NODE_ENV = "test";
 process.env.FRONTEND_URL_LOCAL = "http://localhost:5173";
 process.env.ADMIN_URL_LOCAL = "http://localhost:5174";
 process.env.BACKEND_URL = "http://localhost:3000";
+delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
 
 // Keep the HTTP route, multer middleware, controller and transactions real.
+const deliveredEmails = [];
+let emailDeliveryHook;
 require.cache[require.resolve("../services/sendEmail")] = {
   id: require.resolve("../services/sendEmail"), filename: require.resolve("../services/sendEmail"),
-  loaded: true, exports: async () => {},
+  loaded: true, exports: async (...args) => {
+    deliveredEmails.push(args);
+    if (emailDeliveryHook) await emailDeliveryHook(...args);
+  },
 };
 const storage = require("../services/paymentProofStorage");
 const proofs = new Set();
@@ -40,6 +46,7 @@ const Promo = require("../models/promoCodeModel");
 const Payment = require("../models/paymentModel");
 const Redemption = require("../models/promoRedemptionModel");
 const Enrollment = require("../models/enrollmentModel");
+const { sendAdminPaymentReviewNotification } = require("../services/paymentReviewNotification");
 
 const password = "MultipartPaymentPassword123";
 let mongo, directory, server, base, admin, adminToken;
@@ -106,6 +113,12 @@ async function submit(f, currency, { promoCode = f.promo?.code, courseVersion = 
   if (promoCode) form.append("promoCode", promoCode);
   for (const [key, value] of Object.entries(forged)) form.append(key, String(value));
   return request(`/payments/course/${f.course._id}`, { method: "POST", access: authToken(f.student), body: form });
+}
+
+async function replaceProof(f, paymentId) {
+  const form = new FormData();
+  form.append("paymentProof", new Blob([png], { type: "image/png" }), "replacement.png");
+  return request(`/payments/${paymentId}/proof`, { method: "PUT", access: authToken(f.student), body: form });
 }
 
 async function review(paymentId, action) {
@@ -264,4 +277,97 @@ test("rejecting releases a promo; resubmission and approval create exactly one e
   assert.equal((await review(second.body._id, "approve")).status, 200);
   assert.equal(await Enrollment.countDocuments({ userId: f.student._id, courseId: f.course._id }), 1);
   assert.equal((await Payment.findById(second.body._id)).status, "approved");
+});
+
+test("a committed pending payment sends one minimal Admin review notification", async () => {
+  proofs.clear();
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  let persistedWhenNotified = false;
+  emailDeliveryHook = async (_recipient, _subject, html) => {
+    const paymentId = html.match(/review-payment\?payment=([a-f0-9]{24})/)?.[1];
+    persistedWhenNotified = Boolean(paymentId && await Payment.exists({ _id: paymentId, status: "pending" }));
+  };
+  const f = await fixture();
+  const result = await submit(f, "THB");
+  emailDeliveryHook = undefined;
+  assert.equal(result.status, 201, JSON.stringify(result.body));
+  assert.equal(await Payment.countDocuments({ _id: result.body._id, status: "pending" }), 1);
+  assert.equal(persistedWhenNotified, true);
+
+  const adminEmails = deliveredEmails.filter(([recipient]) => recipient === process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL);
+  assert.equal(adminEmails.length, 1);
+  const [recipient, subject, html] = adminEmails[0];
+  assert.equal(recipient, process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL);
+  assert.equal(subject, "New payment proof requires review");
+  assert.match(html, /Student:<\/strong> Student/);
+  assert.match(html, new RegExp(`Course:<\\/strong> ${f.course.title}`));
+  assert.match(html, /Amount:<\/strong> ฿3,000/);
+  assert.match(html, /Submitted:<\/strong>/);
+  assert.match(html, new RegExp(`http://localhost:5174/review-payment\\?payment=${result.body._id}`));
+  assert.doesNotMatch(html, /payment_method_qr_codes|accountNumber|paymentProofPublicId|proof\.png/i);
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+});
+
+test("Admin notification delivery failure and missing configuration do not fail payment submission", async () => {
+  proofs.clear();
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  emailDeliveryHook = async () => { throw new Error("simulated email outage"); };
+  const failingDelivery = await submit(await fixture(), "THB");
+  emailDeliveryHook = undefined;
+  assert.equal(failingDelivery.status, 201, JSON.stringify(failingDelivery.body));
+  assert.equal((await Payment.findById(failingDelivery.body._id)).status, "pending");
+
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+  const missingRecipient = await submit(await fixture(), "THB");
+  assert.equal(missingRecipient.status, 201, JSON.stringify(missingRecipient.body));
+  assert.equal((await Payment.findById(missingRecipient.body._id)).status, "pending");
+});
+
+test("proof replacement does not send another Admin review notification", async () => {
+  proofs.clear();
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  const f = await fixture();
+  const submitted = await submit(f, "THB");
+  assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
+  assert.equal(deliveredEmails.filter(([recipient]) => recipient === process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL).length, 1);
+
+  const replacement = await replaceProof(f, submitted.body._id);
+  assert.equal(replacement.status, 200, JSON.stringify(replacement.body));
+  assert.equal(deliveredEmails.filter(([recipient]) => recipient === process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL).length, 1);
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+});
+
+test("a new pending payment after rejection receives a new Admin notification", async () => {
+  proofs.clear();
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  const f = await fixture();
+  const first = await submit(f, "THB");
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  assert.equal((await review(first.body._id, "reject")).status, 200);
+
+  const second = await submit(f, "THB");
+  assert.equal(second.status, 201, JSON.stringify(second.body));
+  assert.notEqual(second.body._id, first.body._id);
+  assert.equal(deliveredEmails.filter(([recipient]) => recipient === process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL).length, 2);
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+});
+
+test("missing trusted Admin URL safely skips the notification", async () => {
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  const originalAdminUrl = process.env.ADMIN_URL_LOCAL;
+  delete process.env.ADMIN_URL_LOCAL;
+  const result = await sendAdminPaymentReviewNotification({
+    payment: { _id: "payment-id", amount: 3000, currency: "THB", createdAt: new Date("2026-10-01T00:00:00Z") },
+    studentName: "Student",
+    courseTitle: "Course",
+  });
+  process.env.ADMIN_URL_LOCAL = originalAdminUrl;
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+  assert.deepEqual(result, { sent: false, reason: "missing_admin_url" });
+  assert.equal(deliveredEmails.length, 0);
 });

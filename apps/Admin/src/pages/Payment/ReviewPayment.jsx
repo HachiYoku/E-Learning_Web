@@ -1,9 +1,39 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PaymentCard from '../../components/PaymentCard'
-import { X } from 'lucide-react'
+import { Check, ChevronDown, X } from 'lucide-react'
 import { approvePayment, fetchAllPayments, rejectPayment } from '../../services/paymentService'
+import { resolveReviewPaymentDeepLink } from './reviewPaymentDeepLink'
+
+const denialReasonOptions = [
+  { value: 'receipt_unreadable', label: 'Receipt is not readable' },
+  { value: 'receipt_incomplete', label: 'Receipt is incomplete' },
+  { value: 'receipt_unverifiable', label: 'Receipt cannot be verified' },
+]
+
+function DenialReasonSelect({ value, onChange, disabled }) {
+  const [open, setOpen] = useState(false)
+  const root = useRef(null)
+  const selected = denialReasonOptions.find((option) => option.value === value) || denialReasonOptions[0]
+
+  useEffect(() => {
+    const closeOutside = (event) => {
+      if (!root.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', closeOutside)
+    return () => document.removeEventListener('mousedown', closeOutside)
+  }, [])
+
+  const choose = (nextValue) => {
+    onChange(nextValue)
+    setOpen(false)
+  }
+
+  return <div ref={root} className="relative mb-3"><button type="button" disabled={disabled} onClick={() => setOpen((current) => !current)} aria-label="Reason code" aria-haspopup="listbox" aria-expanded={open} className={`flex w-full items-center justify-between rounded-xl border bg-[#FFFDF8] px-3 py-3 text-left text-sm font-semibold text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 disabled:cursor-not-allowed disabled:opacity-60 ${open ? 'border-[#E58C1A] ring-4 ring-[#E58C1A]/10' : 'border-[#2D2E30]/15 hover:border-[#E58C1A]/45'}`}><span>{selected.label}</span><ChevronDown aria-hidden="true" size={18} className={`shrink-0 text-[#C97112] transition-transform ${open ? 'rotate-180' : ''}`} /></button>{open && !disabled ? <div role="listbox" aria-label="Reason code" className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-[#A34D45]/20 bg-white p-1.5 shadow-xl shadow-[#2D2E30]/15">{denialReasonOptions.map((option) => { const isSelected = option.value === value; return <button type="button" key={option.value} role="option" aria-selected={isSelected} onClick={() => choose(option.value)} className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${isSelected ? 'bg-[#FFF0EE] font-bold text-[#A34D45]' : 'font-medium text-[#2D2E30] hover:bg-[#FFF9EA]'}`}><span>{option.label}</span>{isSelected ? <Check aria-hidden="true" size={16} /> : null}</button> })}</div> : null}</div>
+}
 
 function ReviewPayment() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -20,6 +50,9 @@ function ReviewPayment() {
   const [denyAdminPassword, setDenyAdminPassword] = useState('')
   const [denyError, setDenyError] = useState('')
   const [denying, setDenying] = useState(false)
+  const [reviewPaymentId, setReviewPaymentId] = useState(null)
+  const [deepLinkMessage, setDeepLinkMessage] = useState('')
+  const deepLinkedPaymentId = searchParams.get('payment')
 
   useEffect(() => {
     async function loadPayments() {
@@ -41,6 +74,29 @@ function ReviewPayment() {
     if (tab === 'review') return 'pending'
     if (tab === 'denied') return 'rejected'
     return 'approved'
+  }
+
+  useEffect(() => {
+    if (loading || !deepLinkedPaymentId) return
+
+    const { payment, tab, message } = resolveReviewPaymentDeepLink(payments, deepLinkedPaymentId)
+    if (!payment) {
+      setReviewPaymentId(null)
+      setDeepLinkMessage(message)
+      return
+    }
+
+    setDeepLinkMessage('')
+    setActiveTab(tab)
+    setReviewPaymentId(payment.id)
+  }, [deepLinkedPaymentId, loading, payments])
+
+  const closeReview = () => {
+    setReviewPaymentId(null)
+    if (!deepLinkedPaymentId) return
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.delete('payment')
+    setSearchParams(nextSearchParams, { replace: true })
   }
 
   const handleApproveClick = (paymentId) => {
@@ -177,6 +233,12 @@ function ReviewPayment() {
         </div>
       ) : null}
 
+      {deepLinkMessage ? (
+        <div role="status" className="mb-6 rounded-xl border border-[#E58C1A]/20 bg-[#FFF9EA] px-4 py-3 text-sm text-[#765F55]">
+          {deepLinkMessage}
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="rounded-2xl border border-[#2D2E30]/10 bg-white p-10 text-center text-[#765F55] shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]">
           Loading payments...
@@ -191,6 +253,9 @@ function ReviewPayment() {
                 status={activeTab}
                 onApprove={handleApproveClick}
                 onDeny={handleDenyClick}
+                isReviewOpen={reviewPaymentId === payment.id}
+                onOpenReview={setReviewPaymentId}
+                onCloseReview={closeReview}
               />
             ))}
           </div>
@@ -281,9 +346,7 @@ function ReviewPayment() {
               <p className="mb-4 text-sm leading-6 text-[#765F55]">Explain what needs to be corrected. The learner will receive this message with their payment update.</p>
               {denyError ? <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">{denyError}</div> : null}
               <label className="mb-2 block text-xs font-bold text-[#2D2E30] sm:text-sm">Reason code</label>
-              <select value={denyReasonCode} onChange={(e) => setDenyReasonCode(e.target.value)} className="mb-3 w-full rounded-xl border border-[#2D2E30]/15 px-3 py-3 text-sm" disabled={denying}>
-                <option value="receipt_unreadable">Receipt is not readable</option><option value="receipt_incomplete">Receipt is incomplete</option><option value="receipt_unverifiable">Receipt cannot be verified</option>
-              </select>
+              <DenialReasonSelect value={denyReasonCode} onChange={setDenyReasonCode} disabled={denying} />
               <textarea
                 value={denyReason}
                 onChange={(e) => setDenyReason(e.target.value)}

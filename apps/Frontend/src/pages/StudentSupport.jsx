@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useState } from "react"
-import { Headphones, Mail, MessageCircleQuestion, Plus, Send } from "lucide-react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
+import { ChevronDown, Headphones, Mail, MessageCircleQuestion, Plus, Send } from "lucide-react"
 import { createSupportTicket, fetchMySupportTickets, replyToSupportTicket } from "../services/supportTicketService"
+import { defaultSupportForm, supportFormPreselection, supportSubjectsByCategory } from "../utils/supportFormPreselection"
 
 const categories = [
   { value: "course", label: "Course access" }, { value: "payment", label: "Payment or order" }, { value: "technical", label: "Technical problem" }, { value: "learning", label: "Learning question" }, { value: "general", label: "General support" },
 ]
-const subjectsByCategory = {
-  course: ["Course access", "Lesson progress", "Course content", "Certificate question"], payment: ["Payment issue", "Order status", "Refund request", "Promo code problem"], technical: ["Cannot sign in", "Website issue", "Video or audio problem", "Other technical problem"], learning: ["Question about a lesson", "Practice activity question", "Learning recommendation", "Other learning question"], general: ["General question", "Account question", "Feedback", "Other request"],
-}
 const statusLabel = { open: "Open", in_progress: "In progress", resolved: "Resolved" }
 const statusClass = { open: "bg-[#FFF1D0] text-[#9A5816]", in_progress: "bg-[#E8F3FA] text-[#367599]", resolved: "bg-[#E9F4EA] text-[#4D7C57]" }
 const formatDate = (date) => date ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(date)) : ""
 
 function StudentSupport() {
+  const [searchParams] = useSearchParams()
+  const preselectedForm = supportFormPreselection(searchParams)
   const [tickets, setTickets] = useState([])
   const [selectedId, setSelectedId] = useState("")
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ category: "general", subject: subjectsByCategory.general[0], message: "" })
+  const [showForm, setShowForm] = useState(Boolean(preselectedForm))
+  const [form, setForm] = useState(() => preselectedForm || defaultSupportForm())
   const [reply, setReply] = useState("")
   const [reopening, setReopening] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -30,7 +31,7 @@ function StudentSupport() {
 
   const submitRequest = async (event) => {
     event.preventDefault(); setSending(true); setError("")
-    try { const ticket = await createSupportTicket(form); setTickets((items) => [ticket, ...items]); setSelectedId(ticket._id); setForm({ category: "general", subject: subjectsByCategory.general[0], message: "" }); setShowForm(false) }
+    try { const ticket = await createSupportTicket(form); setTickets((items) => [ticket, ...items]); setSelectedId(ticket._id); setForm(defaultSupportForm()); setShowForm(false) }
     catch (submitError) { setError(submitError.message) } finally { setSending(false) }
   }
   const submitReply = async (event) => {
@@ -44,9 +45,42 @@ function StudentSupport() {
   return <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
     <div className="flex flex-col gap-4 border-b border-[#2D2E30]/10 pb-6 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-[#C97112]">Student support</p><h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Help &amp; support</h1><p className="mt-2 text-sm text-[#765F55] sm:text-base">Read and reply to each support conversation in one place.</p></div><button type="button" onClick={() => setShowForm((open) => !open)} className="inline-flex w-fit items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#E58C1A]"><Plus className="h-4 w-4" />New request</button></div>
     {error ? <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
-    {showForm ? <form onSubmit={submitRequest} className="mt-6 rounded-2xl border border-[#E58C1A]/20 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF1D0] text-[#C97112]"><MessageCircleQuestion className="h-5 w-5" /></span><div><h2 className="font-bold">Send a support request</h2><p className="text-sm text-[#765F55]">We will reply in this conversation.</p></div></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold">Topic<select value={form.category} onChange={(event) => setForm((value) => ({ ...value, category: event.target.value, subject: subjectsByCategory[event.target.value][0] }))} className="mt-2 h-12 w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] px-3 text-sm outline-none focus:border-[#E58C1A]">{categories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label className="text-sm font-bold">Subject<select value={form.subject} onChange={(event) => setForm((value) => ({ ...value, subject: event.target.value }))} className="mt-2 h-12 w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] px-3 text-sm outline-none focus:border-[#E58C1A]">{subjectsByCategory[form.category].map((subject) => <option key={subject}>{subject}</option>)}</select></label></div><label className="mt-4 block text-sm font-bold">Message<textarea required rows="5" maxLength="2000" value={form.message} onChange={(event) => setForm((value) => ({ ...value, message: event.target.value }))} className="mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] p-3 text-sm outline-none focus:border-[#E58C1A]" placeholder="Tell us what happened and how we can help." /></label><div className="mt-5 flex gap-3"><button disabled={sending} className="inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60"><Send className="h-4 w-4" />{sending ? "Sending…" : "Send request"}</button><button type="button" onClick={() => setShowForm(false)} className="px-4 py-3 text-sm font-bold text-[#765F55] hover:bg-[#FFF1D0]">Cancel</button></div></form> : null}
+    {showForm ? <form onSubmit={submitRequest} className="mt-6 rounded-2xl border border-[#E58C1A]/20 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF1D0] text-[#C97112]"><MessageCircleQuestion className="h-5 w-5" /></span><div><h2 className="font-bold">Send a support request</h2><p className="text-sm text-[#765F55]">We will reply in this conversation.</p></div></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><SupportSelect label="Topic" value={form.category} options={categories} onChange={(category) => setForm((value) => ({ ...value, category, subject: supportSubjectsByCategory[category][0] }))} /><SupportSelect label="Subject" value={form.subject} options={supportSubjectsByCategory[form.category]} onChange={(subject) => setForm((value) => ({ ...value, subject }))} /></div><label className="mt-4 block text-sm font-bold">Message<textarea required rows="5" maxLength="2000" value={form.message} onChange={(event) => setForm((value) => ({ ...value, message: event.target.value }))} className="mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] p-3 text-sm outline-none focus:border-[#E58C1A]" placeholder="Tell us what happened and how we can help." /></label><div className="mt-5 flex gap-3"><button disabled={sending} className="inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60"><Send className="h-4 w-4" />{sending ? "Sending…" : "Send request"}</button><button type="button" onClick={() => setShowForm(false)} className="px-4 py-3 text-sm font-bold text-[#765F55] hover:bg-[#FFF1D0]">Cancel</button></div></form> : null}
     <section className="mt-7"><div className="mb-4 flex items-center gap-2"><Headphones className="h-5 w-5 text-[#C97112]" /><h2 className="text-lg font-bold">Your requests</h2></div>{loading ? <p className="py-8 text-sm text-[#765F55]">Loading your requests…</p> : tickets.length === 0 ? <div className="rounded-2xl border border-dashed border-[#D9CEBE] bg-white px-5 py-10 text-center"><Mail className="mx-auto h-6 w-6 text-[#C97112]" /><p className="mt-3 font-bold">No support requests yet</p><p className="mt-1 text-sm text-[#765F55]">Use New request if you need help with your learning account.</p></div> : <><div className="mb-4 flex gap-2 overflow-x-auto pb-1">{tickets.map((ticket) => <button type="button" key={ticket._id} onClick={() => { setSelectedId(ticket._id); setReply(""); setReopening(false) }} className={`shrink-0 rounded-xl border px-3 py-2 text-left text-sm font-bold transition ${selected?._id === ticket._id ? "border-[#E58C1A]/35 bg-[#FFF1D0] text-[#9A5816]" : "border-[#2D2E30]/10 bg-white text-[#765F55] hover:bg-[#FFF9EA]"}`}><span className="block max-w-44 truncate">{ticket.subject}</span></button>)}</div><article className="overflow-hidden rounded-[1.5rem] border border-[#2D2E30]/10 bg-white shadow-sm"><header className="flex flex-wrap items-start justify-between gap-4 border-b border-[#2D2E30]/10 px-5 py-5 sm:px-7"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-[#C97112]">{categories.find((item) => item.value === selected.category)?.label || "Support"}</p><h3 className="mt-2 text-2xl font-bold text-[#2D2E30]">{selected.subject}</h3><p className="mt-2 text-sm text-[#765F55]">Your request · {formatDate(selected.createdAt)}</p></div><span className={`rounded-full px-3 py-2 text-sm font-bold ${statusClass[selected.status]}`}>{statusLabel[selected.status]}</span></header><div className="max-h-[28rem] space-y-4 overflow-y-auto bg-[#FFFDF8] p-5 sm:p-7"><div className="rounded-2xl bg-[#FFF4D8] p-4"><p className="text-xs font-bold uppercase tracking-[.16em] text-[#9A5816]">Your message</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#2D2E30]">{selected.message}</p><p className="mt-3 text-xs text-[#9A8775]">{formatDate(selected.createdAt)}</p></div>{selected.replies?.map((item) => { const student = item.authorRole === "user"; return <div key={item._id} className={`rounded-2xl p-4 ${student ? "ml-4 bg-[#FFF4D8] sm:ml-12" : "mr-4 border border-[#2D2E30]/10 bg-white sm:mr-12"}`}><p className={`text-xs font-bold uppercase tracking-[.16em] ${student ? "text-[#9A5816]" : "text-[#C97112]"}`}>{student ? "Your reply" : "Arun Thai reply"}</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#2D2E30]">{item.message}</p><p className="mt-3 text-xs text-[#9A8775]">{formatDate(item.createdAt)}</p></div> })}</div>{canReply ? <form onSubmit={submitReply} className="border-t border-[#2D2E30]/10 bg-white p-5 sm:p-7"><label className="text-sm font-bold text-[#2D2E30]">Reply to support<textarea required rows="4" maxLength="2000" value={reply} onChange={(event) => setReply(event.target.value)} className="mt-2 w-full resize-y rounded-2xl border border-[#2D2E30]/15 bg-[#FFFDF8] p-4 text-sm outline-none focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10" placeholder="Write your reply…" /></label><button disabled={sending || !reply.trim()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A] disabled:opacity-60"><Send className="h-4 w-4" />{sending ? "Sending…" : selected.status === "resolved" ? "Reopen and send" : "Send reply"}</button></form> : <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#2D2E30]/10 bg-[#E9F4EA] px-5 py-4 sm:px-7"><p className="text-sm text-[#397445]">This request is resolved. Need more help?</p><button type="button" onClick={() => setReopening(true)} className="rounded-xl border border-[#4D7C57]/30 bg-white px-3 py-2 text-sm font-bold text-[#246B35]">Reopen request</button></div>}</article></>}</section>
   </div>
+}
+
+function SupportSelect({ label, value, options, onChange }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef(null)
+  const triggerRef = useRef(null)
+  const labelId = useId()
+  const listboxId = useId()
+  const normalizedOptions = options.map((option) => typeof option === "string" ? { value: option, label: option } : option)
+  const selected = normalizedOptions.find((option) => option.value === value)
+
+  useEffect(() => {
+    const closeOutside = (event) => {
+      if (!containerRef.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", closeOutside)
+    return () => document.removeEventListener("mousedown", closeOutside)
+  }, [])
+
+  const choose = (nextValue) => {
+    onChange(nextValue)
+    setOpen(false)
+    triggerRef.current?.focus()
+  }
+
+  const closeWithEscape = (event) => {
+    if (event.key !== "Escape") return
+    event.preventDefault()
+    setOpen(false)
+    triggerRef.current?.focus()
+  }
+
+  return <div ref={containerRef} className="relative text-sm font-bold"><span id={labelId}>{label}</span><button ref={triggerRef} type="button" aria-labelledby={labelId} aria-haspopup="listbox" aria-controls={listboxId} aria-expanded={open} onClick={() => setOpen((expanded) => !expanded)} onKeyDown={closeWithEscape} className={`mt-2 flex h-12 w-full items-center justify-between rounded-xl border bg-[#FFFDF8] px-3 text-left text-sm font-semibold text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 ${open ? "border-[#E58C1A] ring-4 ring-[#E58C1A]/10" : "border-[#2D2E30]/15"}`}><span>{selected?.label}</span><ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-[#765F55] transition-transform ${open ? "rotate-180" : ""}`} /></button>{open ? <div id={listboxId} role="listbox" aria-labelledby={labelId} className="absolute z-20 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-[#E58C1A]/25 bg-white p-1.5 shadow-[0_16px_30px_-18px_rgba(45,46,48,.55)]" onKeyDown={closeWithEscape}>{normalizedOptions.map((option) => <button type="button" role="option" aria-selected={option.value === value} key={option.value} onClick={() => choose(option.value)} className={`flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#E58C1A]/30 ${option.value === value ? "bg-[#FFF1D0] text-[#9A5816]" : "text-[#2D2E30] hover:bg-[#FFF9EA]"}`}>{option.label}</button>)}</div> : null}</div>
 }
 
 export default StudentSupport
