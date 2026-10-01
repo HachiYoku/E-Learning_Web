@@ -1,11 +1,14 @@
 import { useNavigate } from 'react-router-dom'
 import { useCatalogueCurrency } from '../contexts/useCatalogueCurrency'
-import { getCataloguePrice } from '../utils/catalogueCurrency'
+import { getAvailableCatalogueCurrencies, getCataloguePrice } from '../utils/catalogueCurrency'
 
 function CourseCard({ course, id, image, title, description, price, originalPrice, hasDiscount = false, priceAvailable = true, currency = 'THB', rating, isEnrolled = false }) {
   const navigate = useNavigate()
-  const { currency: selectedCurrency } = useCatalogueCurrency()
+  const { currency: selectedCurrency, setCurrency } = useCatalogueCurrency()
   const displayPrice = course ? getCataloguePrice(course, selectedCurrency) : { price, originalPrice, hasDiscount, available: priceAvailable, currency }
+  const availableAlternativeCurrency = !displayPrice.available && course
+    ? getAvailableCatalogueCurrencies(course).find((currencyOption) => currencyOption !== selectedCurrency)
+    : null
   const courseId = course?.id || id
   const courseTitle = course?.title || title
   const courseImage = course?.image || image
@@ -51,7 +54,9 @@ function CourseCard({ course, id, image, title, description, price, originalPric
         </p>
 
         {/* Price */}
-        <div className="mb-3">{displayPrice.available ? <><p className="text-brand-accent text-lg font-bold md:text-xl">{displayPrice.price}</p>{displayPrice.hasDiscount ? <p className="mt-0.5 text-xs font-medium text-[#9B867C] line-through">{displayPrice.originalPrice}</p> : null}</> : <p className="text-sm font-semibold text-[#765F55]">Not available in {displayPrice.currency}</p>}</div>
+        <div className="mb-3">
+          {displayPrice.available ? <><p className="text-brand-accent text-lg font-bold md:text-xl">{displayPrice.price}</p>{displayPrice.hasDiscount ? <p className="mt-0.5 text-xs font-medium text-[#9B867C] line-through">{displayPrice.originalPrice}</p> : null}</> : <div className="text-sm font-semibold text-[#765F55]"><p>{displayPrice.currency} price unavailable{availableAlternativeCurrency ? <> — available in {availableAlternativeCurrency}</> : ''}</p>{availableAlternativeCurrency ? <button type="button" onClick={() => setCurrency(availableAlternativeCurrency)} className="mt-2 inline-flex min-h-9 items-center rounded-lg border border-[#E58C1A]/30 px-3 text-xs font-bold text-[#9A5816] transition hover:bg-[#FFF1D0]">Show prices in {availableAlternativeCurrency}</button> : null}</div>}
+        </div>
 
         {/* Rating */}
         <div className="mb-4 flex items-center gap-1.5">
@@ -75,12 +80,12 @@ function CourseCard({ course, id, image, title, description, price, originalPric
               View details
             </button>
           )}
-          <button 
+          {(isEnrolled || displayPrice.available) && <button
             onClick={() => navigate(isEnrolled ? `/app/learn/${courseId}` : `/enroll/${courseId}`)}
             className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[#2D2E30] px-3 py-2.5 text-xs font-semibold text-white shadow-md shadow-[#2D2E30]/15 transition-colors hover:bg-[#E58C1A] md:text-sm"
           >
             {isEnrolled ? 'Learn Now' : 'Enroll Now'}
-          </button>
+          </button>}
         </div>
       </div>
     </article>

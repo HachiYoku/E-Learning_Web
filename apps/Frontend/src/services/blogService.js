@@ -4,7 +4,7 @@ function stripHtml(html = "") {
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function buildExcerpt(content = "", maxLength = 180) {
+export function buildExcerpt(content = "", maxLength = 180) {
   const text = stripHtml(content);
 
   if (!text) {
@@ -37,7 +37,7 @@ export function normalizeBlog(blog) {
     content: blog.content || "",
     excerpt: buildExcerpt(blog.content),
     image: blog.image || "",
-    authorName: blog.createdBy?.name || "English Kafe",
+    authorName: blog.createdBy?.name || "Arun Thai Language Center",
     date: formatDate(blog.createdAt),
   };
 }

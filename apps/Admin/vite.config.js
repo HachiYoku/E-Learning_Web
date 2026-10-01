@@ -15,6 +15,7 @@ export default defineConfig({
       'src/services/userService.test.js',
       'src/pages/StudentFeedbackManagement/StudentFeedback.test.jsx',
       'src/pages/ContactManagement/ContactLeads.test.jsx',
+      'src/pages/ReelManagement/Reels.test.jsx',
     ],
   },
   server: {

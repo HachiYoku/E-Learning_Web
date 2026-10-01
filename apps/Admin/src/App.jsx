@@ -32,6 +32,7 @@ import Flashcards from './pages/FlashcardManagement/Flashcards'
 import PromoCodes from './pages/PromoManagement/PromoCodes'
 import SupportTickets from './pages/SupportManagement/SupportTickets'
 import StudentFeedback from './pages/StudentFeedbackManagement/StudentFeedback'
+import Reels from './pages/ReelManagement/Reels'
 
 function ProtectedLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768)
@@ -81,6 +82,7 @@ function App() {
             <Route path="/blog" element={<Blogs />} />
             <Route path="/blog/add" element={<AddBlog />} />
             <Route path="/blog/edit/:id" element={<EditBlog />} />
+            <Route path="/reels" element={<Reels />} />
             <Route path="/review-payment" element={<ReviewPayment />} />
             <Route path="/payment-methods" element={<PaymentMethods />} />
             <Route path="/instructors" element={<Instructors />} />
