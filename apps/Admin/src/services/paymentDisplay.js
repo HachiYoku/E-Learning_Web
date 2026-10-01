@@ -10,6 +10,7 @@ export function normalizePayment(payment) {
 
   return {
     id: payment._id,
+    paymentReference: payment.paymentReference || "",
     userName: payment.userId?.name || "Unknown user",
     userEmail: payment.userId?.email || "",
     userAvatar: payment.userId?.avatar || "",

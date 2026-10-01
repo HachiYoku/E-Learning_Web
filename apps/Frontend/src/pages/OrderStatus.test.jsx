@@ -62,4 +62,22 @@ describe("OrderStatus payment support links", () => {
     expect(await screen.findByRole("heading", { name: "You’re enrolled!" })).toBeTruthy()
     expect(screen.queryByRole("link", { name: "Get Help & Support" })).toBeNull()
   })
+
+  it("shows an available Payment Reference in every status view and copies only its value", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    renderOrder({ ...basePayment, status: "pending", paymentReference: "PAY-7KQ4M9DX" })
+    expect(await screen.findByText("PAY-7KQ4M9DX")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }))
+    expect(writeText).toHaveBeenCalledWith("PAY-7KQ4M9DX")
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy()
+  })
+
+  it("omits a missing legacy Payment Reference and keeps clipboard failures safe", async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("blocked")) } })
+    renderOrder({ ...basePayment, status: "approved" })
+    expect(await screen.findByRole("heading", { name: "You’re enrolled!" })).toBeTruthy()
+    expect(screen.queryByText("Payment Reference")).toBeNull()
+  })
 })

@@ -13,6 +13,7 @@ const { uploadPaymentProof, migrateLegacyPaymentProof, streamPaymentProof, delet
 const { PAYMENT_PROOF_ACCESS_TTL_SECONDS, issuePaymentProofAccessToken, verifyPaymentProofAccessToken } = require("../services/paymentProofAccess");
 const { courseKey, deriveCoursePaymentStates } = require("../services/paymentCourseState");
 const { sendAdminPaymentReviewNotification } = require("../services/paymentReviewNotification");
+const { PAYMENT_REFERENCE_PATTERN, normalizePaymentReference } = require("../services/paymentReference");
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -47,13 +48,17 @@ async function afterPaymentCommit(action) {
   try { await action(); } catch (_error) { console.error("Payment follow-up delivery failed after commit."); }
 }
 
-const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason }) => {
+const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason, paymentReference }) => {
   if (!user?.email) return;
 
   const safeName = escapeHtml(user.name || "there");
   const safeCourseTitle = escapeHtml(courseTitle || "your course");
   const isApproved = status === "approved";
   const safeReason = escapeHtml(rejectReason);
+  const safePaymentReference = paymentReference ? escapeHtml(paymentReference) : "";
+  const paymentReferenceRow = safePaymentReference
+    ? `<div style="margin-top: 12px; color: #765F55; font-size: 14px; line-height: 21px;"><strong style="color: #2D2E30;">Payment Reference:</strong> ${safePaymentReference}</div>`
+    : "";
   const actionUrl = buildTrustedUrl(getTrustedUrls().frontendUrl, isApproved ? "/my-courses" : "/my-course-order");
   const accentColor = isApproved ? "#4D7C57" : "#C97112";
   const statusLabel = isApproved ? "PAYMENT APPROVED" : "PAYMENT NEEDS ATTENTION";
@@ -112,6 +117,7 @@ const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason 
                         <td style="padding: 17px 18px;">
                           <div style="color: #9B867C; font-size: 11px; font-weight: bold; letter-spacing: 0.9px; text-transform: uppercase;">Course</div>
                           <div style="margin-top: 5px; color: #2D2E30; font-size: 16px; font-weight: bold; line-height: 23px;">${safeCourseTitle}</div>
+                          ${paymentReferenceRow}
                         </td>
                       </tr>
                     </table>
@@ -212,7 +218,12 @@ const getMyPayments = async (req, res) => {
 
 const getAllPayments = async (req, res) => {
   try {
-    const payments = await Payment.find().select(PAYMENT_PROOF_FIELDS)
+    const hasReferenceQuery = Object.prototype.hasOwnProperty.call(req.query || {}, "paymentReference");
+    const paymentReference = normalizePaymentReference(req.query?.paymentReference);
+    if (hasReferenceQuery && !PAYMENT_REFERENCE_PATTERN.test(paymentReference)) {
+      return res.status(400).json({ message: "Enter a complete payment reference in the format PAY-XXXXXXXX." });
+    }
+    const payments = await Payment.find(hasReferenceQuery ? { paymentReference } : {}).select(PAYMENT_PROOF_FIELDS)
       .populate("userId", "name email avatar")
       .populate("courseId", "title price")
       .populate("reviewedBy", "name email")
@@ -462,7 +473,7 @@ const reviewPayment = (status) => async (req, res) => {
     }));
     await afterPaymentCommit(async () => {
       const user = await User.findById(payment.userId).select("name email").lean();
-      await sendPaymentReviewEmail({ user, courseTitle: course?.title, status, rejectReason: payment.rejectionReasonCode ? `${REJECTION_REASON_LABELS[payment.rejectionReasonCode]}${payment.rejectionNote ? ` ${payment.rejectionNote}` : ""}` : payment.rejectReason });
+      await sendPaymentReviewEmail({ user, courseTitle: course?.title, status, paymentReference: payment.paymentReference, rejectReason: payment.rejectionReasonCode ? `${REJECTION_REASON_LABELS[payment.rejectionReasonCode]}${payment.rejectionNote ? ` ${payment.rejectionNote}` : ""}` : payment.rejectReason });
     });
     return res.status(200).json({
       message: status === "approved" ? "Payment approved and enrollment created successfully" : "Payment rejected successfully",
