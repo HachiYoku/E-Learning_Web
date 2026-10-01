@@ -52,28 +52,60 @@ function ReviewPayment() {
   const [denying, setDenying] = useState(false)
   const [reviewPaymentId, setReviewPaymentId] = useState(null)
   const [deepLinkMessage, setDeepLinkMessage] = useState('')
+  const [paymentReferenceInput, setPaymentReferenceInput] = useState('')
+  const [paymentReferenceSearch, setPaymentReferenceSearch] = useState('')
+  const [referenceSearchMessage, setReferenceSearchMessage] = useState('')
   const deepLinkedPaymentId = searchParams.get('payment')
-
-  useEffect(() => {
-    async function loadPayments() {
-      try {
-        setLoading(true)
-        setError('')
-        setPayments(await fetchAllPayments())
-      } catch (loadError) {
-        setError(loadError.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadPayments()
-  }, [])
 
   const mapTabToStatus = (tab) => {
     if (tab === 'review') return 'pending'
     if (tab === 'denied') return 'rejected'
     return 'approved'
+  }
+
+  const tabForStatus = (status) => (status === 'pending' ? 'review' : status === 'rejected' ? 'denied' : 'approved')
+
+  const loadPayments = async (paymentReference = '') => {
+    try {
+      setLoading(true)
+      setError('')
+      const nextPayments = await fetchAllPayments(paymentReference)
+      setPayments(nextPayments)
+      if (paymentReference) {
+        const matchedPayment = nextPayments[0]
+        setReferenceSearchMessage(matchedPayment ? '' : 'No payment matches that complete Payment Reference.')
+        if (matchedPayment) {
+          setActiveTab(tabForStatus(matchedPayment.status))
+          setReviewPaymentId(matchedPayment.id)
+        }
+      }
+    } catch (loadError) {
+      setReferenceSearchMessage('')
+      setError(loadError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPayments()
+  }, [])
+
+  const submitPaymentReferenceSearch = async (event) => {
+    event.preventDefault()
+    const normalized = paymentReferenceInput.trim().toUpperCase()
+    setPaymentReferenceInput(normalized)
+    setPaymentReferenceSearch(normalized)
+    setReviewPaymentId(null)
+    await loadPayments(normalized)
+  }
+
+  const clearPaymentReferenceSearch = async () => {
+    setPaymentReferenceInput('')
+    setPaymentReferenceSearch('')
+    setReferenceSearchMessage('')
+    setReviewPaymentId(null)
+    await loadPayments()
   }
 
   useEffect(() => {
@@ -193,6 +225,13 @@ function ReviewPayment() {
       <div className="mb-6 md:mb-8"><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112] sm:text-xs">Finance operations</p>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl md:text-4xl">Review payments</h1><p className="mt-2 text-sm text-[#765F55]">Verify transfer receipts and manage learner course access.</p>
 
+        <form onSubmit={submitPaymentReferenceSearch} className="mt-5 flex max-w-xl flex-col gap-2 sm:flex-row">
+          <label className="sr-only" htmlFor="payment-reference-search">Payment Reference</label>
+          <input id="payment-reference-search" value={paymentReferenceInput} onChange={(event) => setPaymentReferenceInput(event.target.value)} placeholder="Payment Reference (PAY-XXXXXXXX)" className="min-h-11 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 text-sm font-semibold text-[#2D2E30] outline-none placeholder:font-normal placeholder:text-[#9E887C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10" />
+          <button type="submit" className="min-h-11 rounded-xl bg-[#2D2E30] px-4 text-sm font-bold text-white transition hover:bg-[#E58C1A]">Find payment</button>
+          {paymentReferenceSearch ? <button type="button" onClick={clearPaymentReferenceSearch} className="min-h-11 rounded-xl border border-[#2D2E30]/15 bg-white px-4 text-sm font-bold text-[#2D2E30] transition hover:bg-[#FFF4D8]">Clear</button> : null}
+        </form>
+
         <div className="mt-5 inline-flex w-full rounded-xl border border-[#2D2E30]/10 bg-white p-1 shadow-sm sm:w-auto">
           <button
             onClick={() => setActiveTab('review')}
@@ -236,6 +275,12 @@ function ReviewPayment() {
       {deepLinkMessage ? (
         <div role="status" className="mb-6 rounded-xl border border-[#E58C1A]/20 bg-[#FFF9EA] px-4 py-3 text-sm text-[#765F55]">
           {deepLinkMessage}
+        </div>
+      ) : null}
+
+      {referenceSearchMessage ? (
+        <div role="status" className="mb-6 rounded-xl border border-[#E58C1A]/20 bg-[#FFF9EA] px-4 py-3 text-sm text-[#765F55]">
+          {referenceSearchMessage}
         </div>
       ) : null}
 

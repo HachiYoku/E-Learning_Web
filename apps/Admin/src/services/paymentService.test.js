@@ -55,3 +55,8 @@ test('historical review prefers saved course and financial snapshots', () => {
   assert.equal(normalized.discountAmount, 10000)
   assert.equal(normalized.promoCode, 'SAVE10')
 })
+
+test('payment normalization preserves a Payment Reference and safely omits a legacy one', () => {
+  assert.equal(normalizePayment(payment({ paymentReference: 'PAY-7KQ4M9DX' })).paymentReference, 'PAY-7KQ4M9DX')
+  assert.equal(normalizePayment(payment()).paymentReference, '')
+})

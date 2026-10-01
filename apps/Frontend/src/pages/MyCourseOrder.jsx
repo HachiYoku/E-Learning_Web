@@ -88,6 +88,7 @@ function MyCourseOrder() {
                       </div>
                       <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-[#765F55]">{course?.description}</p>
                       <p className="mt-2 text-xs text-[#765F55]">{payment.paymentMethod ? `${payment.paymentMethod.name} · ${payment.paymentMethod.type}` : 'Legacy payment method details unavailable'}</p>
+                      {payment.paymentReference ? <p className="mt-2 text-xs text-[#765F55]"><span className="font-semibold text-[#2D2E30]">Payment Reference:</span> {payment.paymentReference}</p> : null}
 
                       <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#2D2E30]/10 pt-3">
                         <p className="min-w-0 text-xs text-[#765F55]"><span className="font-bold text-[#2D2E30]">{status.detail}</span><span className="hidden sm:inline"> · Submitted {new Date(payment.createdAt).toLocaleDateString()}</span></p>

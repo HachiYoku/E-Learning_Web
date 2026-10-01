@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { PAYMENT_REFERENCE_PATTERN, createPaymentReference } = require("../services/paymentReference");
 
 const paymentRecipientSnapshotSchema = new mongoose.Schema({
   accountName: { type: String, trim: true, default: "" },
@@ -68,6 +69,16 @@ const paymentSchema = new mongoose.Schema(
       ref: "Course",
       required: true,
       index: true,
+    },
+    // A human-facing opaque identifier. Existing rows predate it and remain
+    // readable; every newly-created Payment receives it before validation.
+    paymentReference: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      immutable: true,
+      match: PAYMENT_REFERENCE_PATTERN,
+      required: function requirePaymentReferenceForNewPayments() { return this.isNew; },
     },
     // Retains the purchase description for order history if the course is
     // later removed from the catalogue.
@@ -154,6 +165,7 @@ const paymentSchema = new mongoose.Schema(
 );
 
 paymentSchema.pre("validate", function validatePaymentMethodSnapshot() {
+  if (this.isNew && !this.paymentReference) this.paymentReference = createPaymentReference();
   const snapshot = this.paymentMethodSnapshot;
   if (!snapshot) return; // Existing pre-migration rows remain readable.
   if (snapshot.kind === "legacy") {
@@ -173,5 +185,9 @@ paymentSchema.pre("validate", function validatePaymentMethodSnapshot() {
 });
 
 paymentSchema.index({ userId: 1, courseId: 1 }, { unique: true, partialFilterExpression: { status: "pending" } });
+paymentSchema.index(
+  { paymentReference: 1 },
+  { unique: true, partialFilterExpression: { paymentReference: { $type: "string" } } },
+);
 
 module.exports = mongoose.model("Payment", paymentSchema);
