@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PaymentCard from '../../components/PaymentCard'
 import { X } from 'lucide-react'
 import { approvePayment, fetchAllPayments, rejectPayment } from '../../services/paymentService'
+import { resolveReviewPaymentDeepLink } from './reviewPaymentDeepLink'
 
 function ReviewPayment() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -20,6 +23,9 @@ function ReviewPayment() {
   const [denyAdminPassword, setDenyAdminPassword] = useState('')
   const [denyError, setDenyError] = useState('')
   const [denying, setDenying] = useState(false)
+  const [reviewPaymentId, setReviewPaymentId] = useState(null)
+  const [deepLinkMessage, setDeepLinkMessage] = useState('')
+  const deepLinkedPaymentId = searchParams.get('payment')
 
   useEffect(() => {
     async function loadPayments() {
@@ -41,6 +47,29 @@ function ReviewPayment() {
     if (tab === 'review') return 'pending'
     if (tab === 'denied') return 'rejected'
     return 'approved'
+  }
+
+  useEffect(() => {
+    if (loading || !deepLinkedPaymentId) return
+
+    const { payment, tab, message } = resolveReviewPaymentDeepLink(payments, deepLinkedPaymentId)
+    if (!payment) {
+      setReviewPaymentId(null)
+      setDeepLinkMessage(message)
+      return
+    }
+
+    setDeepLinkMessage('')
+    setActiveTab(tab)
+    setReviewPaymentId(payment.id)
+  }, [deepLinkedPaymentId, loading, payments])
+
+  const closeReview = () => {
+    setReviewPaymentId(null)
+    if (!deepLinkedPaymentId) return
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.delete('payment')
+    setSearchParams(nextSearchParams, { replace: true })
   }
 
   const handleApproveClick = (paymentId) => {
@@ -177,6 +206,12 @@ function ReviewPayment() {
         </div>
       ) : null}
 
+      {deepLinkMessage ? (
+        <div role="status" className="mb-6 rounded-xl border border-[#E58C1A]/20 bg-[#FFF9EA] px-4 py-3 text-sm text-[#765F55]">
+          {deepLinkMessage}
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="rounded-2xl border border-[#2D2E30]/10 bg-white p-10 text-center text-[#765F55] shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]">
           Loading payments...
@@ -191,6 +226,9 @@ function ReviewPayment() {
                 status={activeTab}
                 onApprove={handleApproveClick}
                 onDeny={handleDenyClick}
+                isReviewOpen={reviewPaymentId === payment.id}
+                onOpenReview={setReviewPaymentId}
+                onCloseReview={closeReview}
               />
             ))}
           </div>

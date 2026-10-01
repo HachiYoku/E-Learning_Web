@@ -1,4 +1,5 @@
 import { clearToken, getToken, setToken } from "./tokenStorage";
+import { saveAdminReturnDestination } from "../utils/adminReturnDestination";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -71,6 +72,7 @@ async function request(path, options = {}) {
       }
     }
     if (response.status === 401) {
+      saveAdminReturnDestination();
       clearToken();
       window.dispatchEvent(
         new CustomEvent(SESSION_EXPIRED_EVENT, {
@@ -81,6 +83,7 @@ async function request(path, options = {}) {
       );
     }
     if (response.status === 403 && data?.message === "Admin access only") {
+      saveAdminReturnDestination();
       clearToken();
       window.dispatchEvent(
         new CustomEvent(SESSION_EXPIRED_EVENT, {
