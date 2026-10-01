@@ -37,7 +37,7 @@ export function normalizeBlog(blog) {
     content: blog.content || "",
     excerpt: buildExcerpt(blog.content),
     image: blog.image || "",
-    authorName: blog.createdBy?.name || "English Kafe",
+    authorName: blog.createdBy?.name || "Arun Thai Language Center",
     date: formatDate(blog.createdAt),
   };
 }
