@@ -10,6 +10,7 @@ export default defineConfig({
     include: [
       'src/components/KeyVocabularyEditor.test.jsx',
       'src/components/Avatar.test.jsx',
+      'src/components/PaymentCard.test.jsx',
       'src/pages/CourseManagement/lessonVocabularyForms.test.jsx',
       'src/services/lessonService.test.js',
       'src/services/userService.test.js',
