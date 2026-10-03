@@ -5,11 +5,12 @@ const PromoRedemption = require("../models/promoRedemptionModel");
 const PromoCode = require("../models/promoCodeModel");
 const PaymentProofCleanup = require("../models/paymentProofCleanupModel");
 const PaymentProofRetentionCleanup = require("../models/paymentProofRetentionCleanupModel");
+const ReceiptDelivery = require("../models/receiptDeliveryModel");
 const { paymentTransaction } = require("./paymentTransaction");
 const { addCalendarMonths } = require("./paymentProofRetention");
 
 const TERMINAL = ["approved", "rejected"];
-const FINAL_CLAIM_FIELDS = "+proofRetentionHold +proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim +paymentFinalDeletionClaim +paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage";
+const FINAL_CLAIM_FIELDS = "+proofRetentionHold +proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim +paymentFinalDeletionClaim +receiptEmailReservation +paymentImage +paymentImagePublicId +paymentProofPublicId +paymentProofFormat +paymentProofStorage";
 
 const addCalendarYears = (date, years) => addCalendarMonths(date, years * 12);
 const deadline = (payment) => payment?.createdAt && TERMINAL.includes(payment.status) ? addCalendarYears(payment.createdAt, 7) : null;
@@ -19,6 +20,12 @@ const noCurrentProof = {
   paymentImagePublicId: { $in: [null, ""] },
   paymentImage: { $in: [null, ""] },
 };
+const receiptReservationAvailable = (now = new Date()) => ({
+  $or: [
+    { "receiptEmailReservation.token": { $exists: false } },
+    { "receiptEmailReservation.state": "rendering", "receiptEmailReservation.renderDeadlineAt": { $lte: now } },
+  ],
+});
 const availableClaim = {
   "proofRetentionHold.active": { $ne: true },
   "proofRetentionCleanupClaim.token": { $exists: false },
@@ -40,7 +47,7 @@ async function releaseClaim(paymentId, token) {
 async function acquireClaim(payment, now) {
   const token = randomUUID();
   const claimed = await Payment.findOneAndUpdate(
-    { _id: payment._id, status: { $in: TERMINAL }, createdAt: payment.createdAt, ...availableClaim },
+    { _id: payment._id, status: { $in: TERMINAL }, createdAt: payment.createdAt, ...availableClaim, ...receiptReservationAvailable(now) },
     { $set: { paymentFinalDeletionClaim: { token, claimedAt: now } } },
     { returnDocument: "after" },
   ).select(FINAL_CLAIM_FIELDS).read("primary").readConcern("majority");
@@ -72,7 +79,7 @@ async function legacyProofCleanupExists(payment, session) {
 async function deleteClaimedPayment(claim, { now = new Date(), forceFailure = false } = {}) {
   try {
     const outcome = await paymentTransaction(async (session) => {
-      const payment = await Payment.findOne({ _id: claim.payment._id, status: { $in: TERMINAL }, "paymentFinalDeletionClaim.token": claim.token, ...claimedEligibility }).select(FINAL_CLAIM_FIELDS).session(session);
+      const payment = await Payment.findOne({ _id: claim.payment._id, status: { $in: TERMINAL }, "paymentFinalDeletionClaim.token": claim.token, ...claimedEligibility, ...receiptReservationAvailable(now) }).select(FINAL_CLAIM_FIELDS).session(session);
       if (!payment || !retentionEligible(payment, now)) return { preserved: true, reason: "eligibility_changed" };
       if (await PaymentProofRetentionCleanup.exists({ paymentId: payment._id }).session(session)) return { preserved: true, reason: "proof_retention_cleanup_pending" };
       if (await legacyProofCleanupExists(payment, session)) return { preserved: true, reason: "legacy_proof_cleanup_pending" };
@@ -81,6 +88,7 @@ async function deleteClaimedPayment(claim, { now = new Date(), forceFailure = fa
       // paymentId is informational only; entitlement is the Enrollment itself.
       await Enrollment.updateMany({ paymentId: payment._id }, { $unset: { paymentId: 1 } }, { session });
       if (relation.redemption) await PromoRedemption.deleteOne({ _id: relation.redemption._id, paymentId: payment._id }, { session });
+      await ReceiptDelivery.deleteMany({ paymentId: payment._id }).session(session);
       if (forceFailure) throw new Error("forced final-retention transaction failure");
       const removed = await Payment.deleteOne({ _id: payment._id, "paymentFinalDeletionClaim.token": claim.token }, { session });
       if (removed.deletedCount !== 1) throw new Error("final payment deletion lost its claim");
@@ -112,6 +120,8 @@ async function inspectExpiredPayments({ limit = 50, now = new Date() } = {}) {
     else if (!deadline(payment) || deadline(payment) > now) reason = "too_young";
     else if (payment.proofRetentionHold?.active) reason = "active_hold";
     else if (payment.proofRetentionCleanupClaim?.token || payment.paymentMethodSnapshotMinimizationClaim?.token || payment.paymentFinalDeletionClaim?.token) reason = "conflicting_claim";
+    else if (payment.receiptEmailReservation
+      && !(payment.receiptEmailReservation.state === "rendering" && payment.receiptEmailReservation.renderDeadlineAt <= now)) reason = "receipt_reservation_active";
     else if (payment.paymentProofPublicId || payment.paymentImagePublicId || payment.paymentImage) reason = "proof_dependency";
     else if (await PaymentProofRetentionCleanup.exists({ paymentId: payment._id })) reason = "proof_cleanup_dependency";
     else {
