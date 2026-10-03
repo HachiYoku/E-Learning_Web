@@ -77,6 +77,23 @@ test("student receipt business restrictions return safe, recognizable API states
   }
 });
 
+test("student receipt renderer failures remain generic to the browser", async () => {
+  const loaded = loadController({
+    selfServiceReceipt: async () => {
+      throw new Error("Chromium executable at /private/student@example.com/receipt.pdf is unavailable");
+    },
+  });
+  try {
+    const res = response();
+    await loaded.controller.emailMyReceipt({ params: { paymentId: "payment-one" }, user: { id: "student-one", role: "user" } }, res);
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(res.body, { message: "Receipt is temporarily unavailable. Please try again or contact support." });
+    assert.doesNotMatch(res.body.message, /Chromium|student@example\.com|receipt\.pdf/);
+  } finally {
+    loaded.restore();
+  }
+});
+
 test("admin receipt PDF generation returns only an in-memory attachment and writes the minimal audit event", async () => {
   const auditEvents = [];
   const originalCreate = AuditLog.create;

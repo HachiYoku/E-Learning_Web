@@ -137,6 +137,22 @@ test("provider failure creates no delivery record and releases the self-service 
   require.cache[emailPath].exports = originalEmail;
 });
 
+test("approval receipt rendering failure releases its reservation and remains non-blocking", async () => {
+  const record = paymentRecord();
+  const updates = [];
+  const service = loadService(async () => { throw new Error("synthetic renderer failure"); });
+  mock.method(Payment, "findOneAndUpdate", () => ({ select: async () => record }));
+  mock.method(Payment, "findOne", () => chain(record));
+  mock.method(User, "findById", () => ({ select: () => ({ lean: async () => ({ name: "Aye Aye", email: "aye@example.com" }) }) }));
+  mock.method(ReceiptDelivery, "countDocuments", async () => 0);
+  mock.method(Payment, "updateOne", async (query, update) => { updates.push({ query, update }); });
+
+  const prepared = await service.prepareApprovalReceipt(record);
+
+  assert.equal(prepared, null);
+  assert.ok(updates.some(({ update }) => update.$unset?.receiptEmailReservation === 1));
+});
+
 test("a reservation that has passed its rendering deadline cannot cross the provider-send boundary", async () => {
   const service = loadService();
   const update = mock.method(Payment, "findOneAndUpdate", async () => null);
