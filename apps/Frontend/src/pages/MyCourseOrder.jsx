@@ -1,16 +1,40 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CircleCheck, Clock3, FileSearch, ReceiptText, XCircle } from 'lucide-react'
+import { CircleCheck, Clock3, FileSearch, Hourglass, ReceiptText, Send, XCircle } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { fetchMyPayments } from '../services/paymentService'
+import { emailPaymentReceipt, fetchMyPayments } from '../services/paymentService'
 
 function MyCourseOrder() {
   const navigate = useNavigate()
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [receiptPayment, setReceiptPayment] = useState(null)
+  const [receiptState, setReceiptState] = useState('')
+  const [receiptMessage, setReceiptMessage] = useState('')
+
+  const receiptErrorMessage = (sendError) => ({
+    receipt_limit_reached: 'Receipt email limit reached. Contact support if you need another copy.',
+    receipt_processing: 'A receipt request is already being processed. Please try again shortly.',
+    receipt_temporarily_unavailable: 'Receipt is temporarily unavailable. Please try again or contact support.',
+    receipt_uncertain: 'Receipt delivery is temporarily being confirmed. Please contact support before trying again.',
+  }[sendError?.code] || sendError?.message || 'Receipt is temporarily unavailable. Please contact support if you need help.')
+
+  const sendReceipt = async () => {
+    if (!receiptPayment) return
+    setReceiptState('sending')
+    setReceiptMessage('')
+    try {
+      await emailPaymentReceipt(receiptPayment.id)
+      setReceiptState('success')
+      setReceiptMessage('')
+    } catch (sendError) {
+      setReceiptState(sendError?.code === 'receipt_limit_reached' ? 'limit' : sendError?.code === 'receipt_uncertain' ? 'uncertain' : 'failure')
+      setReceiptMessage(receiptErrorMessage(sendError))
+    }
+  }
 
   useEffect(() => {
     async function loadPayments() {
@@ -89,6 +113,7 @@ function MyCourseOrder() {
                       <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-[#765F55]">{course?.description}</p>
                       <p className="mt-2 text-xs text-[#765F55]">{payment.paymentMethod ? `${payment.paymentMethod.name} · ${payment.paymentMethod.type}` : 'Legacy payment method details unavailable'}</p>
                       {payment.paymentReference ? <p className="mt-2 text-xs text-[#765F55]"><span className="font-semibold text-[#2D2E30]">Payment Reference:</span> {payment.paymentReference}</p> : null}
+                      {payment.status === 'approved' && payment.paymentReference ? <div className="mt-3"><button type="button" onClick={() => { setReceiptPayment(payment); setReceiptState('confirm'); setReceiptMessage('') }} className="rounded-lg border border-[#2D2E30]/15 bg-white px-3 py-2 text-xs font-bold text-[#2D2E30] transition hover:border-[#E58C1A] hover:bg-[#FFF4D8]">Email receipt</button></div> : null}
 
                       <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#2D2E30]/10 pt-3">
                         <p className="min-w-0 text-xs text-[#765F55]"><span className="font-bold text-[#2D2E30]">{status.detail}</span><span className="hidden sm:inline"> · Submitted {new Date(payment.createdAt).toLocaleDateString()}</span></p>
@@ -111,6 +136,7 @@ function MyCourseOrder() {
         </div>
       </main>
 
+      {receiptPayment ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D2E30]/60 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-labelledby="receipt-dialog-title" className="w-full max-w-md overflow-hidden rounded-[1.75rem] border border-[#E58C1A]/20 bg-[#FFFDF8] shadow-[0_28px_80px_-24px_rgba(45,46,48,0.55)]"><div className="border-b border-[#E58C1A]/15 bg-[#FFF4D8] px-6 py-5"><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112]">Payment receipt</p><h2 id="receipt-dialog-title" className="mt-1 text-xl font-bold tracking-tight text-[#2D2E30]">{receiptState === 'sending' ? 'Sending your receipt…' : receiptState === 'success' ? 'Receipt sent' : receiptState === 'limit' ? 'Receipt email limit reached' : receiptState === 'uncertain' ? 'Receipt delivery being confirmed' : receiptState === 'failure' ? 'Receipt temporarily unavailable' : 'Email payment receipt?'}</h2></div><div className="px-6 py-6">{receiptState === 'sending' ? <div className="flex flex-col items-center py-3 text-center"><div className="mb-4 rounded-2xl bg-[#FFF4D8] p-4 text-[#C97112]"><Hourglass className="h-8 w-8 animate-[spin_1.6s_ease-in-out_infinite] motion-reduce:animate-none" aria-hidden="true" /></div><p className="text-sm leading-6 text-[#765F55]">We’re generating your payment receipt and sending it to your registered email.</p></div> : receiptState === 'success' ? <div className="text-center"><CircleCheck className="mx-auto mb-4 h-10 w-10 text-[#4D7C57]" aria-hidden="true" /><p className="text-sm leading-6 text-[#765F55]">Your payment receipt has been sent to your registered email address.</p></div> : receiptState === 'limit' || receiptState === 'uncertain' ? <div className="text-center"><ReceiptText className="mx-auto mb-4 h-10 w-10 text-[#C97112]" aria-hidden="true" /><p className="text-sm leading-6 text-[#765F55]">{receiptMessage}</p></div> : <p className="text-sm leading-6 text-[#765F55]">{receiptState === 'failure' ? receiptMessage : 'We’ll generate your payment receipt and send it to your registered email address. A limited number of copies are available through self-service; contact support if you need more.'}</p>}<div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">{receiptState === 'confirm' ? <><button type="button" onClick={() => setReceiptPayment(null)} className="rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-2.5 text-sm font-bold text-[#2D2E30]">Cancel</button><button type="button" onClick={sendReceipt} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#E58C1A]"><Send className="h-4 w-4" aria-hidden="true" />Send receipt</button></> : null}{receiptState === 'success' ? <button type="button" onClick={() => setReceiptPayment(null)} className="rounded-xl bg-[#2D2E30] px-5 py-2.5 text-sm font-bold text-white">Close</button> : null}{receiptState === 'limit' || receiptState === 'uncertain' ? <><button type="button" onClick={() => setReceiptPayment(null)} className="rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-2.5 text-sm font-bold text-[#2D2E30]">Close</button><button type="button" onClick={() => navigate('/app/support')} className="rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white">Contact support</button></> : null}{receiptState === 'failure' ? <><button type="button" onClick={() => setReceiptPayment(null)} className="rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-2.5 text-sm font-bold text-[#2D2E30]">Close</button><button type="button" onClick={() => { setReceiptState('confirm'); setReceiptMessage('') }} className="rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white">Try again</button></> : null}</div></div></section></div> : null}
       <Footer />
     </div>
   )

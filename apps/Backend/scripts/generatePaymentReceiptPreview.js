@@ -1,10 +1,10 @@
 const fs = require('fs');
 const path = require('path');
-const { renderBrowserReceiptPrototype } = require('../services/paymentReceiptBrowserPrototype');
+const { renderPaymentReceipt } = require('../services/paymentReceiptRenderer');
 
 // DEVELOPMENT ONLY: fixed fake values. This script does not connect to any
 // application service, database, Cloudinary account, or email provider.
-const OUTPUT_DIRECTORY = path.join('/private/tmp', 'arun-thai-payment-receipt-browser-prototype');
+const OUTPUT_DIRECTORY = path.join('/private/tmp', 'arun-thai-payment-receipt-preview');
 
 const SAMPLE_RECEIPTS = Object.freeze({
   'thb-discounted': {
@@ -52,7 +52,7 @@ const SAMPLE_RECEIPTS = Object.freeze({
 async function main() {
   fs.mkdirSync(OUTPUT_DIRECTORY, { recursive: true });
   for (const [name, receipt] of Object.entries(SAMPLE_RECEIPTS)) {
-    const result = await renderBrowserReceiptPrototype(receipt);
+    const result = await renderPaymentReceipt(receipt);
     const pdfPath = path.join(OUTPUT_DIRECTORY, `${name}.pdf`);
     const pngPath = path.join(OUTPUT_DIRECTORY, `${name}.png`);
     fs.writeFileSync(pdfPath, result.pdfBuffer);
@@ -62,7 +62,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Development browser receipt prototype generation failed:', error);
+  console.error('Payment receipt preview generation failed:', error);
   process.exitCode = 1;
 });
 

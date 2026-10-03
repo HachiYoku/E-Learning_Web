@@ -1,7 +1,7 @@
 import { ArrowRight, CreditCard, Loader2, Maximize2, RotateCcw, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
-import { fetchPaymentProofBlob, formatPaymentAmount } from '../services/paymentService'
+import { fetchPaymentProofBlob, fetchReceiptPdf, formatPaymentAmount } from '../services/paymentService'
 
 function Detail({ label, children, full = false }) {
   return (
@@ -48,6 +48,8 @@ export default function PaymentCard({ payment, onApprove, onDeny, status = 'revi
   const [proofUrl, setProofUrl] = useState('')
   const [proofError, setProofError] = useState('')
   const [loadingProof, setLoadingProof] = useState(false)
+  const [generatingReceipt, setGeneratingReceipt] = useState(false)
+  const [receiptError, setReceiptError] = useState('')
   const isApproved = status === 'approved'
   const isDenied = status === 'denied'
   const reviewOpen = isReviewOpen || localReviewOpen
@@ -97,6 +99,22 @@ export default function PaymentCard({ payment, onApprove, onDeny, status = 'revi
     onCloseReview?.()
   }
 
+  const generateReceipt = async () => {
+    setGeneratingReceipt(true)
+    setReceiptError('')
+    try {
+      const blob = await fetchReceiptPdf(payment.id)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `Arun-Thai-Payment-Receipt-${payment.paymentReference}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setReceiptError(error?.message || 'Unable to generate receipt. Please try again.')
+    } finally { setGeneratingReceipt(false) }
+  }
+
   return (
     <>
       <article className="overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_14px_30px_-24px_rgba(45,46,48,0.45)]">
@@ -126,6 +144,7 @@ export default function PaymentCard({ payment, onApprove, onDeny, status = 'revi
                 <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2"><Detail label="Learner">{payment.userName}</Detail><Detail label="Email">{payment.userEmail || '—'}</Detail>{payment.paymentReference ? <Detail label="Payment Reference" full><span className="font-mono">{payment.paymentReference}</span></Detail> : null}<Detail label="Course" full>{payment.courseName}</Detail><Detail label="Payment method">{payment.paymentMethod}{payment.paymentMethodType ? ` · ${payment.paymentMethodType}` : ''}</Detail><Detail label="Currency">{payment.currency}</Detail><Detail label="Submitted">{payment.date || '—'}</Detail>{payment.promoCode ? <Detail label="Promo"><span className="font-bold text-[#C97112]">{payment.promoCode}</span></Detail> : null}</dl>
                 {isDenied && payment.denialReason ? <div className="mt-4 rounded-xl border-l-4 border-[#D78A86] bg-[#FFF0EE] px-4 py-3 text-sm leading-6 text-[#7D514C]"><p className="font-bold text-[#8E4039]">Reason from our team</p><p className="mt-1">{payment.denialReason}</p></div> : null}
                 <div className="mt-4 rounded-xl bg-[#2D2E30] px-4 py-3 text-white"><div className="space-y-1.5 text-sm text-white/75">{payment.originalAmountValue !== payment.amountValue ? <div className="flex justify-between gap-4"><span>Original amount</span><span>{formatPaymentAmount(payment.originalAmountValue, payment.currency)}</span></div> : null}{payment.discountAmount > 0 ? <div className="flex justify-between gap-4"><span>Discount</span><span>-{formatPaymentAmount(payment.discountAmount, payment.currency)}</span></div> : null}</div><div className="mt-2 flex items-end justify-between border-t border-white/15 pt-2"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Amount paid</p><strong className="text-xl text-[#FFD37F]">{payment.amount}</strong></div></div>
+                {isApproved && payment.paymentReference ? <div className="mt-4"><button type="button" onClick={generateReceipt} disabled={generatingReceipt} className="rounded-xl border border-[#2D2E30]/15 bg-[#FFF9EA] px-4 py-2.5 text-sm font-bold text-[#2D2E30] hover:bg-[#FFF4D8] disabled:opacity-60">{generatingReceipt ? 'Generating receipt…' : 'Generate receipt PDF'}</button>{receiptError ? <p className="mt-2 text-xs font-semibold text-[#A34D45]">{receiptError}</p> : null}</div> : null}
               </div>
             </div>
 

@@ -2,8 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
-// DEVELOPMENT ONLY: a renderer comparison. It has no database, payment-flow,
-// email, Cloudinary, or UI dependency and accepts only fake receipt data.
+// The renderer accepts a deliberately minimal, server-derived receipt DTO.
+// It never reads from MongoDB or external services and returns an in-memory PDF.
 const ASSET_DIRECTORY = path.join(__dirname, '..', 'assets');
 const FONT_PATH = path.join(ASSET_DIRECTORY, 'fonts', 'NotoSansMyanmar-Regular.ttf');
 const LOGO_PATH = path.join(ASSET_DIRECTORY, 'branding', 'Arun-thai-web-logo.png');
@@ -15,7 +15,7 @@ const RECEIPT_COPY = Object.freeze({
   approvedEn: 'Payment Approved',
   studentMy: 'သင်တန်းသား အမည်',
   studentEn: 'Student',
-  courseMy: 'သင်တန်း ခေါင်းစဉ်',
+  courseMy: 'သင်တန်း',
   courseEn: 'Course',
   originalPriceMy: 'မူရင်း စျေးနှုန်း',
   originalPriceEn: 'Original Price',
@@ -116,10 +116,9 @@ function formatAmount(value, currency) {
 }
 
 function buildPaymentRows(receipt) {
-  const rows = [
-    [RECEIPT_COPY.originalPriceMy, RECEIPT_COPY.originalPriceEn, formatAmount(receipt.originalAmount, receipt.currency)],
-  ];
+  const rows = [];
   if (receipt.discountAmount > 0) {
+    rows.push([RECEIPT_COPY.originalPriceMy, RECEIPT_COPY.originalPriceEn, formatAmount(receipt.originalAmount, receipt.currency)]);
     rows.push([RECEIPT_COPY.discountMy, RECEIPT_COPY.discountEn, `-${formatAmount(receipt.discountAmount, receipt.currency)}`]);
   }
   rows.push([RECEIPT_COPY.amountPaidMy, RECEIPT_COPY.amountPaidEn, formatAmount(receipt.amount, receipt.currency)]);
@@ -264,10 +263,10 @@ function pageCount(pdfBuffer) {
   return (pdfBuffer.toString('latin1').match(/\/Type \/Page\b/g) || []).length;
 }
 
-async function renderBrowserReceiptPrototype(receipt, options = {}) {
+async function renderPaymentReceipt(receipt, options = {}) {
   validateReceiptInput(receipt);
   if (!fs.existsSync(FONT_PATH) || !fs.existsSync(LOGO_PATH)) {
-    throw new Error('Receipt browser prototype assets are missing.');
+    throw new Error('Receipt renderer assets are missing.');
   }
 
   const launchStartedAt = process.hrtime.bigint();
@@ -328,6 +327,6 @@ module.exports = {
   formatReceiptDate,
   isExternalNetworkUrl,
   pageCount,
-  renderBrowserReceiptPrototype,
+  renderPaymentReceipt,
   validateReceiptInput,
 };

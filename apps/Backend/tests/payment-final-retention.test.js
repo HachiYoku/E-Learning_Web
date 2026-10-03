@@ -16,6 +16,7 @@ const PaymentProofRetentionCleanup = require("../models/paymentProofRetentionCle
 const User = require("../models/userModel");
 const Course = require("../models/courseModel");
 const PaymentMethod = require("../models/paymentMethodModel");
+const ReceiptDelivery = require("../models/receiptDeliveryModel");
 const { getMyEnrollments, checkEnrollment } = require("../controllers/enrollmentController");
 const { openPaymentProofRetentionHold } = require("../controllers/paymentController");
 const { addCalendarYears, retentionEligible, acquireClaim, deleteClaimedPayment, processExpiredPayments, recoverStaleFinalDeletionClaims } = require("../services/paymentFinalRetention");
@@ -30,7 +31,7 @@ async function payment(fields = {}) {
   const createdAt = fields.createdAt || old();
   const item = await Payment.create({ userId: fields.userId || student._id, courseId: fields.courseId || course._id, amount: 100, status: fields.status || "approved", ...fields });
   await Payment.collection.updateOne({ _id: item._id }, { $set: { createdAt, updatedAt: createdAt } });
-  return Payment.findById(item._id).select("+proofRetentionHold +proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim +paymentFinalDeletionClaim +paymentProofPublicId +paymentImagePublicId +paymentImage");
+  return Payment.findById(item._id).select("+proofRetentionHold +proofRetentionCleanupClaim +paymentMethodSnapshotMinimizationClaim +paymentFinalDeletionClaim +receiptEmailReservation +paymentProofPublicId +paymentImagePublicId +paymentImage");
 }
 async function validPromoPayment(extra = {}) {
   const promo = await PromoCode.create({ code: `OLD-${Math.random().toString(16).slice(2, 8)}`, discountType: "percent", discountValue: 10 });
@@ -47,7 +48,7 @@ before(async () => {
   await initiateReplicaSet(port); await mongoose.connect(`mongodb://127.0.0.1:${port}/payment_final_retention?replicaSet=paymentTests`);
 });
 beforeEach(async () => {
-  await Promise.all([Payment.deleteMany({}), Enrollment.deleteMany({}), PromoRedemption.deleteMany({}), PromoCode.deleteMany({}), PaymentProofCleanup.deleteMany({}), PaymentProofRetentionCleanup.deleteMany({}), PaymentMethod.deleteMany({}), Course.deleteMany({}), User.deleteMany({})]);
+  await Promise.all([Payment.deleteMany({}), Enrollment.deleteMany({}), PromoRedemption.deleteMany({}), PromoCode.deleteMany({}), PaymentProofCleanup.deleteMany({}), PaymentProofRetentionCleanup.deleteMany({}), ReceiptDelivery.deleteMany({}), PaymentMethod.deleteMany({}), Course.deleteMany({}), User.deleteMany({})]);
   admin = await User.create({ name: "Reviewer", email: `reviewer-${Math.random()}@test.local`, password: "test", role: "admin", isActive: true, isVerified: true });
   student = await User.create({ name: "Student", email: `student-${Math.random()}@test.local`, password: "test", isActive: true, isVerified: true });
   course = await Course.create({ title: "Retained course", price: 100, createdBy: admin._id });
@@ -74,12 +75,14 @@ test("uses seven calendar years and preserves younger, pending, and held payment
 
 test("deletes terminal Payment and valid redemption atomically while unsetting every enrollment relationship", async () => {
   const { payment: record, redemption } = await validPromoPayment();
+  await ReceiptDelivery.create({ paymentId: record._id, deliveryType: "approval" });
   const otherStudent = await User.create({ name: "Other", email: `other-${Math.random()}@test.local`, password: "test", isActive: true, isVerified: true });
   const otherCourse = await Course.create({ title: "Other course", price: 100, createdBy: admin._id });
   const first = await Enrollment.create({ userId: student._id, courseId: course._id, paymentId: record._id, completedLessonIds: [oid()], lastOpenedAt: new Date("2024-01-01") });
   const second = await Enrollment.create({ userId: otherStudent._id, courseId: otherCourse._id, paymentId: record._id });
   await processExpiredPayments();
   assert.equal(await Payment.exists({ _id: record._id }), null); assert.equal(await PromoRedemption.exists({ _id: redemption._id }), null);
+  assert.equal(await ReceiptDelivery.exists({ paymentId: record._id }), null);
   const savedFirst = await Enrollment.findById(first._id); const savedSecond = await Enrollment.findById(second._id);
   assert.equal(savedFirst.paymentId, undefined); assert.equal(savedSecond.paymentId, undefined);
   assert.equal(savedFirst.completedLessonIds.length, 1); assert.equal(savedFirst.lastOpenedAt.toISOString(), "2024-01-01T00:00:00.000Z");
@@ -111,6 +114,21 @@ test("conservatively preserves inconsistent redemption records and proof/claim d
   const claimed = await payment({ proofRetentionCleanupClaim: { token: "proof", publicId: "x", storage: "authenticated", claimedAt: new Date(), expiresAt: new Date(Date.now() + 60000) } });
   const minimized = await payment({ paymentMethodSnapshotMinimizationClaim: { token: "snapshot", claimedAt: new Date(), expiresAt: new Date(Date.now() + 60000) } });
   await processExpiredPayments(); assert.ok(await Payment.exists({ _id: claimed._id })); assert.ok(await Payment.exists({ _id: minimized._id }));
+});
+
+test("active and unresolved receipt reservations defer final deletion until safely resolved", async () => {
+  const now = new Date("2027-02-28T12:00:00.000Z");
+  const record = await payment({ receiptEmailReservation: {
+    token: "receipt-send", deliveryType: "self_service", state: "uncertain",
+    startedAt: new Date("2027-02-28T11:00:00.000Z"),
+  } });
+  const deferred = await processExpiredPayments({ now });
+  assert.equal(deferred[0].reason, "claim_unavailable");
+  assert.ok(await Payment.exists({ _id: record._id }));
+
+  await Payment.updateOne({ _id: record._id }, { $unset: { receiptEmailReservation: 1 } });
+  await processExpiredPayments({ now });
+  assert.equal(await Payment.exists({ _id: record._id }), null);
 });
 
 test("only one worker owns deletion, normal workers do not steal claims, and repeated runs are idempotent", async () => {

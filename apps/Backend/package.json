@@ -22,8 +22,8 @@
     "test:multi-currency-data-models": "node --test tests/multi-currency-data-models.test.js",
     "test:checkout-calculation": "node --test tests/checkout-calculation.test.js",
     "test:admin-multi-currency-management": "node --test tests/admin-multi-currency-management.test.js",
-    "test:payment-receipt-browser-prototype": "node --test tests/payment-receipt-browser-prototype.test.js",
-    "test:payment-receipt-render-smoke": "node --test tests/payment-receipt-render-smoke.test.js",
+    "test:payment-receipt-renderer": "node --test tests/payment-receipt-renderer.test.js",
+    "test:payment-receipt": "node --test tests/payment-receipt-renderer.test.js tests/payment-receipt-service.test.js tests/payment-receipt-controller.test.js tests/receipt-delivery.test.js",
     "payments:migrate-integrity": "node scripts/migratePaymentIntegrity.js",
     "payments:inspect-multi-currency": "node scripts/inspectMultiCurrencyPaymentReadiness.js",
     "payments:migrate-multi-currency-local": "node scripts/migrateMultiCurrencyPaymentLocal.js",
@@ -38,8 +38,7 @@
     "payments:minimize-snapshots": "node scripts/minimizePaymentMethodSnapshots.js",
     "payment-methods:cleanup-qrs": "node scripts/cleanupPaymentMethodQrs.js",
     "payments:cleanup-expired": "node scripts/cleanupExpiredPayments.js",
-    "receipts:browser-prototype": "node scripts/generatePaymentReceiptBrowserPrototype.js",
-    "receipts:render-smoke-server": "node scripts/receiptRenderSmokeServer.js"
+    "receipts:preview": "node scripts/generatePaymentReceiptPreview.js"
   },
   "author": "",
   "license": "ISC",

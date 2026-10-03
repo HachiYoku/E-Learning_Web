@@ -33,3 +33,5 @@ export async function approvePayment(paymentId, adminPassword) {
 export async function rejectPayment(paymentId, rejectionReasonCode, rejectionNote, adminPassword) {
   return apiClient.patch(`/payments/${paymentId}/reject`, { rejectionReasonCode, rejectionNote, adminPassword });
 }
+
+export const fetchReceiptPdf = (paymentId) => apiClient.getBlob(`/payments/${paymentId}/receipt-pdf`)

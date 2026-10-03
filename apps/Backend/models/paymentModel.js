@@ -55,6 +55,16 @@ const snapshotMinimizationClaimSchema = new mongoose.Schema({ token: { type: Str
 // Final financial-record deletion has no automatic lease recovery. A paused
 // destructive operation must be reconciled explicitly with writers stopped.
 const finalDeletionClaimSchema = new mongoose.Schema({ token: { type: String, required: true }, claimedAt: { type: Date, required: true } }, { _id: false });
+// Private receipt-send reservation. It contains no receipt or learner data:
+// it prevents concurrent sends and conservatively protects a lifetime slot
+// after an uncertain provider outcome.
+const receiptEmailReservationSchema = new mongoose.Schema({
+  token: { type: String, required: true },
+  deliveryType: { type: String, enum: ["approval", "self_service"], required: true },
+  state: { type: String, enum: ["rendering", "sending", "uncertain"], required: true },
+  startedAt: { type: Date, required: true },
+  renderDeadlineAt: { type: Date, default: null },
+}, { _id: false });
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -142,6 +152,7 @@ const paymentSchema = new mongoose.Schema(
     proofRetentionCleanupClaim: { type: proofRetentionCleanupClaimSchema, default: undefined, select: false },
     paymentMethodSnapshotMinimizationClaim: { type: snapshotMinimizationClaimSchema, default: undefined, select: false },
     paymentFinalDeletionClaim: { type: finalDeletionClaimSchema, default: undefined, select: false },
+    receiptEmailReservation: { type: receiptEmailReservationSchema, default: undefined, select: false },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],

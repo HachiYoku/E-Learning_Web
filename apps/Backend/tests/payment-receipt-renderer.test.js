@@ -7,9 +7,9 @@ const {
   createReceiptHtml,
   formatReceiptDate,
   isExternalNetworkUrl,
-  renderBrowserReceiptPrototype,
+  renderPaymentReceipt,
   validateReceiptInput,
-} = require('../services/paymentReceiptBrowserPrototype');
+} = require('../services/paymentReceiptRenderer');
 
 const primarySample = Object.freeze({
   studentName: 'Mg Mg Aung',
@@ -26,7 +26,7 @@ const primarySample = Object.freeze({
 });
 
 test('renders a local-font, one-page Chromium PDF buffer without external requests', async () => {
-  const result = await renderBrowserReceiptPrototype(primarySample);
+  const result = await renderPaymentReceipt(primarySample);
 
   assert.ok(Buffer.isBuffer(result.pdfBuffer));
   assert.ok(Buffer.isBuffer(result.pngBuffer));
@@ -43,7 +43,7 @@ test('identifies only HTTP(S) resources as external network requests', () => {
   assert.equal(isExternalNetworkUrl('about:blank'), false);
 });
 
-test('renders the MMK no-discount case without a zero Discount row', async () => {
+test('renders the MMK no-discount case with only the required Amount Paid row', async () => {
   const receipt = {
     ...primarySample,
     paymentReference: 'PAY-MMK9A7BC',
@@ -52,11 +52,10 @@ test('renders the MMK no-discount case without a zero Discount row', async () =>
     discountAmount: 0,
     amount: 185000,
   };
-  const result = await renderBrowserReceiptPrototype(receipt);
+  const result = await renderPaymentReceipt(receipt);
 
   assert.equal(result.pageCount, 1);
   assert.deepEqual(buildPaymentRows(receipt).map(([, english]) => english), [
-    RECEIPT_COPY.originalPriceEn,
     RECEIPT_COPY.amountPaidEn,
   ]);
 });
@@ -74,7 +73,7 @@ test('keeps the deterministic long-content stress sample to one A4 page', async 
     amount: 22500,
     paymentMethodName: 'KBZPay Mobile Banking',
   };
-  const result = await renderBrowserReceiptPrototype(receipt);
+  const result = await renderPaymentReceipt(receipt);
 
   assert.equal(result.pageCount, 1);
   assert.equal(result.fontLoaded, true);

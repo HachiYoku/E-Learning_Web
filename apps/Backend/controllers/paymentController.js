@@ -1,11 +1,12 @@
 const Payment = require("../models/paymentModel");
 const Enrollment = require("../models/enrollmentModel");
 const User = require("../models/userModel");
+const AuditLog = require("../models/auditLogModel");
 const bcrypt = require("bcryptjs");
 const { createNotification } = require("./notificationController");
 const { emitAdminEvent } = require("../realtime/socketServer");
 const sendEmail = require("../services/sendEmail");
-const { writeAuditLog } = require("../services/auditLogger");
+const { writeAuditLog, buildAuditLogEntry } = require("../services/auditLogger");
 const { submitManualPayment, reviewManualPayment } = require("../services/manualPayment");
 const { calculateCheckout, listAvailablePaymentMethods } = require("../services/checkoutCalculation");
 const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
@@ -14,6 +15,7 @@ const { PAYMENT_PROOF_ACCESS_TTL_SECONDS, issuePaymentProofAccessToken, verifyPa
 const { courseKey, deriveCoursePaymentStates } = require("../services/paymentCourseState");
 const { sendAdminPaymentReviewNotification } = require("../services/paymentReviewNotification");
 const { PAYMENT_REFERENCE_PATTERN, normalizePaymentReference } = require("../services/paymentReference");
+const { prepareApprovalReceipt, selfServiceReceipt, renderForPayment, finalizeAcceptedDelivery, releaseReservation, cancelReservation, preserveUncertainReservation } = require("../services/paymentReceiptService");
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -48,8 +50,8 @@ async function afterPaymentCommit(action) {
   try { await action(); } catch (_error) { console.error("Payment follow-up delivery failed after commit."); }
 }
 
-const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason, paymentReference }) => {
-  if (!user?.email) return;
+const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason, paymentReference, receiptAttachment = null }) => {
+  if (!user?.email) return false;
 
   const safeName = escapeHtml(user.name || "there");
   const safeCourseTitle = escapeHtml(courseTitle || "your course");
@@ -137,11 +139,8 @@ const sendPaymentReviewEmail = async ({ user, courseTitle, status, rejectReason,
       </body>
     </html>`;
 
-  try {
-    await sendEmail(user.email, subject, html);
-  } catch (error) {
-    console.warn(`Failed to send ${status} payment email to ${user.email}:`, error.message);
-  }
+  await sendEmail(user.email, subject, html, receiptAttachment ? [{ filename: receiptAttachment.filename, content: receiptAttachment.pdfBuffer }] : undefined);
+  return true;
 };
 
 const createPayment = async (req, res) => {
@@ -473,7 +472,18 @@ const reviewPayment = (status) => async (req, res) => {
     }));
     await afterPaymentCommit(async () => {
       const user = await User.findById(payment.userId).select("name email").lean();
-      await sendPaymentReviewEmail({ user, courseTitle: course?.title, status, paymentReference: payment.paymentReference, rejectReason: payment.rejectionReasonCode ? `${REJECTION_REASON_LABELS[payment.rejectionReasonCode]}${payment.rejectionNote ? ` ${payment.rejectionNote}` : ""}` : payment.rejectReason });
+      const preparedReceipt = status === "approved" ? await prepareApprovalReceipt(payment).catch(() => null) : null;
+      try {
+        const accepted = await sendPaymentReviewEmail({ user, courseTitle: course?.title, status, paymentReference: payment.paymentReference, receiptAttachment: preparedReceipt?.attachment, rejectReason: payment.rejectionReasonCode ? `${REJECTION_REASON_LABELS[payment.rejectionReasonCode]}${payment.rejectionNote ? ` ${payment.rejectionNote}` : ""}` : payment.rejectReason });
+        if (preparedReceipt && accepted) await finalizeAcceptedDelivery(preparedReceipt.reservation);
+        else if (preparedReceipt) await cancelReservation(preparedReceipt.reservation.paymentId, preparedReceipt.reservation.token);
+      } catch (error) {
+        if (preparedReceipt) {
+          if (error?.definitiveProviderFailure) await cancelReservation(preparedReceipt.reservation.paymentId, preparedReceipt.reservation.token);
+          else await preserveUncertainReservation(preparedReceipt.reservation.paymentId, preparedReceipt.reservation.token);
+        }
+        throw error;
+      }
     });
     return res.status(200).json({
       message: status === "approved" ? "Payment approved and enrollment created successfully" : "Payment rejected successfully",
@@ -485,6 +495,31 @@ const reviewPayment = (status) => async (req, res) => {
 };
 const approvePayment = reviewPayment("approved");
 const rejectPayment = reviewPayment("rejected");
+
+const emailMyReceipt = async (req, res) => {
+  if (req.user?.role !== "user") return res.status(403).json({ message: "Student access only" });
+  try {
+    const rendered = await selfServiceReceipt(req.params.paymentId, req.user.id);
+    return res.status(200).json({ message: "Receipt sent", paymentReference: rendered.payment.paymentReference });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      message: error.status ? error.message : "Receipt is temporarily unavailable. Please try again or contact support.",
+      ...(error.receiptCode ? { code: error.receiptCode } : {}),
+    });
+  }
+};
+
+const generateAdminReceiptPdf = async (req, res) => {
+  try {
+    const rendered = await renderForPayment(req.params.paymentId);
+    if (!rendered) return res.status(404).json({ message: "Approved payment receipt not found" });
+    await AuditLog.create(buildAuditLogEntry({ actorId: req.user.id, action: "payment_receipt_generated", targetType: "payment", targetId: rendered.payment._id }));
+    res.set({ "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename=\"${rendered.filename}\"`, "Cache-Control": "private, no-store, max-age=0", "X-Content-Type-Options": "nosniff" });
+    return res.send(rendered.pdfBuffer);
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: "Receipt is temporarily unavailable. Please try again." });
+  }
+};
 
 module.exports = {
   createPayment,
@@ -501,4 +536,6 @@ module.exports = {
   resolvePaymentProofRetentionHold,
   approvePayment,
   rejectPayment,
+  emailMyReceipt,
+  generateAdminReceiptPdf,
 };

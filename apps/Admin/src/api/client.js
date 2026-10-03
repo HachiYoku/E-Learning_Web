@@ -96,10 +96,44 @@ async function request(path, options = {}) {
     const error = new Error(message);
     error.status = response.status;
     error.data = data;
+    error.code = data?.code;
     throw error;
   }
 
   return data;
+}
+
+// Receipt PDFs use the same authenticated request and refresh behavior as
+// JSON endpoints, but must remain binary all the way to the caller.
+async function requestBlob(path, options = {}) {
+  const requestToken = options.token === undefined ? getToken() : options.token;
+  const headers = new Headers(options.headers || {});
+  headers.set("X-Auth-Portal", "admin");
+  if (requestToken) headers.set("Authorization", `Bearer ${requestToken}`);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, credentials: "include" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    if (response.status === 401 && !options.skipRefresh) {
+      try {
+        const freshToken = await refreshAccessToken();
+        return requestBlob(path, { ...options, token: freshToken, skipRefresh: true });
+      } catch {
+        // The common expiry/deactivation path is handled below.
+      }
+    }
+    if (response.status === 401) {
+      saveAdminReturnDestination();
+      clearToken();
+      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { message: getFriendlyErrorMessage(response.status, data?.message) } }));
+    }
+    const error = new Error(getFriendlyErrorMessage(response.status, data?.message));
+    error.status = response.status;
+    error.data = data;
+    error.code = data?.code;
+    throw error;
+  }
+  return response.blob();
 }
 
 export const apiClient = {
@@ -124,6 +158,7 @@ export const apiClient = {
       method: "DELETE",
       body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
     }),
+  getBlob: (path) => requestBlob(path),
 };
 
 export { SESSION_EXPIRED_EVENT };
