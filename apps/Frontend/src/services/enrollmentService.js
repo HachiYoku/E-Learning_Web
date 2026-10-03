@@ -1,6 +1,6 @@
 import { apiClient } from "../api/client";
 
-function normalizeEnrollment(enrollment) {
+export function normalizeEnrollment(enrollment) {
   if (!enrollment) {
     return null;
   }

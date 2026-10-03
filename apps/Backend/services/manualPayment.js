@@ -10,6 +10,11 @@ const { cleanFailedProof } = require("./paymentProofCleanup");
 const { paymentError, paymentTransaction, assertPaymentDatabaseReady } = require("./paymentTransaction");
 const { availabilityMessages, getPromoAvailability, calculatePromoDiscount } = require("./promoCodePolicy");
 const { calculateCheckout } = require("./checkoutCalculation");
+const {
+  MAX_PAYMENT_REFERENCE_ATTEMPTS,
+  createPaymentReference,
+  isPaymentReferenceDuplicate,
+} = require("./paymentReference");
 
 async function validatePurchase(userId, courseId, session = null) {
   const course = await Course.findById(courseId).session(session);
@@ -40,7 +45,10 @@ async function submitManualPayment({ userId, courseId, paymentMethodId, courseMu
   try {
     const proof = await storage.uploadPaymentProof(buffer, publicId);
     transactionStarted = true;
-    return await paymentTransaction(async (session) => {
+    for (let attempt = 0; attempt < MAX_PAYMENT_REFERENCE_ATTEMPTS; attempt += 1) {
+      const paymentReference = createPaymentReference();
+      try {
+        return await paymentTransaction(async (session) => {
       const course = await validatePurchase(userId, courseId, session);
       let quote = await calculateCheckout({ userId, courseId, paymentMethodId, promoCode: code, session });
       if (Number(courseMutationVersion) !== quote.coursePrice.mutationVersion || Number(paymentMethodMutationVersion) !== quote.paymentMethod.mutationVersion) throw paymentError(409, "Payment details changed. Review the current quote before submitting.");
@@ -68,7 +76,7 @@ async function submitManualPayment({ userId, courseId, paymentMethodId, courseMu
       }
       const method = quote.paymentMethod;
       const [payment] = await Payment.create([{
-        _id: paymentId, userId, courseId,
+        _id: paymentId, userId, courseId, paymentReference,
         courseSnapshot: { title: course.title, description: course.description || "", thumbnail: course.thumbnail || "", price: quote.coursePrice.price, originalPrice: quote.coursePrice.originalPrice, currency: quote.currency },
         currency: quote.currency, paymentMethodId: method.id,
         paymentMethodSnapshot: { schemaVersion: 1, kind: "method", methodId: method.id, methodVersion: method.mutationVersion, name: method.name, currency: method.currency, type: method.type, provider: method.provider, instructions: method.instructions, recipient: method.recipient, qrImage: method.qrImage },
@@ -81,7 +89,14 @@ async function submitManualPayment({ userId, courseId, paymentMethodId, courseMu
       const removed = await Cleanup.deleteOne({ publicId, state: "staged" }, { session });
       if (removed.deletedCount !== 1) throw paymentError(409, "Payment submission must be retried.");
       return { payment: payment.toObject(), course: course.toObject() };
-    });
+        });
+      } catch (error) {
+        if (!isPaymentReferenceDuplicate(error)) throw error;
+        if (attempt === MAX_PAYMENT_REFERENCE_ATTEMPTS - 1) {
+          throw paymentError(503, "Payment submission is temporarily unavailable. Please try again.");
+        }
+      }
+    }
   } catch (error) {
     // Unknown commit outcome must never trigger destructive compensation.
     // Keep the staged record for offline reconciliation if we cannot record it.
@@ -98,12 +113,12 @@ async function submitManualPayment({ userId, courseId, paymentMethodId, courseMu
   }
 }
 
-async function reviewManualPayment({ paymentId, adminId, status, rejectReason }) {
+async function reviewManualPayment({ paymentId, adminId, status, rejectionReasonCode, rejectionNote }) {
   return paymentTransaction(async (session) => {
     const payment = await Payment.findOneAndUpdate(
       { _id: paymentId, status: "pending" },
-      { $set: { status, reviewedBy: adminId, reviewedAt: new Date(), ...(status === "rejected" ? { rejectReason } : {}) },
-        ...(status === "approved" ? { $unset: { rejectReason: 1 } } : {}) },
+      { $set: { status, reviewedBy: adminId, reviewedAt: new Date(), ...(status === "rejected" ? { rejectionReasonCode, rejectionNote } : {}) },
+        ...(status === "approved" ? { $unset: { rejectReason: 1, rejectionReasonCode: 1, rejectionNote: 1 } } : {}) },
       { session, returnDocument: "after", runValidators: true },
     );
     if (!payment) {

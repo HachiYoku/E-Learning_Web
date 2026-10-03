@@ -18,6 +18,10 @@ function checkoutMethod(method) {
     mutationVersion: Number(method.mutationVersion || 0),
   };
 }
+// Treat legacy/inconsistent active QR rows as unavailable.  Snapshot QR data
+// is historical only; checkout must use the method's currently owned asset.
+const QR_PREFIX = "arun_thai/payment_method_qr_codes/";
+const checkoutReady = (method) => method.type !== "qr" || Boolean(method.qrImage?.url && typeof method.qrImage?.publicId === "string" && method.qrImage.publicId.startsWith(QR_PREFIX));
 
 function selectedCoursePrice(course, currency) {
   const price = course.prices?.[currency];
@@ -84,7 +88,7 @@ async function listAvailablePaymentMethods({ courseId, isAdmin = false }) {
   const methods = await PaymentMethod.find({ isActive: true, currency: { $in: Object.keys(course.prices || {}) } }).sort({ currency: 1, name: 1 });
   return methods.filter((method) => {
     try { selectedCoursePrice(course, method.currency); return true; } catch (_error) { return false; }
-  }).map(checkoutMethod);
+  }).filter(checkoutReady).map(checkoutMethod);
 }
 
-module.exports = { calculateCheckout, listAvailablePaymentMethods, selectedCoursePrice, checkoutMethod };
+module.exports = { calculateCheckout, listAvailablePaymentMethods, selectedCoursePrice, checkoutMethod, checkoutReady };

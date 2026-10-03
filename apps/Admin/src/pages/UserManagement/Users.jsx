@@ -2,6 +2,7 @@ import { Plus, Trash2, Eye, EyeOff, X, Check, Copy, KeyRound, ShieldAlert } from
 import { useEffect, useMemo, useState } from 'react'
 import { fetchCourses } from '../../services/courseService'
 import { deleteUser, fetchUsers, updateUserCourseAccess, updateUserStatus } from '../../services/userService'
+import { Avatar } from '../../components/Avatar'
 
 function SecureUserActionModal({ action, user, password, error, success, saving, onPasswordChange, onConfirm, onClose }) {
   if (!action || !user) return null
@@ -314,11 +315,7 @@ function Users() {
                 <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
                   <div className="flex items-center gap-2 sm:gap-3">
                     <div className="relative shrink-0">
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className={`h-8 w-8 rounded-full border border-[#E58C1A]/25 object-cover sm:h-10 sm:w-10 ${!user.isActive ? 'opacity-50' : ''}`}
-                      />
+                      <Avatar src={user.avatar} name={user.name} alt={user.name} className={`h-8 w-8 rounded-full border border-[#E58C1A]/25 object-cover sm:h-10 sm:w-10 ${!user.isActive ? 'opacity-50' : ''}`} fallbackClassName={`h-8 w-8 rounded-full border border-[#E58C1A]/25 bg-[#FFF1CE] text-xs font-bold text-[#C97112] sm:h-10 sm:w-10 ${!user.isActive ? 'opacity-50' : ''}`} />
                       {!user.isActive ? (
                         <div className="absolute inset-0 rounded-full bg-black bg-opacity-40 flex items-center justify-center">
                           <span className="text-white text-xs font-bold">×</span>

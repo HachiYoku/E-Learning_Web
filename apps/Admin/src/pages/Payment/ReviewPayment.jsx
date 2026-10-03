@@ -1,9 +1,39 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PaymentCard from '../../components/PaymentCard'
-import { X } from 'lucide-react'
+import { Check, ChevronDown, X } from 'lucide-react'
 import { approvePayment, fetchAllPayments, rejectPayment } from '../../services/paymentService'
+import { resolveReviewPaymentDeepLink } from './reviewPaymentDeepLink'
+
+const denialReasonOptions = [
+  { value: 'receipt_unreadable', label: 'Receipt is not readable' },
+  { value: 'receipt_incomplete', label: 'Receipt is incomplete' },
+  { value: 'receipt_unverifiable', label: 'Receipt cannot be verified' },
+]
+
+function DenialReasonSelect({ value, onChange, disabled }) {
+  const [open, setOpen] = useState(false)
+  const root = useRef(null)
+  const selected = denialReasonOptions.find((option) => option.value === value) || denialReasonOptions[0]
+
+  useEffect(() => {
+    const closeOutside = (event) => {
+      if (!root.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', closeOutside)
+    return () => document.removeEventListener('mousedown', closeOutside)
+  }, [])
+
+  const choose = (nextValue) => {
+    onChange(nextValue)
+    setOpen(false)
+  }
+
+  return <div ref={root} className="relative mb-3"><button type="button" disabled={disabled} onClick={() => setOpen((current) => !current)} aria-label="Reason code" aria-haspopup="listbox" aria-expanded={open} className={`flex w-full items-center justify-between rounded-xl border bg-[#FFFDF8] px-3 py-3 text-left text-sm font-semibold text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 disabled:cursor-not-allowed disabled:opacity-60 ${open ? 'border-[#E58C1A] ring-4 ring-[#E58C1A]/10' : 'border-[#2D2E30]/15 hover:border-[#E58C1A]/45'}`}><span>{selected.label}</span><ChevronDown aria-hidden="true" size={18} className={`shrink-0 text-[#C97112] transition-transform ${open ? 'rotate-180' : ''}`} /></button>{open && !disabled ? <div role="listbox" aria-label="Reason code" className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-[#A34D45]/20 bg-white p-1.5 shadow-xl shadow-[#2D2E30]/15">{denialReasonOptions.map((option) => { const isSelected = option.value === value; return <button type="button" key={option.value} role="option" aria-selected={isSelected} onClick={() => choose(option.value)} className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${isSelected ? 'bg-[#FFF0EE] font-bold text-[#A34D45]' : 'font-medium text-[#2D2E30] hover:bg-[#FFF9EA]'}`}><span>{option.label}</span>{isSelected ? <Check aria-hidden="true" size={16} /> : null}</button> })}</div> : null}</div>
+}
 
 function ReviewPayment() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -15,31 +45,90 @@ function ReviewPayment() {
   const [approving, setApproving] = useState(false)
   const [denyReasonModalOpen, setDenyReasonModalOpen] = useState(false)
   const [denyReason, setDenyReason] = useState('')
+  const [denyReasonCode, setDenyReasonCode] = useState('receipt_unverifiable')
   const [selectedDenyPaymentId, setSelectedDenyPaymentId] = useState(null)
   const [denyAdminPassword, setDenyAdminPassword] = useState('')
   const [denyError, setDenyError] = useState('')
   const [denying, setDenying] = useState(false)
-
-  useEffect(() => {
-    async function loadPayments() {
-      try {
-        setLoading(true)
-        setError('')
-        setPayments(await fetchAllPayments())
-      } catch (loadError) {
-        setError(loadError.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadPayments()
-  }, [])
+  const [reviewPaymentId, setReviewPaymentId] = useState(null)
+  const [deepLinkMessage, setDeepLinkMessage] = useState('')
+  const [paymentReferenceInput, setPaymentReferenceInput] = useState('')
+  const [paymentReferenceSearch, setPaymentReferenceSearch] = useState('')
+  const [referenceSearchMessage, setReferenceSearchMessage] = useState('')
+  const deepLinkedPaymentId = searchParams.get('payment')
 
   const mapTabToStatus = (tab) => {
     if (tab === 'review') return 'pending'
     if (tab === 'denied') return 'rejected'
     return 'approved'
+  }
+
+  const tabForStatus = (status) => (status === 'pending' ? 'review' : status === 'rejected' ? 'denied' : 'approved')
+
+  const loadPayments = async (paymentReference = '') => {
+    try {
+      setLoading(true)
+      setError('')
+      const nextPayments = await fetchAllPayments(paymentReference)
+      setPayments(nextPayments)
+      if (paymentReference) {
+        const matchedPayment = nextPayments[0]
+        setReferenceSearchMessage(matchedPayment ? '' : 'No payment matches that complete Payment Reference.')
+        if (matchedPayment) {
+          setActiveTab(tabForStatus(matchedPayment.status))
+          setReviewPaymentId(matchedPayment.id)
+        }
+      }
+    } catch (loadError) {
+      setReferenceSearchMessage('')
+      setError(loadError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPayments()
+  }, [])
+
+  const submitPaymentReferenceSearch = async (event) => {
+    event.preventDefault()
+    const normalized = paymentReferenceInput.trim().toUpperCase()
+    setPaymentReferenceInput(normalized)
+    setPaymentReferenceSearch(normalized)
+    setReviewPaymentId(null)
+    await loadPayments(normalized)
+  }
+
+  const clearPaymentReferenceSearch = async () => {
+    setPaymentReferenceInput('')
+    setPaymentReferenceSearch('')
+    setReferenceSearchMessage('')
+    setReviewPaymentId(null)
+    await loadPayments()
+  }
+
+  useEffect(() => {
+    if (loading || !deepLinkedPaymentId) return
+
+    const { payment, tab, message } = resolveReviewPaymentDeepLink(payments, deepLinkedPaymentId)
+    if (!payment) {
+      setReviewPaymentId(null)
+      setDeepLinkMessage(message)
+      return
+    }
+
+    setDeepLinkMessage('')
+    setActiveTab(tab)
+    setReviewPaymentId(payment.id)
+  }, [deepLinkedPaymentId, loading, payments])
+
+  const closeReview = () => {
+    setReviewPaymentId(null)
+    if (!deepLinkedPaymentId) return
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.delete('payment')
+    setSearchParams(nextSearchParams, { replace: true })
   }
 
   const handleApproveClick = (paymentId) => {
@@ -52,17 +141,13 @@ function ReviewPayment() {
   const handleDenyClick = (paymentId) => {
     setSelectedDenyPaymentId(paymentId)
     setDenyReason('')
+    setDenyReasonCode('receipt_unverifiable')
     setDenyAdminPassword('')
     setDenyError('')
     setDenyReasonModalOpen(true)
   }
 
   const handleConfirmDeny = async () => {
-    if (!denyReason.trim()) {
-      setDenyError('Please enter a reason for denying this payment.')
-      return
-    }
-
     if (!denyAdminPassword.trim()) {
       setDenyError('Please enter your admin password to deny this payment.')
       return
@@ -71,7 +156,7 @@ function ReviewPayment() {
     try {
       setDenying(true)
       setDenyError('')
-      await rejectPayment(selectedDenyPaymentId, denyReason, denyAdminPassword)
+      await rejectPayment(selectedDenyPaymentId, denyReasonCode, denyReason, denyAdminPassword)
       setPayments((currentPayments) =>
         currentPayments.map((payment) =>
           payment.id === selectedDenyPaymentId
@@ -140,6 +225,13 @@ function ReviewPayment() {
       <div className="mb-6 md:mb-8"><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112] sm:text-xs">Finance operations</p>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#2D2E30] sm:text-3xl md:text-4xl">Review payments</h1><p className="mt-2 text-sm text-[#765F55]">Verify transfer receipts and manage learner course access.</p>
 
+        <form onSubmit={submitPaymentReferenceSearch} className="mt-5 flex max-w-xl flex-col gap-2 sm:flex-row">
+          <label className="sr-only" htmlFor="payment-reference-search">Payment Reference</label>
+          <input id="payment-reference-search" value={paymentReferenceInput} onChange={(event) => setPaymentReferenceInput(event.target.value)} placeholder="Payment Reference (PAY-XXXXXXXX)" className="min-h-11 flex-1 rounded-xl border border-[#2D2E30]/15 bg-white px-3 text-sm font-semibold text-[#2D2E30] outline-none placeholder:font-normal placeholder:text-[#9E887C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10" />
+          <button type="submit" className="min-h-11 rounded-xl bg-[#2D2E30] px-4 text-sm font-bold text-white transition hover:bg-[#E58C1A]">Find payment</button>
+          {paymentReferenceSearch ? <button type="button" onClick={clearPaymentReferenceSearch} className="min-h-11 rounded-xl border border-[#2D2E30]/15 bg-white px-4 text-sm font-bold text-[#2D2E30] transition hover:bg-[#FFF4D8]">Clear</button> : null}
+        </form>
+
         <div className="mt-5 inline-flex w-full rounded-xl border border-[#2D2E30]/10 bg-white p-1 shadow-sm sm:w-auto">
           <button
             onClick={() => setActiveTab('review')}
@@ -180,6 +272,18 @@ function ReviewPayment() {
         </div>
       ) : null}
 
+      {deepLinkMessage ? (
+        <div role="status" className="mb-6 rounded-xl border border-[#E58C1A]/20 bg-[#FFF9EA] px-4 py-3 text-sm text-[#765F55]">
+          {deepLinkMessage}
+        </div>
+      ) : null}
+
+      {referenceSearchMessage ? (
+        <div role="status" className="mb-6 rounded-xl border border-[#E58C1A]/20 bg-[#FFF9EA] px-4 py-3 text-sm text-[#765F55]">
+          {referenceSearchMessage}
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="rounded-2xl border border-[#2D2E30]/10 bg-white p-10 text-center text-[#765F55] shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]">
           Loading payments...
@@ -194,6 +298,9 @@ function ReviewPayment() {
                 status={activeTab}
                 onApprove={handleApproveClick}
                 onDeny={handleDenyClick}
+                isReviewOpen={reviewPaymentId === payment.id}
+                onOpenReview={setReviewPaymentId}
+                onCloseReview={closeReview}
               />
             ))}
           </div>
@@ -283,10 +390,13 @@ function ReviewPayment() {
             <div className="p-4 sm:p-6">
               <p className="mb-4 text-sm leading-6 text-[#765F55]">Explain what needs to be corrected. The learner will receive this message with their payment update.</p>
               {denyError ? <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">{denyError}</div> : null}
+              <label className="mb-2 block text-xs font-bold text-[#2D2E30] sm:text-sm">Reason code</label>
+              <DenialReasonSelect value={denyReasonCode} onChange={setDenyReasonCode} disabled={denying} />
               <textarea
                 value={denyReason}
                 onChange={(e) => setDenyReason(e.target.value)}
-                placeholder="Write your reason here ..."
+                placeholder="Optional short note — do not include unnecessary personal or sensitive information."
+                maxLength="300"
                 className="w-full resize-none rounded-xl border border-[#2D2E30]/15 px-3 py-3 text-sm outline-none focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10"
                 rows="4"
                 disabled={denying}

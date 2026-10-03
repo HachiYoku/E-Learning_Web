@@ -13,6 +13,8 @@ const {
   getPaymentProofAccess,
   streamAuthorizedPaymentProof,
   streamStudentRejectedPaymentProof,
+  openPaymentProofRetentionHold,
+  resolvePaymentProofRetentionHold,
   approvePayment,
   rejectPayment,
 } = require("../controllers/paymentController");
@@ -30,6 +32,8 @@ router.put("/:paymentId/proof", validateToken, upload.single("paymentProof"), va
 router.get("/:paymentId/proof-access", validateToken, requireAdmin, getPaymentProofAccess);
 router.get("/:paymentId/student-proof", validateToken, streamStudentRejectedPaymentProof);
 router.get("/:paymentId/proof", streamAuthorizedPaymentProof);
+router.post("/:paymentId/proof-retention-hold", validateToken, requireAdmin, openPaymentProofRetentionHold);
+router.patch("/:paymentId/proof-retention-hold/resolve", validateToken, requireAdmin, resolvePaymentProofRetentionHold);
 router.patch("/:paymentId/approve", validateToken, requireAdmin, approvePayment);
 router.patch("/:paymentId/reject", validateToken, requireAdmin, rejectPayment);
 

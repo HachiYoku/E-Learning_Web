@@ -29,7 +29,13 @@
     "payments:verify-integrity-migration": "node scripts/verifyPaymentIntegrityMigration.js --read-only",
     "payments:cleanup-disposable-promo-tests": "node scripts/cleanupDisposablePromoTests.js",
     "payments:cleanup-proofs": "node scripts/cleanupPaymentProofs.js",
-    "accounts:cleanup-assets": "node scripts/cleanupAccountAssets.js"
+    "payments:cleanup-retained-proofs": "node scripts/cleanupExpiredPaymentProofs.js",
+    "accounts:cleanup-assets": "node scripts/cleanupAccountAssets.js",
+    "campaigns:cleanup-expired": "node scripts/cleanupExpiredCampaigns.js",
+    "contacts:cleanup-suppressions": "node scripts/cleanupContactLeadSuppressions.js",
+    "payments:minimize-snapshots": "node scripts/minimizePaymentMethodSnapshots.js",
+    "payment-methods:cleanup-qrs": "node scripts/cleanupPaymentMethodQrs.js",
+    "payments:cleanup-expired": "node scripts/cleanupExpiredPayments.js"
   },
   "author": "",
   "license": "ISC",

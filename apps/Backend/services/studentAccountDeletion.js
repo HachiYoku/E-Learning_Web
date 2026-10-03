@@ -10,12 +10,23 @@ const SupportTicket = require("../models/supportTicketModel");
 const StudentFeedback = require("../models/studentFeedbackModel");
 const RefreshSession = require("../models/refreshSessionModel");
 const AuditLog = require("../models/auditLogModel");
+const { buildAuditLogEntry } = require("./auditLogger");
 const AccountAssetCleanup = require("../models/accountAssetCleanupModel");
 const { cleanAccountAsset } = require("./accountAssetCleanup");
 const AccountDeletionConfirmation = require("../models/accountDeletionConfirmationModel");
 const { hashConfirmationToken, validConfirmationToken } = require("./accountDeletionConfirmation");
 
 const deletionError = (status, message) => Object.assign(new Error(message), { status });
+
+const deletionAuditEntry = ({ actorId, initiatedBy, studentId }) => buildAuditLogEntry({
+  actorId,
+  action: initiatedBy === "self" ? "user.self_deleted" : "user.deleted",
+  targetType: "user",
+  // This remains a pseudonymous, linkable historical identifier; it is
+  // intentionally not treated as anonymized data.
+  targetId: studentId,
+  metadata: { initiatedBy },
+});
 
 function validId(value) {
   return mongoose.isValidObjectId(value);
@@ -67,13 +78,7 @@ async function deleteStudentAccount(userId, { actorId, initiatedBy, deletionConf
       cleanupId = cleanup._id;
     }
 
-    await AuditLog.create([{
-      actorId,
-      action: initiatedBy === "self" ? "user.self_deleted" : "user.deleted",
-      targetType: "user",
-      targetId: student._id,
-      metadata: { email: student.email, name: student.name, initiatedBy },
-    }], { session });
+    await AuditLog.create([deletionAuditEntry({ actorId, initiatedBy, studentId: student._id })], { session });
 
     await student.deleteOne({ session });
     return { userId: student._id, hadAvatar: Boolean(student.avatarPublicId) };
@@ -85,4 +90,4 @@ async function deleteStudentAccount(userId, { actorId, initiatedBy, deletionConf
   return { ...result, assetCleanup };
 }
 
-module.exports = { deleteStudentAccount, deletionError };
+module.exports = { deleteStudentAccount, deletionAuditEntry, deletionError };

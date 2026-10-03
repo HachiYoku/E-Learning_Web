@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { BadgePercent, BarChart3, BellRing, BookOpen, ChevronDown, ChevronRight, CreditCard, FileText, GalleryVerticalEnd, Headphones, LayoutGrid, ListChecks, LogOut, Mail, MailCheck, MessageSquare, Send, Settings, Users, WalletCards } from 'lucide-react'
+import { BadgePercent, BarChart3, BellRing, BookOpen, ChevronDown, ChevronRight, CreditCard, FileText, Film, GalleryVerticalEnd, Headphones, LayoutGrid, ListChecks, LogOut, Mail, MailCheck, MessageSquare, Send, Settings, Users, WalletCards } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchUnreadContactLeadCount } from '../services/contactLeadService'
 import { useAdminBadges } from '../contexts/AdminBadgeContext'
@@ -39,7 +39,7 @@ function Sidebar({ isOpen = true, onNavigate }) {
 
   const dashboardItem = { label: 'Dashboard', path: '/', icon: LayoutGrid }
   const navigationGroups = [
-    { key: 'learning', label: 'Learning', items: [{ label: 'Courses', path: '/courses', icon: BookOpen }, { label: 'Quizzes', path: '/quizzes', icon: ListChecks }, { label: 'Flashcards', path: '/flashcards', icon: GalleryVerticalEnd }, { label: 'Blog', path: '/blog', icon: FileText }] },
+    { key: 'learning', label: 'Learning', items: [{ label: 'Courses', path: '/courses', icon: BookOpen }, { label: 'Quizzes', path: '/quizzes', icon: ListChecks }, { label: 'Flashcards', path: '/flashcards', icon: GalleryVerticalEnd }, { label: 'Blog', path: '/blog', icon: FileText }, { label: 'Reels', path: '/reels', icon: Film }] },
     { key: 'people', label: 'People', items: [{ label: 'Users', path: '/users', icon: Users }, { label: 'Verifications', path: '/pending-verifications', icon: MailCheck }, { label: 'Support', path: '/support', icon: Headphones, badge: actionBadges.support }, { label: 'Student Feedback', path: '/student-feedback', icon: MessageSquare }] },
     { key: 'communication', label: 'Communication', items: [{ label: 'Enquiries', path: '/contacts', icon: Mail, badge: badges.contacts }, { label: 'Email', path: '/campaigns', icon: Send }, { label: 'Announcements', path: '/announcements', icon: BellRing }] },
     { key: 'sales', label: 'Sales', items: [{ label: 'Payments', path: '/review-payment', icon: CreditCard, badge: actionBadges.payments }, { label: 'Payment methods', path: '/payment-methods', icon: WalletCards }, { label: 'Promo codes', path: '/promo-codes', icon: BadgePercent }] },

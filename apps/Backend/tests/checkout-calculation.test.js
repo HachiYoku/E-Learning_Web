@@ -38,7 +38,7 @@ async function course({ thb = [4000, 4000], mmk = [120000, 120000], published = 
   return Course.create({ title: `Course ${Date.now()}-${Math.random()}`, price: thb[0], originalPrice: thb[1], isPublished: published, createdBy: oid(), prices: { THB: { price: thb[0], originalPrice: thb[1] }, ...(mmk ? { MMK: { price: mmk[0], originalPrice: mmk[1] } } : {}) } });
 }
 async function method(currency, fields = {}) {
-  return PaymentMethod.create({ name: `${currency} ${fields.type || "qr"} ${Math.random()}`, currency, type: fields.type || "qr", provider: "manual", instructions: "Pay exactly the quoted amount", recipient: { accountName: "Receiver" }, qrImage: { url: "https://example.test/qr.png" }, isActive: fields.isActive ?? true, createdBy: oid(), updatedBy: oid() });
+  return PaymentMethod.create({ name: `${currency} ${fields.type || "qr"} ${Math.random()}`, currency, type: fields.type || "qr", provider: "manual", instructions: "Pay exactly the quoted amount", recipient: { accountName: "Receiver" }, qrImage: { url: "https://example.test/qr.png", publicId: `arun_thai/payment_method_qr_codes/${new mongoose.Types.ObjectId()}` }, isActive: fields.isActive ?? true, createdBy: oid(), updatedBy: oid() });
 }
 async function promo(fields = {}) {
   return PromoCode.create({ code: `QUOTE-${Date.now()}-${Math.floor(Math.random() * 100000)}`, discountType: "percent", discountValue: 10, ...fields });

@@ -2,8 +2,9 @@ import { apiClient } from "../api/client";
 export { formatPaymentAmount, normalizePayment } from "./paymentDisplay";
 import { normalizePayment } from "./paymentDisplay";
 
-export async function fetchAllPayments() {
-  const payments = await apiClient.get("/payments");
+export async function fetchAllPayments(paymentReference = "") {
+  const query = paymentReference ? `?paymentReference=${encodeURIComponent(paymentReference)}` : "";
+  const payments = await apiClient.get(`/payments${query}`);
   return payments.map(normalizePayment);
 }
 
@@ -29,6 +30,6 @@ export async function approvePayment(paymentId, adminPassword) {
   return apiClient.patch(`/payments/${paymentId}/approve`, { adminPassword });
 }
 
-export async function rejectPayment(paymentId, rejectReason, adminPassword) {
-  return apiClient.patch(`/payments/${paymentId}/reject`, { rejectReason, adminPassword });
+export async function rejectPayment(paymentId, rejectionReasonCode, rejectionNote, adminPassword) {
+  return apiClient.patch(`/payments/${paymentId}/reject`, { rejectionReasonCode, rejectionNote, adminPassword });
 }

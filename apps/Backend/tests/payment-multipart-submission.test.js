@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { before, after, test } = require("node:test");
+const { before, after, test, mock } = require("node:test");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs/promises");
 const os = require("node:os");
@@ -17,11 +17,17 @@ process.env.NODE_ENV = "test";
 process.env.FRONTEND_URL_LOCAL = "http://localhost:5173";
 process.env.ADMIN_URL_LOCAL = "http://localhost:5174";
 process.env.BACKEND_URL = "http://localhost:3000";
+delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
 
 // Keep the HTTP route, multer middleware, controller and transactions real.
+const deliveredEmails = [];
+let emailDeliveryHook;
 require.cache[require.resolve("../services/sendEmail")] = {
   id: require.resolve("../services/sendEmail"), filename: require.resolve("../services/sendEmail"),
-  loaded: true, exports: async () => {},
+  loaded: true, exports: async (...args) => {
+    deliveredEmails.push(args);
+    if (emailDeliveryHook) await emailDeliveryHook(...args);
+  },
 };
 const storage = require("../services/paymentProofStorage");
 const proofs = new Set();
@@ -40,6 +46,7 @@ const Promo = require("../models/promoCodeModel");
 const Payment = require("../models/paymentModel");
 const Redemption = require("../models/promoRedemptionModel");
 const Enrollment = require("../models/enrollmentModel");
+const { sendAdminPaymentReviewNotification } = require("../services/paymentReviewNotification");
 
 const password = "MultipartPaymentPassword123";
 let mongo, directory, server, base, admin, adminToken;
@@ -82,7 +89,7 @@ async function fixture({ promo, thb = 3000, mmk = 120000 } = {}) {
       name: `${currency} method ${id}`, currency, type: "qr", provider: "manual", isActive: true,
       instructions: `Pay ${currency} for ${id}`,
       recipient: { accountName: `${currency} recipient ${id}`, accountNumber: `${id}123` },
-      qrImage: { url: `https://example.test/${currency}-${id}.png`, publicId: `${currency}-${id}` },
+      qrImage: { url: `https://example.test/${currency}-${id}.png`, publicId: `arun_thai/payment_method_qr_codes/${currency}-${id}` },
       createdBy: admin._id, updatedBy: admin._id,
     });
   }
@@ -108,9 +115,15 @@ async function submit(f, currency, { promoCode = f.promo?.code, courseVersion = 
   return request(`/payments/course/${f.course._id}`, { method: "POST", access: authToken(f.student), body: form });
 }
 
+async function replaceProof(f, paymentId) {
+  const form = new FormData();
+  form.append("paymentProof", new Blob([png], { type: "image/png" }), "replacement.png");
+  return request(`/payments/${paymentId}/proof`, { method: "PUT", access: authToken(f.student), body: form });
+}
+
 async function review(paymentId, action) {
   return request(`/payments/${paymentId}/${action}`, {
-    method: "PATCH", body: { adminPassword: password, rejectReason: "Receipt could not be verified" },
+    method: "PATCH", body: { adminPassword: password, rejectionReasonCode: "receipt_unverifiable" },
   });
 }
 
@@ -165,6 +178,7 @@ for (const currency of ["THB", "MMK"]) {
     assert.equal(result.body.originalAmount, expectedOriginal);
     assert.equal(result.body.discountAmount, expectedOriginal * 0.125);
     assert.equal(result.body.amount, expectedOriginal * 0.875);
+    assert.match(result.body.paymentReference, /^PAY-[A-HJKMNPQRSTUVWXYZ2-9]{8}$/);
   });
 }
 
@@ -264,4 +278,200 @@ test("rejecting releases a promo; resubmission and approval create exactly one e
   assert.equal((await review(second.body._id, "approve")).status, 200);
   assert.equal(await Enrollment.countDocuments({ userId: f.student._id, courseId: f.course._id }), 1);
   assert.equal((await Payment.findById(second.body._id)).status, "approved");
+});
+
+test("a committed pending payment sends one minimal Admin review notification", async () => {
+  proofs.clear();
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  let persistedWhenNotified = false;
+  emailDeliveryHook = async (_recipient, _subject, html) => {
+    const paymentId = html.match(/review-payment\?payment=([a-f0-9]{24})/)?.[1];
+    persistedWhenNotified = Boolean(paymentId && await Payment.exists({ _id: paymentId, status: "pending" }));
+  };
+  const f = await fixture();
+  const result = await submit(f, "THB");
+  emailDeliveryHook = undefined;
+  assert.equal(result.status, 201, JSON.stringify(result.body));
+  assert.equal(await Payment.countDocuments({ _id: result.body._id, status: "pending" }), 1);
+  assert.equal(persistedWhenNotified, true);
+
+  const adminEmails = deliveredEmails.filter(([recipient]) => recipient === process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL);
+  assert.equal(adminEmails.length, 1);
+  const [recipient, subject, html] = adminEmails[0];
+  assert.equal(recipient, process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL);
+  assert.equal(subject, "New payment proof requires review");
+  assert.match(html, /Student:<\/strong> Student/);
+  assert.match(html, new RegExp(`Course:<\\/strong> ${f.course.title}`));
+  assert.match(html, /Amount:<\/strong> ฿3,000/);
+  assert.match(html, /Submitted:<\/strong>/);
+  assert.match(html, new RegExp(`Payment Reference:<\\/strong> ${result.body.paymentReference}`));
+  assert.match(html, new RegExp(`http://localhost:5174/review-payment\\?payment=${result.body._id}`));
+  assert.doesNotMatch(html, /payment_method_qr_codes|accountNumber|paymentProofPublicId|proof\.png/i);
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+});
+
+test("Admin notification delivery failure and missing configuration do not fail payment submission", async () => {
+  proofs.clear();
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  emailDeliveryHook = async () => { throw new Error("simulated email outage"); };
+  const failingDelivery = await submit(await fixture(), "THB");
+  emailDeliveryHook = undefined;
+  assert.equal(failingDelivery.status, 201, JSON.stringify(failingDelivery.body));
+  assert.equal((await Payment.findById(failingDelivery.body._id)).status, "pending");
+
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+  const missingRecipient = await submit(await fixture(), "THB");
+  assert.equal(missingRecipient.status, 201, JSON.stringify(missingRecipient.body));
+  assert.equal((await Payment.findById(missingRecipient.body._id)).status, "pending");
+});
+
+test("proof replacement does not send another Admin review notification", async () => {
+  proofs.clear();
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  const f = await fixture();
+  const submitted = await submit(f, "THB");
+  assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
+  const reference = submitted.body.paymentReference;
+  assert.equal(deliveredEmails.filter(([recipient]) => recipient === process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL).length, 1);
+
+  const replacement = await replaceProof(f, submitted.body._id);
+  assert.equal(replacement.status, 200, JSON.stringify(replacement.body));
+  assert.equal(replacement.body.paymentReference, reference);
+  assert.equal(deliveredEmails.filter(([recipient]) => recipient === process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL).length, 1);
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+});
+
+test("a new pending payment after rejection receives a new Admin notification", async () => {
+  proofs.clear();
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  const f = await fixture();
+  const first = await submit(f, "THB");
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  assert.equal((await review(first.body._id, "reject")).status, 200);
+
+  const second = await submit(f, "THB");
+  assert.equal(second.status, 201, JSON.stringify(second.body));
+  assert.notEqual(second.body._id, first.body._id);
+  assert.notEqual(second.body.paymentReference, first.body.paymentReference);
+  assert.equal(deliveredEmails.filter(([recipient]) => recipient === process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL).length, 2);
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+});
+
+test("missing trusted Admin URL safely skips the notification", async () => {
+  deliveredEmails.length = 0;
+  process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL = "payment-review@example.test";
+  const originalAdminUrl = process.env.ADMIN_URL_LOCAL;
+  delete process.env.ADMIN_URL_LOCAL;
+  const result = await sendAdminPaymentReviewNotification({
+    payment: { _id: "payment-id", amount: 3000, currency: "THB", createdAt: new Date("2026-10-01T00:00:00Z") },
+    studentName: "Student",
+    courseTitle: "Course",
+  });
+  process.env.ADMIN_URL_LOCAL = originalAdminUrl;
+  delete process.env.ADMIN_PAYMENT_NOTIFICATION_EMAIL;
+  assert.deepEqual(result, { sent: false, reason: "missing_admin_url" });
+  assert.equal(deliveredEmails.length, 0);
+});
+
+test("Admin exact Payment Reference lookup normalizes case and whitespace without exposing an unauthenticated lookup", async () => {
+  const f = await fixture();
+  const submitted = await submit(f, "THB");
+  assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
+
+  const found = await request(`/payments?paymentReference=${encodeURIComponent(`  ${submitted.body.paymentReference.toLowerCase()}  `)}`);
+  assert.equal(found.status, 200, JSON.stringify(found.body));
+  assert.equal(found.body.length, 1);
+  assert.equal(found.body[0].paymentReference, submitted.body.paymentReference);
+
+  const partial = await request("/payments?paymentReference=7KQ4");
+  assert.equal(partial.status, 400);
+
+  const unauthenticated = await request(`/payments?paymentReference=${submitted.body.paymentReference}`, { access: null });
+  assert.equal(unauthenticated.status, 401);
+});
+
+test("review emails retain the same Payment Reference for approval and rejection", async () => {
+  deliveredEmails.length = 0;
+  const approved = await submit(await fixture(), "THB");
+  assert.equal((await review(approved.body._id, "approve")).status, 200);
+  const approvedEmail = deliveredEmails.find(([recipient]) => recipient.includes("multipart-"));
+  assert.ok(approvedEmail);
+  assert.match(approvedEmail[2], new RegExp(`Payment Reference:<\\/strong> ${approved.body.paymentReference}`));
+
+  deliveredEmails.length = 0;
+  const rejected = await submit(await fixture(), "THB");
+  assert.equal((await review(rejected.body._id, "reject")).status, 200);
+  const rejectedEmail = deliveredEmails.find(([recipient]) => recipient.includes("multipart-"));
+  assert.ok(rejectedEmail);
+  assert.match(rejectedEmail[2], new RegExp(`Payment Reference:<\\/strong> ${rejected.body.paymentReference}`));
+});
+
+test("a duplicate Payment Reference retries the transaction without a partial payment", async () => {
+  proofs.clear();
+  const originalCreate = Payment.create.bind(Payment);
+  let creates = 0;
+  mock.method(Payment, "create", async (...args) => {
+    creates += 1;
+    if (creates === 1) {
+      const error = new Error("duplicate paymentReference");
+      error.code = 11000;
+      error.keyPattern = { paymentReference: 1 };
+      throw error;
+    }
+    return originalCreate(...args);
+  });
+  try {
+    const f = await fixture();
+    const result = await submit(f, "THB");
+    assert.equal(result.status, 201, JSON.stringify(result.body));
+    assert.ok(creates >= 2);
+    assert.match(result.body.paymentReference, /^PAY-[A-HJKMNPQRSTUVWXYZ2-9]{8}$/);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test("Payment Reference collision retry is bounded and unrelated duplicate errors retain existing behavior", async () => {
+  proofs.clear();
+  const originalCreate = Payment.create.bind(Payment);
+  let creates = 0;
+  mock.method(Payment, "create", async () => {
+    creates += 1;
+    const error = new Error("duplicate paymentReference");
+    error.code = 11000;
+    error.keyPattern = { paymentReference: 1 };
+    throw error;
+  });
+  try {
+    const f = await fixture();
+    const exhausted = await submit(f, "THB");
+    assert.equal(exhausted.status, 503);
+    assert.equal(creates, 3);
+    await assertNoSubmissionArtifacts(f);
+  } finally {
+    mock.restoreAll();
+  }
+
+  creates = 0;
+  mock.method(Payment, "create", async (...args) => {
+    creates += 1;
+    const error = new Error("duplicate pending payment");
+    error.code = 11000;
+    error.keyPattern = { userId: 1, courseId: 1 };
+    throw error;
+  });
+  try {
+    const f = await fixture();
+    const unrelated = await submit(f, "THB");
+    assert.equal(unrelated.status, 409);
+    assert.equal(creates, 1);
+    await assertNoSubmissionArtifacts(f);
+  } finally {
+    mock.restoreAll();
+  }
+  void originalCreate;
 });

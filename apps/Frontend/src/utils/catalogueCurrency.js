@@ -49,3 +49,9 @@ export function getCataloguePrice(course, requestedCurrency) {
     hasDiscount: originalPrice > price,
   }
 }
+
+export function getAvailableCatalogueCurrencies(course) {
+  return CATALOGUE_CURRENCIES.filter((currency) => (
+    getCataloguePrice(course, currency).available
+  ))
+}

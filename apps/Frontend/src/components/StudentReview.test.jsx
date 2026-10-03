@@ -52,6 +52,49 @@ describe("StudentReview", () => {
     expect(screen.getByText("Anonymous learner")).toBeTruthy();
   });
 
+  it("shows an accessible expansion control only when a testimonial is visually truncated", async () => {
+    const originalScrollHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
+    const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get() {
+        return this.dataset?.testid === "testimonial-quote-long" ? 200 : 100;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        return 100;
+      },
+    });
+
+    try {
+      fetchTestimonials.mockResolvedValueOnce([
+        { id: "short", quote: "A short testimonial.", displayName: "Lina" },
+        { id: "long", quote: "A much longer testimonial that should be expandable when it overflows the card's six-line preview area.", displayName: "Htet" },
+      ]);
+      render(<StudentReview />);
+
+      const readMore = await screen.findByRole("button", { name: "Read more" });
+      expect(screen.queryAllByRole("button", { name: "Read more" })).toHaveLength(1);
+      expect(readMore.getAttribute("aria-expanded")).toBe("false");
+      expect(readMore.getAttribute("aria-controls")).toBe("testimonial-long-quote");
+      expect(screen.getByTestId("testimonial-quote-long").className).toContain("line-clamp-6");
+
+      fireEvent.click(readMore);
+      expect(screen.getByRole("button", { name: "Show less" }).getAttribute("aria-expanded")).toBe("true");
+      expect(screen.getByTestId("testimonial-quote-long").className).not.toContain("line-clamp-6");
+
+      fireEvent.click(screen.getByRole("button", { name: "Show less" }));
+      expect(screen.getByRole("button", { name: "Read more" }).getAttribute("aria-expanded")).toBe("false");
+    } finally {
+      if (originalScrollHeight) Object.defineProperty(HTMLElement.prototype, "scrollHeight", originalScrollHeight);
+      else delete HTMLElement.prototype.scrollHeight;
+      if (originalClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);
+      else delete HTMLElement.prototype.clientHeight;
+    }
+  });
+
   it("shows three cards on desktop, two on tablet, and one on mobile", async () => {
     const items = testimonials(4);
     fetchTestimonials.mockResolvedValue(items);

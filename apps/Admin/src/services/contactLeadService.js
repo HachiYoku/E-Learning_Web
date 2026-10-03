@@ -7,3 +7,7 @@ export function fetchContactLeads() {
 export function fetchUnreadContactLeadCount() {
   return apiClient.get("/contacts/unread-count");
 }
+
+export function fetchContactEnquiries(id) {
+  return apiClient.get(`/contacts/${id}/enquiries`);
+}

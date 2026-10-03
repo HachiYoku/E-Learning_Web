@@ -124,7 +124,7 @@ async function readJavaScriptFiles(directory) {
   const contents = await Promise.all(entries.map(async (entry) => {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) return readJavaScriptFiles(entryPath);
-    if (/\.(js|jsx)$/.test(entry.name)) return fs.readFile(entryPath, "utf8");
+    if (/\.(js|jsx)$/.test(entry.name) && !/\.(test|spec)\.(js|jsx)$/.test(entry.name)) return fs.readFile(entryPath, "utf8");
     return [];
   }));
   return contents.flat();
@@ -188,9 +188,43 @@ test("access tokens are not persisted in localStorage", async () => {
   assert.doesNotMatch(adminStorage, /localStorage/);
 });
 
+test("registration enforces the minimal 13+ age and guardian attestation flow", async () => {
+  const registration = async (suffix, extra) => {
+    const response = await request("/auth/register", { method: "POST", body: { name: "Age Test", email: `age-${suffix}@example.test`, password, ...extra } });
+    return { response, body: await responseJson(response) };
+  };
+  const adult = await registration("adult", { ageGroup: "18_plus", ageConfirmed: true });
+  assert.equal(adult.response.status, 201);
+  const adultUser = await User.findOne({ email: "age-adult@example.test" });
+  assert.equal(adultUser.ageGroup, "18_plus"); assert.ok(adultUser.ageConfirmedAt); assert.equal(adultUser.guardianPermissionAt, null);
+  assert.equal(adultUser.dateOfBirth, undefined); assert.equal(adultUser.guardianName, undefined);
+
+  const teenager = await registration("teen", { ageGroup: "13_17", ageConfirmed: true, guardianPermission: true });
+  assert.equal(teenager.response.status, 201);
+  const teenUser = await User.findOne({ email: "age-teen@example.test" });
+  assert.equal(teenUser.ageGroup, "13_17"); assert.ok(teenUser.ageConfirmedAt); assert.ok(teenUser.guardianPermissionAt);
+
+  for (const [suffix, extra, expected] of [
+    ["no-guardian", { ageGroup: "13_17", ageConfirmed: true }, /guardian/i],
+    ["under-13", { ageGroup: "under_13", ageConfirmed: true }, /13 and over/i],
+    ["missing", { ageConfirmed: true }, /13 and over/i],
+  ]) {
+    const result = await registration(suffix, extra);
+    assert.equal(result.response.status, 400); assert.match(result.body.message, expected);
+    assert.equal(await User.exists({ email: `age-${suffix}@example.test` }), null);
+  }
+});
+
 test("admin source has no persistent auth/user storage writes", async () => {
   const adminSources = (await readJavaScriptFiles(path.join(projectDirectory, "apps/Admin/src"))).join("\n");
-  assert.doesNotMatch(adminSources, /(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|getItem)/);
+  const returnDestinationSource = await fs.readFile(path.join(projectDirectory, "apps/Admin/src/utils/adminReturnDestination.js"), "utf8");
+  const adminSourcesWithoutReturnDestination = adminSources.replace(returnDestinationSource, "");
+
+  // The sole sessionStorage exception preserves a validated internal route after reauthentication.
+  // It does not contain an access token, user record, or other credential.
+  assert.match(returnDestinationSource, /window\.sessionStorage\.setItem\(ADMIN_RETURN_DESTINATION_KEY, destination\)/);
+  assert.match(returnDestinationSource, /window\.sessionStorage\.getItem\(ADMIN_RETURN_DESTINATION_KEY\)/);
+  assert.doesNotMatch(adminSourcesWithoutReturnDestination, /(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|getItem)/);
   assert.doesNotMatch(adminSources, /indexedDB/);
   assert.match(adminSources, /localStorage\.removeItem\(key\)/);
 });
@@ -439,7 +473,7 @@ test("payment approval and rejection preserve the existing review workflow witho
   assert.equal(approved.status, 200);
   assert.equal((await responseJson(approved)).payment.status, "approved");
 
-  const rejected = await request(`/payments/${rejectedPayment._id}/reject`, { method: "PATCH", token: loginResult.body.accessToken, body: { adminPassword: password, rejectReason: "Receipt is incomplete" }, origin: "https://admin.example.test" });
+  const rejected = await request(`/payments/${rejectedPayment._id}/reject`, { method: "PATCH", token: loginResult.body.accessToken, body: { adminPassword: password, rejectionReasonCode: "receipt_incomplete" }, origin: "https://admin.example.test" });
   assert.equal(rejected.status, 200);
   const rejectedBody = await responseJson(rejected);
   assert.equal(rejectedBody.payment.status, "rejected");

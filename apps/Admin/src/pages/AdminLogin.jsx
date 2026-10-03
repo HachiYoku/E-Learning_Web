@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
+import { clearAdminReturnDestination, internalDestination, readAdminReturnDestination } from '../utils/adminReturnDestination'
 
 function AdminLogin() {
   const [email, setEmail] = useState('')
@@ -13,8 +14,8 @@ function AdminLogin() {
   const location = useLocation()
   const { login, clearLocalSession, isAuthenticated, isBootstrapping, user } = useAuth()
 
-  const requestedPath = location.state?.from?.pathname
-  const redirectTo = requestedPath && requestedPath !== '/login' ? requestedPath : '/'
+  const requestedDestination = internalDestination(location.state?.from)
+  const redirectTo = requestedDestination !== '/' ? requestedDestination : readAdminReturnDestination()
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -30,6 +31,7 @@ function AdminLogin() {
         return
       }
 
+      clearAdminReturnDestination()
       navigate(redirectTo, { replace: true })
     } catch (loginError) {
       setError(loginError.message)
@@ -40,6 +42,7 @@ function AdminLogin() {
 
   useEffect(() => {
     if (!isBootstrapping && isAuthenticated && user?.role === 'admin') {
+      clearAdminReturnDestination()
       navigate(redirectTo, { replace: true })
     }
   }, [isAuthenticated, isBootstrapping, navigate, redirectTo, user?.role])

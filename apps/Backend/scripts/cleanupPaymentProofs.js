@@ -3,9 +3,10 @@ const mongoose = require("mongoose");
 const Cleanup = require("../models/paymentProofCleanupModel");
 const Payment = require("../models/paymentModel");
 const { cleanFailedProof } = require("../services/paymentProofCleanup");
+const { assertRetentionJobEnvironment } = require("../services/retentionJobGuard");
 
 async function main() {
-  await mongoose.connect(process.env.MONGO_DB);
+  assertRetentionJobEnvironment(); await mongoose.connect(process.env.MONGO_DB);
   const reconcile = process.argv.includes("--reconcile-staged");
   // Explicit offline recovery: no in-flight uploader/transaction may exist.
   // Normal runs process only definitively failed submissions.

@@ -76,7 +76,10 @@ test("admin deletion removes private student data, retains business history, and
   const response = await request(`/user/${student._id}`, { method: "DELETE", token: adminLogin.token, body: { adminPassword: password } });
   assert.equal(response.status, 200); assert.equal(await User.exists({ _id: student._id }), null);
   await Promise.all([Enrollment, PersonalFlashcardDeck, PersonalFlashcard, FlashcardReviewProgress, QuizAttempt, Notification, SupportTicket].map(async (Model) => assert.equal(await Model.countDocuments(Model === QuizAttempt ? { user: student._id } : Model === PersonalFlashcardDeck || Model === PersonalFlashcard ? { ownerId: student._id } : Model === SupportTicket ? { studentId: student._id } : { userId: student._id }), 0)));
-  assert.ok(await Payment.exists({ _id: payment._id })); assert.ok(await PromoRedemption.exists({ _id: redemption._id })); assert.ok(await AuditLog.exists({ targetId: student._id, action: "user.deleted" })); assert.ok(await PersonalFlashcardDeck.exists({ _id: otherDeck._id })); assert.ok(await FlashcardReviewProgress.exists({ _id: otherReview._id }));
+  assert.ok(await Payment.exists({ _id: payment._id })); assert.ok(await PromoRedemption.exists({ _id: redemption._id }));
+  const deletionAudit = await AuditLog.findOne({ targetId: student._id, action: "user.deleted" }).lean();
+  assert.ok(deletionAudit); assert.equal(String(deletionAudit.actorId), String(admin._id)); assert.equal(String(deletionAudit.targetId), String(student._id)); assert.equal(deletionAudit.metadata.initiatedBy, "admin"); assert.equal("name" in deletionAudit.metadata, false); assert.equal("email" in deletionAudit.metadata, false);
+  assert.ok(await PersonalFlashcardDeck.exists({ _id: otherDeck._id })); assert.ok(await FlashcardReviewProgress.exists({ _id: otherReview._id }));
   assert.equal((await request("/auth/refresh", { method: "POST", cookie: studentLogin.cookie })).status, 401);
 });
 
@@ -91,7 +94,18 @@ test("self deletion requires a server-confirmed current password and uses the au
   const confirmation = await request("/user/me/deletion-confirmation", { method: "POST", token: loginResult.token, body: { currentPassword: password } });
   assert.equal(confirmation.status, 200); const { deletionConfirmationToken } = await json(confirmation); assert.ok(deletionConfirmationToken);
   const deleted = await request("/user/me", { method: "DELETE", token: loginResult.token, cookie: loginResult.cookie, body: { deletionConfirmationToken, userId: other._id } });
-  assert.equal(deleted.status, 200); assert.match(deleted.headers.get("set-cookie") || "", /Expires=Thu, 01 Jan 1970/i); assert.equal(await User.exists({ _id: student._id }), null); assert.ok(await PersonalFlashcardDeck.exists({ _id: otherDeck._id })); assert.ok(await AuditLog.exists({ targetId: student._id, action: "user.self_deleted" })); assert.equal((await request("/auth/refresh", { method: "POST", cookie: loginResult.cookie })).status, 401);
+  assert.equal(deleted.status, 200); assert.match(deleted.headers.get("set-cookie") || "", /Expires=Thu, 01 Jan 1970/i); assert.equal(await User.exists({ _id: student._id }), null); assert.ok(await PersonalFlashcardDeck.exists({ _id: otherDeck._id }));
+  const deletionAudit = await AuditLog.findOne({ targetId: student._id, action: "user.self_deleted" }).lean();
+  assert.ok(deletionAudit); assert.equal(String(deletionAudit.actorId), String(student._id)); assert.equal(String(deletionAudit.targetId), String(student._id)); assert.equal(deletionAudit.metadata.initiatedBy, "self"); assert.equal("name" in deletionAudit.metadata, false); assert.equal("email" in deletionAudit.metadata, false);
+  assert.equal((await request("/auth/refresh", { method: "POST", cookie: loginResult.cookie })).status, 401);
+});
+
+test("non-deletion audit events retain their existing metadata", async () => {
+  const admin = await createUser("admin"); const student = await createUser(); const adminLogin = await login(admin);
+  const response = await request(`/user/${student._id}/status`, { method: "PUT", token: adminLogin.token, body: { isActive: false, adminPassword: password } });
+  assert.equal(response.status, 200);
+  const audit = await AuditLog.findOne({ targetId: student._id, action: "user.deactivated" }).lean();
+  assert.ok(audit); assert.equal(audit.metadata.email, student.email);
 });
 
 test("a transactional cleanup failure leaves the account and private data intact", async () => {

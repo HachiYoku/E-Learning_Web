@@ -12,7 +12,7 @@ import { useAuth } from "../contexts/AuthContext";
 import Seo from "../components/Seo";
 import CatalogueCurrencySelector from "../components/CatalogueCurrencySelector";
 import { useCatalogueCurrency } from "../contexts/useCatalogueCurrency";
-import { getCataloguePrice } from "../utils/catalogueCurrency";
+import { getAvailableCatalogueCurrencies, getCataloguePrice } from "../utils/catalogueCurrency";
 
 const RELATED_COURSES_PER_PAGE = 4;
 
@@ -135,6 +135,10 @@ function CourseDetail() {
       ? course.features
       : ["No specific features listed for this course."];
   const displayPrice = getCataloguePrice(course, currency);
+  const isEnrolled = enrolledCourseIds.has(course.id);
+  const availableAlternativeCurrency = !displayPrice.available
+    ? getAvailableCatalogueCurrencies(course).find((currencyOption) => currencyOption !== currency)
+    : null;
 
   const courseSchema = { "@context": "https://schema.org", "@type": "Course", name: course.title, description: course.fullDescription || course.description, provider: { "@type": "EducationalOrganization", name: "Arun Thai Language Center", url: "https://arunthaiedu.com" } };
 
@@ -218,8 +222,8 @@ function CourseDetail() {
 
                 
                 <div className="flex flex-col gap-3 border-t border-[#2D2E30]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div><div className="flex flex-wrap items-center gap-3"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Course access</p><CatalogueCurrencySelector currency={currency} onChange={setCurrency} compact /></div>{displayPrice.available ? <><p className="mt-2 text-2xl font-bold text-[#C97112]">{displayPrice.price}</p>{displayPrice.hasDiscount ? <p className="mt-1 text-sm font-medium text-[#9B867C] line-through">{displayPrice.originalPrice}</p> : null}</> : <p className="mt-2 text-sm font-semibold text-[#765F55]">Not available in {currency}</p>}</div>
-                  <button onClick={() => navigate(`/enroll/${course.id}`)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#2D2E30]/20 transition hover:bg-[#E58C1A]">Enroll now <PlayCircle className="h-4 w-4" aria-hidden="true" /></button>
+                  <div><div className="flex flex-wrap items-center gap-3"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Course access</p><CatalogueCurrencySelector currency={currency} onChange={setCurrency} compact /></div>{displayPrice.available ? <><p className="mt-2 text-2xl font-bold text-[#C97112]">{displayPrice.price}</p>{displayPrice.hasDiscount ? <p className="mt-1 text-sm font-medium text-[#9B867C] line-through">{displayPrice.originalPrice}</p> : null}</> : <div className="mt-2 text-sm font-semibold text-[#765F55]"><p>{currency} price unavailable{availableAlternativeCurrency ? <> — available in {availableAlternativeCurrency}</> : ''}</p>{availableAlternativeCurrency ? <button type="button" onClick={() => setCurrency(availableAlternativeCurrency)} className="mt-2 inline-flex min-h-9 items-center rounded-lg border border-[#E58C1A]/30 px-3 text-xs font-bold text-[#9A5816] transition hover:bg-[#FFF1D0]">Show prices in {availableAlternativeCurrency}</button> : null}</div>}</div>
+                  {isEnrolled ? <button onClick={() => navigate(`/app/learn/${course.id}`)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#2D2E30]/20 transition hover:bg-[#E58C1A]">Learn Now <PlayCircle className="h-4 w-4" aria-hidden="true" /></button> : displayPrice.available ? <button onClick={() => navigate(`/enroll/${course.id}`)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#2D2E30]/20 transition hover:bg-[#E58C1A]">Enroll now <PlayCircle className="h-4 w-4" aria-hidden="true" /></button> : null}
                 </div>
                 
               </div>

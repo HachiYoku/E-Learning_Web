@@ -1,7 +1,9 @@
 import { ArrowRight, BookOpen, Heart, Users } from "lucide-react"
+import { useCallback, useRef, useState } from "react"
 import Navbar from "../components/Navbar"
 import StudentReview from "../components/StudentReview"
 import ContactSection from "../components/ContactSection"
+import ContactChoiceModal from "../components/ContactChoiceModal"
 import Footer from "../components/Footer"
 import Seo from "../components/Seo"
 import { organizationSchema } from "../components/seoData"
@@ -27,6 +29,15 @@ const values = [
 ]
 
 function About() {
+  const [isContactOpen, setIsContactOpen] = useState(false)
+  const contactTriggerRef = useRef(null)
+
+  const openContact = (event) => {
+    contactTriggerRef.current = event.currentTarget
+    setIsContactOpen(true)
+  }
+  const closeContact = useCallback(() => setIsContactOpen(false), [])
+
   return (
     <div className="min-h-screen bg-[#FFF9EA] text-[#2D2E30]">
       <Seo title="About Arun Thai" description="Meet Arun Thai Language Center and our practical, supportive approach to learning Thai for real life." path="/about" structuredData={organizationSchema} />
@@ -43,12 +54,12 @@ function About() {
               <h1 className="mt-4 max-w-3xl text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl md:text-6xl">
                 Learning Thai should feel <span className="text-[#E58C1A]">possible.</span>
               </h1>
-              <p className="mt-6 max-w-2xl text-base leading-relaxed text-[#765F55] sm:text-lg">
-                Arun Thai Language Center helps learners build the confidence to understand, speak, and enjoy Thai in everyday life. We believe progress comes from practical learning, patient guidance, and a little encouragement at every step.
+              <p lang="my" className="font-myanmar mt-6 max-w-2xl text-base leading-relaxed text-[#765F55] sm:text-lg">
+                Arun Thai မှာ ထိုင်းစကားကို သဘာဝကျကျနဲ့ ယုံကြည်မှုရှိရှိ ပြောဆိုနိုင်အောင် <br className="hidden lg:block" />ကူညီပေးပါတယ်။ လက်တွေ့အသုံးကျတဲ့ သင်ခန်းစာတွေ၊ စိတ်ရှည်တဲ့ လမ်းညွှန်မှုတွေနဲ့အတူ သင်ယူသူတစ်ယောက်ချင်းစီရဲ့ တိုးတက်မှုအတွက် အနီးကပ် ကူညီပေးသွားမှာပါ။
               </p>
-              <a href="mailto:arunthaiedu@gmail.com" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-6 py-3.5 font-semibold text-white shadow-lg shadow-[#2D2E30]/20 transition-all hover:-translate-y-0.5 hover:bg-[#E58C1A]">
+              <button type="button" onClick={openContact} className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#2D2E30] px-6 py-3.5 font-semibold text-white shadow-lg shadow-[#2D2E30]/20 transition-all hover:-translate-y-0.5 hover:bg-[#E58C1A]">
                 Get in touch <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </a>
+              </button>
             </div>
 
             <div className="relative mx-auto w-full max-w-xl">
@@ -86,6 +97,7 @@ function About() {
         <ContactSection />
       </main>
 
+      <ContactChoiceModal isOpen={isContactOpen} onClose={closeContact} returnFocusRef={contactTriggerRef} />
       <Footer />
     </div>
   )
