@@ -86,6 +86,7 @@ async function request(path, options = {}) {
     const error = new Error(message);
     error.status = response.status;
     error.data = data;
+    error.code = data?.code;
     throw error;
   }
 
@@ -118,6 +119,8 @@ async function requestBlob(path, options = {}) {
     }
     const error = new Error(getFriendlyErrorMessage(response.status, data?.message));
     error.status = response.status;
+    error.data = data;
+    error.code = data?.code;
     throw error;
   }
   return response.blob();

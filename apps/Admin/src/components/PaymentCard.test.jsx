@@ -1,14 +1,17 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PaymentCard from './PaymentCard'
+import { apiClient } from '../api/client'
+import { setToken } from '../api/tokenStorage'
 
 vi.mock('../services/paymentService', () => ({
   fetchPaymentProofBlob: vi.fn(),
+  fetchReceiptPdf: vi.fn(),
   formatPaymentAmount: (amount, currency) => `${currency} ${amount}`,
 }))
 vi.mock('./Avatar', () => ({ Avatar: () => <div aria-label="Learner avatar" /> }))
 
-import { fetchPaymentProofBlob } from '../services/paymentService'
+import { fetchPaymentProofBlob, fetchReceiptPdf } from '../services/paymentService'
 
 const payment = {
   id: 'payment-1', paymentReference: 'PAY-7KQ4M9DX', userName: 'Learner', userEmail: 'learner@example.test', userAvatar: '',
@@ -39,6 +42,35 @@ describe('PaymentCard historical details', () => {
     expect(within(modal).getByText('PAY-7KQ4M9DX')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Approve payment' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Deny payment' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Generate receipt PDF' })).toBeTruthy()
+  })
+
+  it('downloads a fresh approved payment receipt without sending email', async () => {
+    fetchReceiptPdf.mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }))
+    global.URL.createObjectURL = vi.fn(() => 'blob:receipt')
+    global.URL.revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(<PaymentCard payment={payment} status="approved" onApprove={vi.fn()} onDeny={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'View payment details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Generate receipt PDF' }))
+    expect(await fetchReceiptPdf).toHaveBeenCalledWith('payment-1')
+    click.mockRestore()
+  })
+
+  it('provides the real authenticated binary client method used for receipt PDFs', async () => {
+    setToken('admin-token')
+    const blob = new Blob(['pdf'], { type: 'application/pdf' })
+    const fetchMock = vi.fn().mockResolvedValue(new Response(blob, { status: 200, headers: { 'Content-Type': 'application/pdf' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(apiClient.getBlob('/payments/payment-1/receipt-pdf')).resolves.toEqual(blob)
+      const headers = fetchMock.mock.calls[0][1].headers
+      expect(headers.get('Authorization')).toBe('Bearer admin-token')
+      expect(headers.get('X-Auth-Portal')).toBe('admin')
+    } finally {
+      setToken(null)
+      vi.unstubAllGlobals()
+    }
   })
 
   it('opens denied Payments read-only and shows an available denial reason', async () => {

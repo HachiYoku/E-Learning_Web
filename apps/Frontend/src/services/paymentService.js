@@ -49,6 +49,7 @@ export async function createPayment(courseId, file, paymentMethodId, promoCode =
 export const fetchPaymentMethods = (courseId) => apiClient.get(`/payments/course/${courseId}/methods`);
 export const quotePayment = (courseId, paymentMethodId, promoCode = "") => apiClient.post(`/payments/course/${courseId}/quote`, { paymentMethodId, promoCode });
 export const fetchRejectedPaymentProofBlob = (paymentId) => apiClient.getBlob(`/payments/${paymentId}/student-proof`);
+export const emailPaymentReceipt = (paymentId) => apiClient.post(`/payments/${paymentId}/receipt-email`, {});
 
 export async function fetchMyPayments() {
   const payments = await apiClient.get("/payments/my");

@@ -17,6 +17,8 @@ const {
   resolvePaymentProofRetentionHold,
   approvePayment,
   rejectPayment,
+  emailMyReceipt,
+  generateAdminReceiptPdf,
 } = require("../controllers/paymentController");
 
 const router = express.Router();
@@ -31,6 +33,8 @@ router.post("/course/:courseId", validateToken, upload.single("paymentProof"), v
 router.put("/:paymentId/proof", validateToken, upload.single("paymentProof"), validateImageFileContent, replacePaymentProof);
 router.get("/:paymentId/proof-access", validateToken, requireAdmin, getPaymentProofAccess);
 router.get("/:paymentId/student-proof", validateToken, streamStudentRejectedPaymentProof);
+router.post("/:paymentId/receipt-email", validateToken, emailMyReceipt);
+router.get("/:paymentId/receipt-pdf", validateToken, requireAdmin, generateAdminReceiptPdf);
 router.get("/:paymentId/proof", streamAuthorizedPaymentProof);
 router.post("/:paymentId/proof-retention-hold", validateToken, requireAdmin, openPaymentProofRetentionHold);
 router.patch("/:paymentId/proof-retention-hold/resolve", validateToken, requireAdmin, resolvePaymentProofRetentionHold);

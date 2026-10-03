@@ -1,5 +1,13 @@
 const { Resend } = require("resend");
 
+class DefinitiveEmailProviderError extends Error {
+  constructor() {
+    super("Email provider did not accept the send request");
+    this.name = "DefinitiveEmailProviderError";
+    this.definitiveProviderFailure = true;
+  }
+}
+
 let resend;
 
 function getResendClient() {
@@ -11,13 +19,17 @@ function getResendClient() {
   return resend;
 }
 
-const sendEmail = async (to, subject, html) => {
-  return getResendClient().emails.send({
+const sendEmail = async (to, subject, html, attachments = undefined) => {
+  const result = await getResendClient().emails.send({
     from: process.env.EMAIL_FROM,
     to,
     subject,
     html,
+    ...(attachments?.length ? { attachments } : {}),
   });
+  if (result?.error) throw new DefinitiveEmailProviderError();
+  return result;
 };
 
 module.exports = sendEmail;
+module.exports.DefinitiveEmailProviderError = DefinitiveEmailProviderError;

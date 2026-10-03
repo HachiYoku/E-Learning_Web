@@ -22,6 +22,8 @@
     "test:multi-currency-data-models": "node --test tests/multi-currency-data-models.test.js",
     "test:checkout-calculation": "node --test tests/checkout-calculation.test.js",
     "test:admin-multi-currency-management": "node --test tests/admin-multi-currency-management.test.js",
+    "test:payment-receipt-renderer": "node --test tests/payment-receipt-renderer.test.js",
+    "test:payment-receipt": "node --test tests/payment-receipt-renderer.test.js tests/payment-receipt-service.test.js tests/payment-receipt-controller.test.js tests/receipt-delivery.test.js",
     "payments:migrate-integrity": "node scripts/migratePaymentIntegrity.js",
     "payments:inspect-multi-currency": "node scripts/inspectMultiCurrencyPaymentReadiness.js",
     "payments:migrate-multi-currency-local": "node scripts/migrateMultiCurrencyPaymentLocal.js",
@@ -35,7 +37,8 @@
     "contacts:cleanup-suppressions": "node scripts/cleanupContactLeadSuppressions.js",
     "payments:minimize-snapshots": "node scripts/minimizePaymentMethodSnapshots.js",
     "payment-methods:cleanup-qrs": "node scripts/cleanupPaymentMethodQrs.js",
-    "payments:cleanup-expired": "node scripts/cleanupExpiredPayments.js"
+    "payments:cleanup-expired": "node scripts/cleanupExpiredPayments.js",
+    "receipts:preview": "node scripts/generatePaymentReceiptPreview.js"
   },
   "author": "",
   "license": "ISC",
@@ -50,6 +53,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.7.2",
     "multer": "^2.4.0",
+    "playwright": "^1.63.0",
     "resend": "^6.9.4",
     "sanitize-html": "^2.17.7",
     "socket.io": "^4.8.3",
