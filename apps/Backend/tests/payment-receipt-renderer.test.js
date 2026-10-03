@@ -1,5 +1,6 @@
 const assert = require('assert/strict');
-const test = require('node:test');
+const { test, mock } = require('node:test');
+const { chromium } = require('playwright');
 const {
   PROHIBITED_FIELDS,
   RECEIPT_COPY,
@@ -34,6 +35,33 @@ test('renders a local-font, one-page Chromium PDF buffer without external reques
   assert.equal(result.pageCount, 1);
   assert.equal(result.fontLoaded, true);
   assert.deepEqual(result.externalRequests, []);
+});
+
+test('logs a redacted browser-launch diagnostic without changing the thrown error', async () => {
+  const logs = [];
+  const originalError = console.error;
+  const launch = mock.method(chromium, 'launch', async () => {
+    const error = new Error('failed at mongodb+srv://user:password@cluster.example/arunthai for learner@example.com at /private/student/receipt.pdf with Bearer secret-token');
+    error.name = 'BrowserLaunchError';
+    throw error;
+  });
+  console.error = (...args) => logs.push(args);
+  try {
+    await assert.rejects(renderPaymentReceipt(primarySample), /cluster\.example/);
+  } finally {
+    console.error = originalError;
+    launch.mock.restore();
+  }
+
+  const [, diagnostic] = logs.find(([event]) => event === 'receipt_render_failed');
+  assert.equal(diagnostic.event, 'receipt_render_failed');
+  assert.equal(diagnostic.stage, 'browser_launch');
+  assert.equal(diagnostic.errorName, 'BrowserLaunchError');
+  assert.match(diagnostic.errorMessage, /\[redacted-mongodb-url\]/);
+  assert.match(diagnostic.errorMessage, /\[redacted-email\]/);
+  assert.match(diagnostic.errorMessage, /Bearer \[redacted\]/);
+  assert.match(diagnostic.errorMessage, /\[redacted-path\]/);
+  assert.doesNotMatch(diagnostic.errorMessage, /password|cluster\.example|learner@example\.com|student\/receipt\.pdf|secret-token/);
 });
 
 test('identifies only HTTP(S) resources as external network requests', () => {

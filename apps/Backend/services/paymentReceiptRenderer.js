@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
+const { redact } = require('../middleware/monitoring');
 
 // The renderer accepts a deliberately minimal, server-derived receipt DTO.
 // It never reads from MongoDB or external services and returns an in-memory PDF.
@@ -69,6 +70,25 @@ const PROHIBITED_FIELDS = Object.freeze([
   'bankDetails',
   'qrUrl',
 ]);
+
+const RECEIPT_DIAGNOSTIC_MESSAGE_LIMIT = 400;
+
+function safeDiagnosticMessage(error) {
+  return redact(error?.message || error)
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted-email]')
+    .replace(/data:[^\s"']+/gi, '[redacted-data-url]')
+    .replace(/(?:^|[\s(])\/[^\s"']+/g, (value) => `${value.startsWith(' ') || value.startsWith('(') ? value[0] : ''}[redacted-path]`)
+    .slice(0, RECEIPT_DIAGNOSTIC_MESSAGE_LIMIT);
+}
+
+function logReceiptRenderFailure(stage, error) {
+  console.error('receipt_render_failed', {
+    event: 'receipt_render_failed',
+    stage,
+    errorName: String(error?.name || 'Error').slice(0, 100),
+    errorMessage: safeDiagnosticMessage(error),
+  });
+}
 
 function validateReceiptInput(receipt) {
   if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) {
@@ -264,17 +284,23 @@ function pageCount(pdfBuffer) {
 }
 
 async function renderPaymentReceipt(receipt, options = {}) {
-  validateReceiptInput(receipt);
-  if (!fs.existsSync(FONT_PATH) || !fs.existsSync(LOGO_PATH)) {
-    throw new Error('Receipt renderer assets are missing.');
-  }
-
-  const launchStartedAt = process.hrtime.bigint();
+  let stage = 'input_validation';
+  let primaryError;
   let browser;
   try {
+    validateReceiptInput(receipt);
+    stage = 'asset_check';
+    if (!fs.existsSync(FONT_PATH) || !fs.existsSync(LOGO_PATH)) {
+      throw new Error('Receipt renderer assets are missing.');
+    }
+
+    stage = 'browser_launch';
+    const launchStartedAt = process.hrtime.bigint();
     browser = await chromium.launch({ headless: true });
     const launchDurationMs = Number(process.hrtime.bigint() - launchStartedAt) / 1e6;
     runHook(options.onBrowserLaunched, { launchDurationMs });
+
+    stage = 'page_setup';
     const page = await browser.newPage({ viewport: { width: 794, height: 1123 }, deviceScaleFactor: 2 });
     const externalRequests = [];
     page.on('request', (request) => {
@@ -285,13 +311,18 @@ async function renderPaymentReceipt(receipt, options = {}) {
       if (isExternalNetworkUrl(route.request().url())) return route.abort('blockedbyclient');
       return route.continue();
     });
+
+    stage = 'html_render';
     const html = createReceiptHtml(receipt);
     await page.setContent(html, { waitUntil: 'load' });
+
+    stage = 'font_load';
     await page.evaluate(async () => document.fonts.ready);
     const fontLoaded = await page.evaluate(() => document.fonts.check('16px ArunThaiMyanmar'));
     if (!fontLoaded) throw new Error('The bundled ArunThaiMyanmar font did not load in Chromium.');
     if (externalRequests.length > 0) throw new Error('Receipt attempted external network resources.');
 
+    stage = 'pdf_generation';
     const pdfStartedAt = process.hrtime.bigint();
     const pdfBuffer = await page.pdf({
       format: 'A4',
@@ -302,17 +333,33 @@ async function renderPaymentReceipt(receipt, options = {}) {
     });
     const pdfDurationMs = Number(process.hrtime.bigint() - pdfStartedAt) / 1e6;
     runHook(options.onPdfGenerated, { pdfDurationMs, pdfBytes: pdfBuffer.length });
+
+    stage = 'screenshot';
     const pngBuffer = await page.screenshot({ fullPage: true, type: 'png' });
+
+    stage = 'layout_check';
     const documentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
     const viewportHeight = await page.evaluate(() => window.innerHeight);
     if (documentHeight > viewportHeight) {
       throw new Error(`Receipt browser layout overflowed one page (${documentHeight}px > ${viewportHeight}px).`);
     }
     return { pdfBuffer, pngBuffer, html, fontLoaded, externalRequests, pageCount: pageCount(pdfBuffer), launchDurationMs, pdfDurationMs };
+  } catch (error) {
+    primaryError = error;
+    logReceiptRenderFailure(stage, error);
+    throw error;
   } finally {
     if (browser) {
-      await browser.close();
-      runHook(options.onBrowserClosed, {});
+      try {
+        stage = 'browser_cleanup';
+        await browser.close();
+        runHook(options.onBrowserClosed, {});
+      } catch (cleanupError) {
+        if (!primaryError) {
+          logReceiptRenderFailure(stage, cleanupError);
+          throw cleanupError;
+        }
+      }
     }
   }
 }
@@ -322,11 +369,13 @@ module.exports = {
   LOGO_PATH,
   PROHIBITED_FIELDS,
   RECEIPT_COPY,
+  RECEIPT_DIAGNOSTIC_MESSAGE_LIMIT,
   buildPaymentRows,
   createReceiptHtml,
   formatReceiptDate,
   isExternalNetworkUrl,
   pageCount,
   renderPaymentReceipt,
+  safeDiagnosticMessage,
   validateReceiptInput,
 };
