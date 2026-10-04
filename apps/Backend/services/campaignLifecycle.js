@@ -40,7 +40,7 @@ async function processCampaignAssetCleanup(job) {
 async function processExpiredCampaigns({ limit = 50, now = new Date() } = {}) {
   const results = [];
   for (let count = 0; count < limit; count += 1) {
-    const campaign = await Campaign.findOneAndUpdate({ expiresAt: { $lte: now }, cleanupState: "active" }, { $set: { cleanupState: "claimed" } }, { new: true });
+    const campaign = await Campaign.findOneAndUpdate({ expiresAt: { $lte: now }, cleanupState: "active" }, { $set: { cleanupState: "claimed" } }, { returnDocument: "after" });
     if (!campaign) break;
     if (!campaign.imagePublicId) { await campaign.deleteOne(); results.push({ deleted: true, image: false }); continue; }
     await queueCampaignAssetCleanup(campaign._id, campaign.imagePublicId, { removeCampaign: true });

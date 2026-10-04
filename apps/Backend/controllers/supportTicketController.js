@@ -44,7 +44,7 @@ const updateTicketStatus = async (req, res) => {
   try {
     const { status } = req.body || {};
     if (!["open", "in_progress", "resolved"].includes(status)) return res.status(400).json({ message: "Invalid ticket status." });
-    const ticket = await SupportTicket.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    const ticket = await SupportTicket.findByIdAndUpdate(req.params.id, { status }, { returnDocument: "after" });
     if (!ticket) return res.status(404).json({ message: "Support request not found." });
     emitAdminEvent("admin:support-updated");
     return res.status(200).json(await populateTicket(SupportTicket.findById(ticket._id)));
