@@ -8,6 +8,7 @@ const path = require("node:path");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { ipKeyGenerator } = require("express-rate-limit");
 const { derivePublicDisplayName } = require("../services/studentFeedbackDisplayName");
 
 const backendDirectory = path.resolve(__dirname, "..");
@@ -46,6 +47,26 @@ before(async () => {
 });
 beforeEach(async () => { await mongoose.connection.db.dropDatabase(); await StudentFeedback.syncIndexes(); });
 after(async () => { await mongoose.disconnect(); await Promise.all([stop(apiProcess), stop(mongoProcess)]); if (mongoDirectory) await fs.rm(mongoDirectory, { recursive: true, force: true }); });
+
+test("configures the feedback limiter without the IPv6 key-generator warning", () => {
+  const routePath = require.resolve("../routes/studentFeedback");
+  const originalConsoleError = console.error;
+  const errors = [];
+  console.error = (...args) => errors.push(args.join(" "));
+  delete require.cache[routePath];
+  try {
+    require(routePath);
+  } finally {
+    console.error = originalConsoleError;
+    delete require.cache[routePath];
+  }
+  assert.equal(errors.some((message) => message.includes("ERR_ERL_KEY_GEN_IPV6")), false);
+});
+
+test("uses the library IPv6-safe fallback normalization", () => {
+  assert.equal(ipKeyGenerator("203.0.113.9"), "203.0.113.9");
+  assert.equal(ipKeyGenerator("2001:db8:abcd:1234:5678:9abc:def0:1234"), "2001:db8:abcd:1200::/56");
+});
 
 test("requires an authenticated, active, verified student", async () => {
   const active = await createUser(); const enrolledCourse = await course(); await enroll(active, enrolledCourse); const inactive = await createUser({ isActive: false }); const unverified = await createUser({ isVerified: false });
@@ -91,6 +112,18 @@ test("accepts feedback at the documented 20 and 2000 character bounds", async ()
   const first = await createUser(); const second = await createUser(); const firstToken = await login(first); const secondToken = await login(second); const firstCourse = await course(); const secondCourse = await course(); await enroll(first, firstCourse); await enroll(second, secondCourse);
   assert.equal((await submit(firstToken, firstCourse, "x".repeat(20))).status, 201);
   assert.equal((await submit(secondToken, secondCourse, "y".repeat(2000))).status, 201);
+});
+
+test("limits feedback writes per authenticated student after 20 writes per hour", async () => {
+  const first = await createUser(); const second = await createUser(); const firstToken = await login(first); const secondToken = await login(second); const firstCourse = await course(); const secondCourse = await course(); await enroll(first, firstCourse); await enroll(second, secondCourse);
+  const created = await json(await submit(firstToken, firstCourse));
+  for (let attempt = 0; attempt < 19; attempt += 1) {
+    const response = await request(`/student-feedback/${created.feedback._id}/publication-consent`, { method: "PATCH", token: firstToken, body: { status: "permitted", namePreference: "first_name" } });
+    assert.equal(response.status, 200);
+  }
+  const limited = await request(`/student-feedback/${created.feedback._id}/publication-consent`, { method: "PATCH", token: firstToken, body: { status: "permitted", namePreference: "first_name" } });
+  assert.equal(limited.status, 429);
+  assert.equal((await submit(secondToken, secondCourse)).status, 201);
 });
 
 test("enforces one feedback submission per student and course and isolates owner reads", async () => {

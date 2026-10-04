@@ -1,5 +1,5 @@
 const express = require("express");
-const rateLimit = require("express-rate-limit");
+const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 const validateToken = require("../middleware/authMiddleware");
 const { createStudentFeedback, getMyStudentFeedback, updatePublicationConsent } = require("../controllers/studentFeedbackController");
 
@@ -9,7 +9,7 @@ const feedbackWriteLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => String(req.user?.id || req.ip),
+  keyGenerator: (req) => String(req.user?.id || ipKeyGenerator(req.ip)),
   message: { message: "Too many feedback updates. Please try again later." },
 });
 
