@@ -92,7 +92,7 @@ test("unlimited lesson submissions provide immediate review and immutable snapsh
   const first = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0], score: 99, correctness: false });
   const second = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [1] });
   assert.equal(first.score, 1); assert.equal(first.review[0].correctAnswer, 0); assert.equal(first.review[0].isCorrect, true);
-  assert.equal(second.attemptNumber, 2); assert.equal(second.maxAttempts, null);
+  assert.equal(second.attemptNumber, 2); assert.equal(second.maxAttempts, null); assert.equal(second.review[0].correctAnswer, 0);
   quiz.questions[0].prompt = "Changed"; await quiz.save();
   const history = await studentQuizHistory({ quizId: quiz._id, user });
   assert.equal(history.timesTaken, 2); assert.equal(history.attempts[0].review[0].correctAnswer, 0);
@@ -100,21 +100,57 @@ test("unlimited lesson submissions provide immediate review and immutable snapsh
   assert.equal((await studentQuizHistory({ quizId: quiz._id, user: other })).attempts.length, 0);
 });
 
-test("final quizzes default to three attempts and each grant adds one", async () => {
+test("final quizzes conceal answers until the last available submission, then reveal them durably", async () => {
   const { course, quiz } = await setupQuiz({ contextType: "course_final" }); const user = { id: id() };
   await Enrollment.create({ userId: user.id, courseId: course._id });
   assert.equal(quiz.maxAttempts, 3);
-  for (let attemptNumber = 1; attemptNumber <= 3; attemptNumber += 1) {
-    const submission = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0] });
-    assert.equal(submission.attemptNumber, attemptNumber);
-    assert.equal(submission.maxAttempts, 3);
-  }
+  const first = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0] });
+  assert.equal(first.attemptNumber, 1); assert.equal(first.review[0].isCorrect, true); assert.equal("correctAnswer" in first.review[0], false);
+  assert.equal((await QuizAttempt.findOne({ quiz: quiz._id, user: user.id, attemptNumber: 1 }).lean()).submissionSnapshot.questions[0].correctAnswer, 0);
+  const beforeReveal = await studentQuizHistory({ quizId: quiz._id, user });
+  assert.equal("correctAnswer" in beforeReveal.attempts[0].review[0], false);
+  const second = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [1] });
+  assert.equal(second.attemptNumber, 2); assert.equal(second.review[0].isCorrect, false); assert.equal("correctAnswer" in second.review[0], false);
+  const third = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0] });
+  assert.equal(third.attemptNumber, 3); assert.equal(third.maxAttempts, 3); assert.equal(third.review[0].correctAnswer, 0);
+  assert.equal((await QuizAttempt.findOne({ quiz: quiz._id, user: user.id, attemptNumber: 3 }).lean()).correctAnswersRevealed, true);
+  const afterReveal = await studentQuizHistory({ quizId: quiz._id, user });
+  assert.equal(afterReveal.attempts.length, 3);
+  assert.equal(afterReveal.attempts[0].review[0].correctAnswer, 0);
   await assert.rejects(submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0] }), /No final quiz attempts/);
   await QuizAttemptGrant.create({ user: user.id, quiz: quiz._id, grantedBy: id() });
   const grantedSubmission = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0] });
   assert.equal(grantedSubmission.attemptNumber, 4);
   assert.equal(grantedSubmission.maxAttempts, 4);
+  assert.equal(grantedSubmission.review[0].correctAnswer, 0);
+  assert.equal((await studentQuizHistory({ quizId: quiz._id, user })).attempts[0].review[0].correctAnswer, 0);
   await assert.rejects(submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0] }), /No final quiz attempts/);
+});
+
+test("final quizzes with explicit limits keep answers hidden until their final available submission", async () => {
+  const { course, quiz } = await setupQuiz({ contextType: "course_final", maxAttempts: 5 }); const user = { id: id() };
+  await Enrollment.create({ userId: user.id, courseId: course._id });
+  for (let attemptNumber = 1; attemptNumber <= 4; attemptNumber += 1) {
+    const submission = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0] });
+    assert.equal(submission.attemptNumber, attemptNumber);
+    assert.equal("correctAnswer" in submission.review[0], false);
+  }
+  const fifth = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0] });
+  assert.equal(fifth.attemptNumber, 5);
+  assert.equal(fifth.review[0].correctAnswer, 0);
+});
+
+test("final answer reveal state remains private to the student who exhausted attempts", async () => {
+  const { course, quiz } = await setupQuiz({ contextType: "course_final", maxAttempts: 2 });
+  const revealedUser = { id: id() }; const otherUser = { id: id() };
+  await Enrollment.create([{ userId: revealedUser.id, courseId: course._id }, { userId: otherUser.id, courseId: course._id }]);
+  await submitQuiz({ quizId: quiz._id, user: revealedUser, submittedRevision: quiz.revision, answers: [0] });
+  await submitQuiz({ quizId: quiz._id, user: revealedUser, submittedRevision: quiz.revision, answers: [0] });
+  const otherSubmission = await submitQuiz({ quizId: quiz._id, user: otherUser, submittedRevision: quiz.revision, answers: [0] });
+  assert.equal("correctAnswer" in otherSubmission.review[0], false);
+  const otherHistory = await studentQuizHistory({ quizId: quiz._id, user: otherUser });
+  assert.equal(otherHistory.attempts.length, 1);
+  assert.equal("correctAnswer" in otherHistory.attempts[0].review[0], false);
 });
 
 test("direct student quiz requests conceal unavailable and unauthorized quiz identifiers", async () => {
@@ -151,6 +187,7 @@ test("final allowance uses grants atomically and records durable goal achievemen
   assert.equal(concurrent.filter((result) => result.status === "fulfilled").length, 1);
   assert.equal(concurrent.filter((result) => result.status === "rejected").length, 1);
   assert.equal(await QuizAttempt.countDocuments({ user: concurrentUser.id, quiz: quiz._id }), 1);
+  assert.equal((await QuizAttempt.findOne({ user: concurrentUser.id, quiz: quiz._id }).lean()).correctAnswersRevealed, true);
   assert.equal(await QuizGoalAchievement.countDocuments({ user: firstUser.id, quiz: quiz._id }), 1);
   quiz.goalPercent = 100; await quiz.save();
   assert.equal(await QuizGoalAchievement.countDocuments({ user: firstUser.id, quiz: quiz._id }), 1);

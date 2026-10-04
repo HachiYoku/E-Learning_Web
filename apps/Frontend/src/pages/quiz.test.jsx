@@ -104,7 +104,36 @@ describe('Quiz result navigation', () => {
     await user.click(screen.getByRole('button', { name: 'Finish quiz' }))
     await user.click(screen.getByRole('button', { name: 'Submit quiz' }))
     expect((await screen.findByText(/your answer:/i)).parentElement.textContent).toContain('Hello')
+    expect(screen.getByText('Right')).toBeTruthy()
+    expect(screen.getByText(/correct answer:/i)).toBeTruthy()
+  })
+
+  it('shows final selected answers and correctness without rendering a hidden correct answer', async () => {
+    const user = userEvent.setup()
+    fetchCourseQuizzes.mockResolvedValue([{ ...lessonQuiz, _id: 'course-final-1', id: 'course-final-1', title: 'Course final', maxAttempts: 3 }])
+    submitQuiz.mockResolvedValueOnce({ score: 0, total: 1, attemptsUsed: 1, maxAttempts: 3, review: [{ selectedAnswer: 1, isCorrect: false }] })
+    render(<MemoryRouter initialEntries={['/app/course-quiz/course-1/course-final-1']}><Routes><Route path="/app/course-quiz/:courseId/:quizId" element={<Quiz />} /></Routes></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: /goodbye/i }))
+    await user.click(screen.getByRole('button', { name: 'Finish quiz' }))
+    await user.click(screen.getByRole('button', { name: 'Submit quiz' }))
+
+    expect((await screen.findByText(/your answer:/i)).parentElement.textContent).toContain('Goodbye')
+    expect(screen.getByText('Wrong')).toBeTruthy()
     expect(screen.queryByText(/correct answer:/i)).toBeNull()
+  })
+
+  it('renders a revealed correct answer when the server supplies it for a final quiz', async () => {
+    const user = userEvent.setup()
+    fetchCourseQuizzes.mockResolvedValue([{ ...lessonQuiz, _id: 'course-final-1', id: 'course-final-1', title: 'Course final', maxAttempts: 3 }])
+    submitQuiz.mockResolvedValueOnce({ score: 0, total: 1, attemptsUsed: 3, maxAttempts: 3, review: [{ selectedAnswer: 1, correctAnswer: 0, isCorrect: false }] })
+    render(<MemoryRouter initialEntries={['/app/course-quiz/course-1/course-final-1']}><Routes><Route path="/app/course-quiz/:courseId/:quizId" element={<Quiz />} /></Routes></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: /goodbye/i }))
+    await user.click(screen.getByRole('button', { name: 'Finish quiz' }))
+    await user.click(screen.getByRole('button', { name: 'Submit quiz' }))
+
+    expect((await screen.findByText(/correct answer:/i)).parentElement.textContent).toContain('Hello')
   })
 
   it('returns a lesson quiz result to the exact originating lesson and retains Try again', async () => {

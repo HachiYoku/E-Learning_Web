@@ -49,6 +49,9 @@ const quizAttemptSchema = new mongoose.Schema(
     answers: { type: [Number], default: [], immutable: true },
     score: { type: Number, required: true, min: 0, immutable: true },
     total: { type: Number, required: true, min: 1, immutable: true },
+    // A Final Quiz marks the accepted last available submission so answer
+    // review remains available even if an administrator later grants a retry.
+    correctAnswersRevealed: { type: Boolean, default: false, immutable: true },
     // New submissions will carry this immutable complete historical view.
     submissionSnapshot: { type: submissionSnapshotSchema, default: undefined },
   },
@@ -73,7 +76,7 @@ quizAttemptSchema.pre("save", async function preserveCompletedSnapshot() {
 });
 
 const IMMUTABLE_SUBMISSION_PATHS = new Set([
-  "quiz", "user", "attemptNumber", "answers", "score", "total", "submissionSnapshot",
+  "quiz", "user", "attemptNumber", "answers", "score", "total", "correctAnswersRevealed", "submissionSnapshot",
 ]);
 
 function touchesImmutableSubmissionPath(update) {

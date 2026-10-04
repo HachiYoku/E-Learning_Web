@@ -20,6 +20,19 @@ class QuizSubmissionError extends Error {
 const FINAL_CONTEXTS = new Set(["course_final", "homework_final"]);
 const isFinalQuiz = (quiz) => FINAL_CONTEXTS.has(quiz.contextType);
 
+function revealedCorrectAnswerQuery(quizId, userId) {
+  return {
+    quiz: quizId,
+    user: userId,
+    $or: [
+      { correctAnswersRevealed: true },
+      // Phase 2 stored complete snapshots and returned them to students before
+      // this marker existed. Keep that already-disclosed review available.
+      { correctAnswersRevealed: { $exists: false }, "submissionSnapshot.questions.0": { $exists: true } },
+    ],
+  };
+}
+
 function validateAnswers(quiz, answers) {
   if (!Array.isArray(answers) || answers.length !== quiz.questions.length) {
     throw new QuizSubmissionError(400, "Submit one valid answer for every question.", "invalid_quiz_answers");
@@ -69,7 +82,7 @@ async function loadSnapshotParents(quiz, session) {
   return { course, lesson, homeworkSet };
 }
 
-function submissionReview(attempt) {
+function submissionReview(attempt, { revealCorrectAnswers = true } = {}) {
   const questions = attempt.submissionSnapshot?.questions || [];
   return {
     score: attempt.score,
@@ -80,7 +93,7 @@ function submissionReview(attempt) {
     review: questions.map((question) => ({
       questionId: question.questionId,
       selectedAnswer: question.selectedAnswer,
-      correctAnswer: question.correctAnswer,
+      ...(revealCorrectAnswers ? { correctAnswer: question.correctAnswer } : {}),
       isCorrect: question.isCorrect,
     })),
   };
@@ -106,6 +119,9 @@ async function submitQuiz({ quizId, user, submittedRevision, answers }) {
           throw new QuizSubmissionError(403, "No final quiz attempts remain.", "quiz_attempt_limit_reached");
         }
 
+        const answersAlreadyRevealed = isFinalQuiz(quiz)
+          ? Boolean(await QuizAttempt.exists(revealedCorrectAnswerQuery(quiz._id, userId)).session(session))
+          : true;
         const score = quiz.questions.reduce((total, question, index) => total + (question.correctAnswer === normalizedAnswers[index] ? 1 : 0), 0);
         const parents = await loadSnapshotParents(quiz, session);
         const submittedAt = new Date();
@@ -118,6 +134,9 @@ async function submitQuiz({ quizId, user, submittedRevision, answers }) {
           ...parents,
         });
         const attemptNumber = (allowance?.attemptsUsed || await QuizAttempt.countDocuments({ quiz: quiz._id, user: userId }).session(session)) + 1;
+        const revealCorrectAnswers = !isFinalQuiz(quiz)
+          || answersAlreadyRevealed
+          || attemptNumber >= allowance.effectiveMaxAttempts;
         const [attempt] = await QuizAttempt.create([{
           quiz: quiz._id,
           user: userId,
@@ -125,6 +144,7 @@ async function submitQuiz({ quizId, user, submittedRevision, answers }) {
           answers: normalizedAnswers,
           score,
           total: quiz.questions.length,
+          correctAnswersRevealed: revealCorrectAnswers && isFinalQuiz(quiz),
           submissionSnapshot: snapshot,
           createdAt: submittedAt,
         }], { session });
@@ -144,7 +164,7 @@ async function submitQuiz({ quizId, user, submittedRevision, answers }) {
 
         const attemptsUsed = attemptNumber;
         return {
-          ...submissionReview(attempt),
+          ...submissionReview(attempt, { revealCorrectAnswers }),
           attemptsUsed,
           maxAttempts: allowance ? allowance.effectiveMaxAttempts : null,
           timesTaken: attemptsUsed,
@@ -166,6 +186,8 @@ async function studentQuizHistory({ quizId, user }) {
     .select("attemptNumber answers score total createdAt submissionSnapshot")
     .sort({ attemptNumber: 1 })
     .lean();
+  const correctAnswersRevealed = !isFinalQuiz(quiz)
+    || Boolean(await QuizAttempt.exists(revealedCorrectAnswerQuery(quiz._id, user.id || user._id)));
   const bestScore = attempts.reduce((best, attempt) => Math.max(best, attempt.total ? (attempt.score / attempt.total) * 100 : 0), 0);
   const allowance = await attemptAllowance({ quiz, userId: user.id || user._id });
   return {
@@ -175,7 +197,7 @@ async function studentQuizHistory({ quizId, user }) {
       score: attempt.score,
       total: attempt.total,
       createdAt: attempt.createdAt,
-      review: attempt.submissionSnapshot ? submissionReview(attempt).review : null,
+      review: attempt.submissionSnapshot ? submissionReview(attempt, { revealCorrectAnswers: correctAnswersRevealed }).review : null,
     })),
     attemptsUsed: attempts.length,
     timesTaken: attempts.length,

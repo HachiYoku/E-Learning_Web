@@ -39,6 +39,7 @@ function FinalAnswerReview({ questions, review }) {
         const answerIndex = review[index]?.selectedAnswer;
         const correctAnswerIndex = review[index]?.correctAnswer;
         const isCorrect = review[index]?.isCorrect === true;
+        const hasCorrectAnswer = Number.isInteger(correctAnswerIndex);
 
         return (
           <article key={item._id || item.id || index} className={`overflow-hidden rounded-2xl border ${isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
@@ -47,7 +48,8 @@ function FinalAnswerReview({ questions, review }) {
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Question {index + 1}</p>
               <h3 className="mt-1 text-lg font-bold text-[#2D2E30]">{item.prompt || "Question"}</h3>
               <p className={`mt-4 rounded-xl bg-white/80 px-3 py-2.5 text-sm ${isCorrect ? "text-[#4D7C57]" : "text-[#A84646]"}`}><span className="font-bold">Your answer:</span> {item.options[answerIndex] ?? "Answer unavailable"}</p>
-              {!isCorrect ? <p className="mt-2 rounded-xl bg-white/80 px-3 py-2.5 text-sm text-[#4D7C57]"><span className="font-bold">Correct answer:</span> {item.options[correctAnswerIndex] ?? "Answer unavailable"}</p> : null}
+              <p className={`mt-2 rounded-xl bg-white/80 px-3 py-2.5 text-sm ${isCorrect ? "text-[#4D7C57]" : "text-[#A84646]"}`}><span className="font-bold">{isCorrect ? "Right" : "Wrong"}</span></p>
+              {hasCorrectAnswer ? <p className="mt-2 rounded-xl bg-white/80 px-3 py-2.5 text-sm text-[#4D7C57]"><span className="font-bold">Correct answer:</span> {item.options[correctAnswerIndex] ?? "Answer unavailable"}</p> : null}
             </div>
           </article>
         );
