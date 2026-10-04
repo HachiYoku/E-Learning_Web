@@ -17,9 +17,15 @@ const notificationSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    homeworkSetId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "HomeworkSet",
+      default: null,
+      index: true,
+    },
     type: {
       type: String,
-      enum: ["payment", "enrollment", "course", "system", "info"],
+      enum: ["payment", "enrollment", "course", "homework", "system", "info"],
       default: "info",
     },
     title: {

@@ -15,6 +15,7 @@ function serialiseNotification(notification) {
     _id: String(value._id),
     userId: String(value.userId),
     courseId: value.courseId ? String(value.courseId) : null,
+    homeworkSetId: value.homeworkSetId ? String(value.homeworkSetId) : null,
     announcementId: value.announcementId ? String(value.announcementId) : undefined,
     type: value.type,
     title: value.title,

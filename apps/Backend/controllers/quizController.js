@@ -69,10 +69,17 @@ async function validateLesson(courseId, lessonId) {
   if (!lesson || String(lesson.course) !== String(courseId)) throw new Error("Lesson not found in this course");
 }
 
+function duplicateQuizMessage(quizType) {
+  return quizType === "course"
+    ? "A final quiz already exists for this course."
+    : "A quiz already exists for this lesson.";
+}
+
 const createQuiz = async (req, res) => {
+  let finalQuizType = "lesson";
   try {
     const { courseId, lessonId, title, quizType } = req.body;
-    const finalQuizType = quizType || "lesson"; // Default to lesson for backward compatibility
+    finalQuizType = quizType || "lesson"; // Default to lesson for backward compatibility
     const maxAttempts = req.body.maxAttempts === "" || req.body.maxAttempts === undefined ? null : Number(req.body.maxAttempts);
     
     if (!courseId || !title?.trim()) return res.status(400).json({ message: "Course and quiz title are required." });
@@ -93,7 +100,7 @@ const createQuiz = async (req, res) => {
     const quiz = await Quiz.create(quizData);
     return res.status(201).json(quiz);
   } catch (error) {
-    if (error.code === 11000) return res.status(400).json({ message: "A quiz with this title already exists for this course/lesson." });
+    if (error.code === 11000) return res.status(400).json({ message: duplicateQuizMessage(finalQuizType) });
     return res.status(error.message.includes("not found") ? 404 : 400).json({ message: error.message });
   }
 };
@@ -118,13 +125,14 @@ const getAdminQuiz = async (req, res) => {
 };
 
 const updateQuiz = async (req, res) => {
+  let quizType = "lesson";
   try {
     const quiz = await Quiz.findById(req.params.quizId);
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
     
     const courseId = req.body.courseId || String(quiz.course);
     const lessonId = req.body.lessonId || String(quiz.lesson);
-    const quizType = req.body.quizType || quiz.quizType;
+    quizType = req.body.quizType || quiz.quizType;
     
     if (!["lesson", "course"].includes(quizType)) return res.status(400).json({ message: "Quiz type must be 'lesson' or 'course'." });
     if (quizType === "lesson" && !lessonId) return res.status(400).json({ message: "Lesson is required for lesson-type quizzes." });
@@ -153,7 +161,7 @@ const updateQuiz = async (req, res) => {
     await quiz.save();
     return res.json(quiz);
   } catch (error) {
-    if (error.code === 11000) return res.status(400).json({ message: "A quiz with this title already exists for this course/lesson." });
+    if (error.code === 11000) return res.status(400).json({ message: duplicateQuizMessage(quizType) });
     return res.status(error.message.includes("not found") ? 404 : 400).json({ message: error.message });
   }
 };

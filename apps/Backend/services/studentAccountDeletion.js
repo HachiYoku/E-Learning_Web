@@ -5,6 +5,10 @@ const PersonalFlashcardDeck = require("../models/personalFlashcardDeckModel");
 const PersonalFlashcard = require("../models/personalFlashcardModel");
 const FlashcardReviewProgress = require("../models/flashcardReviewProgressModel");
 const QuizAttempt = require("../models/quizAttemptModel");
+const HomeworkSetAssignment = require("../models/homeworkSetAssignmentModel");
+const QuizUnlock = require("../models/quizUnlockModel");
+const QuizAttemptGrant = require("../models/quizAttemptGrantModel");
+const QuizGoalAchievement = require("../models/quizGoalAchievementModel");
 const Notification = require("../models/notificationModel");
 const SupportTicket = require("../models/supportTicketModel");
 const StudentFeedback = require("../models/studentFeedbackModel");
@@ -66,6 +70,10 @@ async function deleteStudentAccount(userId, { actorId, initiatedBy, deletionConf
       FlashcardReviewProgress.deleteMany({ userId: student._id }, { session }),
       PersonalFlashcardDeck.deleteMany({ ownerId: student._id }, { session }),
       QuizAttempt.deleteMany({ user: student._id }, { session }),
+      HomeworkSetAssignment.deleteMany({ user: student._id }, { session }),
+      QuizUnlock.deleteMany({ user: student._id }, { session }),
+      QuizAttemptGrant.deleteMany({ user: student._id }, { session }),
+      QuizGoalAchievement.deleteMany({ user: student._id }, { session }),
       Notification.deleteMany({ userId: student._id }, { session }),
       SupportTicket.deleteMany({ studentId: student._id }, { session }),
       StudentFeedback.deleteMany({ studentId: student._id }, { session }),
