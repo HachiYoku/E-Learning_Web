@@ -23,7 +23,7 @@ async function assignLegacyCards() {
   const category = await FlashcardCategory.findOneAndUpdate(
     { name: "Uncategorized" },
     { $setOnInsert: { name: "Uncategorized" } },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
+    { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
   );
   await Flashcard.updateMany({ $or: [{ category: { $exists: false } }, { category: null }] }, { $set: { category: category._id } });
 }
@@ -112,7 +112,7 @@ exports.updateCategory = async (req, res) => {
   try {
     const name = String(req.body.name || "").trim();
     if (!name) return res.status(400).json({ message: "A category name is required." });
-    const category = await FlashcardCategory.findByIdAndUpdate(req.params.categoryId, { name }, { new: true, runValidators: true });
+    const category = await FlashcardCategory.findByIdAndUpdate(req.params.categoryId, { name }, { returnDocument: "after", runValidators: true });
     if (!category) return res.status(404).json({ message: "Flashcard category not found." });
     const cardCount = await Flashcard.countDocuments({ category: category._id });
     return res.json({ ...category.toObject(), cardCount });

@@ -74,7 +74,7 @@ async function rotateRefreshSession(token, expectedRole) {
   const rotatedSession = await RefreshSession.findOneAndUpdate(
     { _id: session._id, revokedAt: null, expiresAt: { $gt: new Date() } },
     { $set: { revokedAt: new Date() } },
-    { new: false }
+    { returnDocument: "before" }
   );
   if (!rotatedSession) return null;
 

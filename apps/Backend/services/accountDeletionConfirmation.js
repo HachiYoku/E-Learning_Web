@@ -14,7 +14,7 @@ async function issueDeletionConfirmation(userId, sessionVersion) {
   await AccountDeletionConfirmation.findOneAndUpdate(
     { userId },
     { $set: { tokenHash: hashConfirmationToken(token), sessionVersion: Number(sessionVersion || 0), expiresAt } },
-    { upsert: true, new: true, runValidators: true }
+    { upsert: true, returnDocument: "after", runValidators: true }
   );
   return { token, expiresAt };
 }

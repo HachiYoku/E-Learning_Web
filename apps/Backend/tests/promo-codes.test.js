@@ -80,7 +80,7 @@ test("duplicate user redemption is denied, while separate users cannot oversell 
   const owner = await user(`owner-capacity-${Date.now()}@example.test`); const first = await user(`first-capacity-${Date.now()}@example.test`); const second = await user(`second-capacity-${Date.now()}@example.test`); const item = await promo({ usageLimit: 1 });
   const reserve = async (student) => {
     const redemption = await PromoRedemption.create({ promoCode: item._id, userId: student._id });
-    const updated = await PromoCode.findOneAndUpdate({ _id: item._id, isActive: true, $and: [{ $or: [{ usageLimit: null }, { $expr: { $lt: ["$usageCount", "$usageLimit"] } }] }] }, { $inc: { usageCount: 1 } }, { new: true });
+    const updated = await PromoCode.findOneAndUpdate({ _id: item._id, isActive: true, $and: [{ $or: [{ usageLimit: null }, { $expr: { $lt: ["$usageCount", "$usageLimit"] } }] }] }, { $inc: { usageCount: 1 } }, { returnDocument: "after" });
     if (!updated) await PromoRedemption.deleteOne({ _id: redemption._id });
     return Boolean(updated);
   };

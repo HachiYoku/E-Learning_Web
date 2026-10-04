@@ -86,7 +86,7 @@ exports.updateDeck = async (req, res) => {
     const deck = await PersonalFlashcardDeck.findOneAndUpdate(
       { _id: req.params.deckId, ownerId: req.user.id },
       { $set: { name } },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     );
     if (!deck) return res.status(404).json({ message: DECK_NOT_FOUND });
     const cardCount = await PersonalFlashcard.countDocuments({ ownerId: req.user.id, deckId: deck._id });
@@ -146,7 +146,7 @@ exports.updateCard = async (req, res) => {
     const card = await PersonalFlashcard.findOneAndUpdate(
       { _id: req.params.cardId, deckId: req.params.deckId, ownerId: req.user.id },
       { $set: fields },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     );
     if (!card) return res.status(404).json({ message: CARD_NOT_FOUND });
     return res.json(cardResponse(card));
