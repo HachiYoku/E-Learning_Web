@@ -14,8 +14,8 @@ export function fetchCourseQuizzes(courseId) {
   return apiClient.get(`/quizzes/course/${courseId}`).then((items) => items.map(normalizeQuiz));
 }
 
-export function submitQuiz(quizId, answers) {
-  return apiClient.post(`/quizzes/${quizId}/submit`, { answers });
+export function submitQuiz(quizId, answers, revision) {
+  return apiClient.post(`/quizzes/${quizId}/submit`, { answers, revision });
 }
 
 export function fetchQuizHistory(quizId) {

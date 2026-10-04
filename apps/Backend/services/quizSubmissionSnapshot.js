@@ -31,11 +31,14 @@ function entitySnapshot(entity) {
   return { id: entity._id || entity.id || entity, title: String(entity.title || "") };
 }
 
-function buildQuizSubmissionSnapshot({ quiz, answers, course, lesson, homeworkSet }) {
+function buildQuizSubmissionSnapshot({ quiz, answers, course, lesson, homeworkSet, score, total, submittedAt }) {
   return {
     contextType: quiz.contextType,
     quizTitle: String(quiz.title || ""),
     quizRevision: Number(quiz.revision || 1),
+    score: Number.isFinite(score) ? score : null,
+    total: Number.isFinite(total) ? total : null,
+    submittedAt: submittedAt || null,
     course: entitySnapshot(course || quiz.course),
     lesson: entitySnapshot(lesson || quiz.lesson),
     homeworkSet: entitySnapshot(homeworkSet || quiz.homeworkSet),

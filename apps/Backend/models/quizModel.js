@@ -116,7 +116,11 @@ function validateQuizContext(quiz) {
     invalidateContext(quiz, "standaloneAccess", "Only standalone quizzes can define standalone access.");
   }
 
-  if (!FINAL_CONTEXTS.has(context)) {
+  if (FINAL_CONTEXTS.has(context) && (quiz.maxAttempts === null || quiz.maxAttempts === undefined)) {
+    // Finals are always finite. This preserves the approved default for both
+    // legacy Admin creation and future final-quiz management flows.
+    quiz.maxAttempts = 3;
+  } else if (!FINAL_CONTEXTS.has(context)) {
     // Legacy clients may still submit this field for lesson quizzes. Keeping
     // it null makes unlimited-retake semantics explicit without rejecting an
     // otherwise valid transitional request.

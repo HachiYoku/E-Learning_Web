@@ -32,13 +32,13 @@ function clearSavedQuizDraft(key) {
   }
 }
 
-function FinalAnswerReview({ questions, answers, correctAnswers }) {
+function FinalAnswerReview({ questions, review }) {
   return (
     <div className="mt-8 space-y-5 text-left">
       {questions.map((item, index) => {
-        const answerIndex = answers[index];
-        const correctAnswerIndex = correctAnswers[index];
-        const isCorrect = answerIndex === correctAnswerIndex;
+        const answerIndex = review[index]?.selectedAnswer;
+        const correctAnswerIndex = review[index]?.correctAnswer;
+        const isCorrect = review[index]?.isCorrect === true;
 
         return (
           <article key={item._id || item.id || index} className={`overflow-hidden rounded-2xl border ${isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
@@ -198,7 +198,7 @@ function Quiz() {
 
     try {
       setError("");
-      const submission = await submitQuiz(quiz._id, answers);
+      const submission = await submitQuiz(quiz._id, answers, quiz.revision);
       setResult(submission);
       if (draftKey) clearSavedQuizDraft(draftKey);
       fetchQuizHistory(quiz._id)
@@ -345,11 +345,10 @@ function Quiz() {
                   </h2>
                   <p className="mt-2 text-gray-600">{scoreMessage(Math.round((result.score / result.total) * 100))}</p>
 
-                  {result.showCorrectAnswers ? (
+                  {Array.isArray(result.review) ? (
                     <FinalAnswerReview
                       questions={quiz.questions}
-                      answers={answers}
-                      correctAnswers={result.results.map((item) => item.correctAnswer)}
+                      review={result.review}
                     />
                   ) : quiz.maxAttempts ? (
                     <p className="mt-6 text-sm text-gray-600">
@@ -377,8 +376,8 @@ function Quiz() {
                     <p className="text-center text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">Final attempt</p>
                     <h2 className="mt-2 text-center text-2xl font-bold text-[#2D2E30]">Your last answers</h2>
                     <p className="mt-3 text-center text-sm text-[#765F55]">You have used all available attempts. Here is what you selected on your final attempt.</p>
-                    {Array.isArray(lastAttempt?.answers) && lastAttempt.answers.length === quiz.questions.length ? (
-                      <FinalAnswerReview questions={quiz.questions} answers={lastAttempt.answers} correctAnswers={history.correctAnswers || []} />
+                    {Array.isArray(lastAttempt?.answers) && Array.isArray(lastAttempt?.review) && lastAttempt.answers.length === quiz.questions.length ? (
+                      <FinalAnswerReview questions={quiz.questions} review={lastAttempt.review} />
                     ) : (
                       <p className="mt-6 rounded-xl bg-white p-4 text-center text-sm text-[#765F55]">Your final answers are not available for attempts submitted before answer review was added.</p>
                     )}

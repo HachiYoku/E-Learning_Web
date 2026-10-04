@@ -1,9 +1,16 @@
 const Course = require("../models/courseModel");
 const Lesson = require("../models/lessonModel");
 const Quiz = require("../models/quizModel");
-const Enrollment = require("../models/enrollmentModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const { uploadStream } = require("../services/uploadStream");
+const { submitQuiz: submitQuizRuntime, studentQuizHistory, studentQuizProjection, statusForError } = require("../services/quizRuntime");
+
+function studentQuizError(res, error) {
+  const status = statusForError(error);
+  if (status !== 500) return res.status(status).json({ message: error.message });
+  console.error("Student quiz request failed", { name: error?.name });
+  return res.status(500).json({ message: "Unable to process the quiz request." });
+}
 
 function parseQuestions(rawQuestions, files = []) {
   let questions = rawQuestions;
@@ -94,7 +101,9 @@ const createQuiz = async (req, res) => {
     }
     
     const questions = await uploadQuestionImages(parseQuestions(req.body.questions, req.files));
-    const quizData = { course: courseId, title: title.trim(), maxAttempts, questions, quizType: finalQuizType };
+    // The current Admin flow predates status controls and has no status input.
+    // Publishing here preserves its established Video Course behavior.
+    const quizData = { course: courseId, title: title.trim(), maxAttempts, questions, quizType: finalQuizType, status: "published" };
     if (finalQuizType === "lesson") quizData.lesson = lessonId;
     
     const quiz = await Quiz.create(quizData);
@@ -179,75 +188,23 @@ const deleteQuiz = async (req, res) => {
 
 const getStudentQuizzesForLesson = async (req, res) => {
   try {
-    const quizzes = await Quiz.find({ course: req.params.courseId, lesson: req.params.lessonId }).select("title maxAttempts questions.prompt questions.image questions.options");
-    const withAttemptInfo = await Promise.all(quizzes.map(async (quiz) => ({
-      ...quiz.toObject(),
-      attemptsUsed: await QuizAttempt.countDocuments({ quiz: quiz._id, user: req.user.id }),
-    })));
-    return res.json(withAttemptInfo);
+    const quizzes = await Quiz.find({ course: req.params.courseId, lesson: req.params.lessonId });
+    return res.json(await Promise.all(quizzes.map((quiz) => studentQuizProjection({ quiz, user: req.user }))));
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return studentQuizError(res, error);
   }
 };
 
 const submitQuiz = async (req, res) => {
   try {
-    const quiz = await Quiz.findById(req.params.quizId);
-    if (!quiz) return res.status(404).json({ message: "Quiz not found" });
-    if (req.user.role !== "admin") {
-      const enrollment = await Enrollment.exists({ userId: req.user.id, courseId: quiz.course });
-      if (!enrollment) return res.status(403).json({ message: "You are not enrolled in this course" });
-    }
-    const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
-    if (answers.length !== quiz.questions.length || quiz.questions.some((question, index) => {
-      const answer = Number(answers[index]);
-      return !Number.isInteger(answer) || answer < 0 || answer >= question.options.length;
-    })) {
-      return res.status(400).json({ message: "Submit one valid answer for every question." });
-    }
-    const results = quiz.questions.map((question, index) => ({ correct: Number(answers[index]) === question.correctAnswer, correctAnswer: question.correctAnswer }));
-    const score = results.filter((result) => result.correct).length;
-    let attempt;
-    let attemptsUsed;
-
-    for (let retry = 0; retry < 5; retry += 1) {
-      attemptsUsed = await QuizAttempt.countDocuments({ quiz: quiz._id, user: req.user.id });
-      if (quiz.maxAttempts && attemptsUsed >= quiz.maxAttempts) {
-        return res.status(403).json({ message: "You have used all available attempts for this quiz." });
-      }
-
-      try {
-        attempt = await QuizAttempt.create({
-          quiz: quiz._id,
-          user: req.user.id,
-          attemptNumber: attemptsUsed + 1,
-          answers: answers.map(Number),
-          score,
-          total: quiz.questions.length,
-        });
-        break;
-      } catch (error) {
-        if (error.code !== 11000) throw error;
-      }
-    }
-
-    if (!attempt) return res.status(409).json({ message: "Please try submitting the quiz again." });
-
-    const completedAttempts = attemptsUsed + 1;
-    const showCorrectAnswers = Boolean(quiz.maxAttempts) && completedAttempts >= quiz.maxAttempts;
-
-    return res.json({
-      score,
-      total: quiz.questions.length,
-      ...(showCorrectAnswers ? { results } : {}),
-      showCorrectAnswers,
-      attemptId: attempt._id,
-      attemptNumber: completedAttempts,
-      attemptsUsed: completedAttempts,
-      maxAttempts: quiz.maxAttempts,
-    });
+    return res.json(await submitQuizRuntime({
+      quizId: req.params.quizId,
+      user: req.user,
+      submittedRevision: req.body?.revision,
+      answers: req.body?.answers,
+    }));
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return studentQuizError(res, error);
   }
 };
 
@@ -264,47 +221,18 @@ const getQuizAttempts = async (req, res) => {
 
 const getStudentQuizHistory = async (req, res) => {
   try {
-    const quiz = await Quiz.findById(req.params.quizId).select("course maxAttempts questions.correctAnswer");
-    if (!quiz) return res.status(404).json({ message: "Quiz not found" });
-
-    if (req.user.role !== "admin") {
-      const enrollment = await Enrollment.exists({ userId: req.user.id, courseId: quiz.course });
-      if (!enrollment) return res.status(403).json({ message: "You are not enrolled in this course" });
-    }
-
-    const attempts = await QuizAttempt.find({ quiz: quiz._id, user: req.user.id })
-      .select("attemptNumber answers score total createdAt")
-      .sort({ attemptNumber: 1 });
-
-    const bestScore = attempts.reduce((best, attempt) => {
-      const percentage = attempt.total ? (attempt.score / attempt.total) * 100 : 0;
-      return Math.max(best, percentage);
-    }, 0);
-
-    return res.json({
-      attempts,
-      attemptsUsed: attempts.length,
-      maxAttempts: quiz.maxAttempts,
-      bestScore,
-      ...(quiz.maxAttempts && attempts.length >= quiz.maxAttempts
-        ? { correctAnswers: quiz.questions.map((question) => question.correctAnswer) }
-        : {}),
-    });
+    return res.json(await studentQuizHistory({ quizId: req.params.quizId, user: req.user }));
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return studentQuizError(res, error);
   }
 };
 
 const getStudentCourseQuizzes = async (req, res) => {
   try {
-    const quizzes = await Quiz.find({ course: req.params.courseId, quizType: "course" }).select("title maxAttempts questions.prompt questions.image questions.options");
-    const withAttemptInfo = await Promise.all(quizzes.map(async (quiz) => ({
-      ...quiz.toObject(),
-      attemptsUsed: await QuizAttempt.countDocuments({ quiz: quiz._id, user: req.user.id }),
-    })));
-    return res.json(withAttemptInfo);
+    const quizzes = await Quiz.find({ course: req.params.courseId, quizType: "course" });
+    return res.json(await Promise.all(quizzes.map((quiz) => studentQuizProjection({ quiz, user: req.user }))));
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return studentQuizError(res, error);
   }
 };
 

@@ -95,6 +95,18 @@ describe('Quiz result navigation', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem('quiz-draft:student-a:course-1:lesson-1:lesson'))).toMatchObject({ quizId: 'quiz-1', questionIndex: 0, answers: [null] }))
   })
 
+  it('uses the server-provided answer review immediately after submission', async () => {
+    const user = userEvent.setup()
+    submitQuiz.mockResolvedValueOnce({ score: 1, total: 1, attemptsUsed: 1, maxAttempts: null, review: [{ selectedAnswer: 0, correctAnswer: 0, isCorrect: true }] })
+    renderLessonQuiz()
+
+    await user.click(await screen.findByRole('button', { name: /goodbye/i }))
+    await user.click(screen.getByRole('button', { name: 'Finish quiz' }))
+    await user.click(screen.getByRole('button', { name: 'Submit quiz' }))
+    expect((await screen.findByText(/your answer:/i)).parentElement.textContent).toContain('Hello')
+    expect(screen.queryByText(/correct answer:/i)).toBeNull()
+  })
+
   it('returns a lesson quiz result to the exact originating lesson and retains Try again', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/app/learn/course-1/quiz/lesson-1']}><Routes><Route path="/app/learn/:courseId/quiz/:lessonId" element={<><Quiz /><LocationProbe /></>} /><Route path="/app/learn/:courseId" element={<LocationProbe />} /></Routes></MemoryRouter>)

@@ -87,10 +87,13 @@ test("Quiz context validation supports valid contexts and rejects mixed ownershi
   const homeworkSet = await HomeworkSet.create({ title: unique("Homework"), createdBy: id(), updatedBy: id() });
 
   await Quiz.create({ course: course._id, lesson: lesson._id, contextType: "course_lesson", title: unique("Lesson quiz"), questions: [question()] });
-  await Quiz.create({ course: course._id, contextType: "course_final", title: unique("Course final"), maxAttempts: 3, goalPercent: 80, questions: [question()] });
+  const courseFinal = await Quiz.create({ course: course._id, contextType: "course_final", title: unique("Course final"), goalPercent: 80, questions: [question()] });
   await Quiz.create({ homeworkSet: homeworkSet._id, contextType: "homework_lesson", sortOrder: 1, title: unique("Homework lesson"), questions: [question()] });
-  await Quiz.create({ homeworkSet: homeworkSet._id, contextType: "homework_final", title: unique("Homework final"), maxAttempts: 2, goalPercent: 70, questions: [question()] });
+  const homeworkFinal = await Quiz.create({ homeworkSet: homeworkSet._id, contextType: "homework_final", title: unique("Homework final"), goalPercent: 70, questions: [question()] });
   await Quiz.create({ contextType: "standalone", standaloneAccess: "public", title: unique("Practice"), questions: [question()] });
+
+  assert.equal(courseFinal.maxAttempts, 3);
+  assert.equal(homeworkFinal.maxAttempts, 3);
 
   await assert.rejects(Quiz.create({ contextType: "course_lesson", title: unique("Invalid lesson"), questions: [question()] }), /requires a course|requires a lesson/);
   await assert.rejects(Quiz.create({ course: course._id, lesson: lesson._id, contextType: "course_final", title: unique("Invalid final"), questions: [question()] }), /cannot belong to a lesson/);
@@ -208,6 +211,7 @@ test("legacy Quiz controller create and update paths retain valid inferred conte
   assert.equal(lessonCreateResponse.statusCode, 201);
   assert.equal(lessonCreateResponse.body.contextType, "course_lesson");
   assert.equal(lessonCreateResponse.body.quizType, "lesson");
+  assert.equal(lessonCreateResponse.body.maxAttempts, null);
 
   const courseCreateResponse = responseRecorder();
   await quizController.createQuiz({
@@ -215,7 +219,6 @@ test("legacy Quiz controller create and update paths retain valid inferred conte
       courseId: String(course._id),
       title: unique("Legacy course controller"),
       quizType: "course",
-      maxAttempts: "2",
       questions: [legacyControllerQuestion()],
     },
     files: [],
@@ -223,6 +226,22 @@ test("legacy Quiz controller create and update paths retain valid inferred conte
   assert.equal(courseCreateResponse.statusCode, 201);
   assert.equal(courseCreateResponse.body.contextType, "course_final");
   assert.equal(courseCreateResponse.body.quizType, "course");
+  assert.equal(courseCreateResponse.body.maxAttempts, 3);
+
+  const explicit = await courseAndLesson();
+  const explicitFinalResponse = responseRecorder();
+  await quizController.createQuiz({
+    body: {
+      courseId: String(explicit.course._id),
+      title: unique("Explicit final limit"),
+      quizType: "course",
+      maxAttempts: "5",
+      questions: [legacyControllerQuestion()],
+    },
+    files: [],
+  }, explicitFinalResponse);
+  assert.equal(explicitFinalResponse.statusCode, 201);
+  assert.equal(explicitFinalResponse.body.maxAttempts, 5);
 
   const duplicateResponse = responseRecorder();
   await quizController.createQuiz({

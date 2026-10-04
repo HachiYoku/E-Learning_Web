@@ -22,6 +22,9 @@ const submissionSnapshotSchema = new mongoose.Schema({
   contextType: { type: String, trim: true, default: "" },
   quizTitle: { type: String, trim: true, default: "" },
   quizRevision: { type: Number, min: 1, default: null },
+  score: { type: Number, min: 0, default: null },
+  total: { type: Number, min: 1, default: null },
+  submittedAt: { type: Date, default: null },
   course: {
     id: { type: mongoose.Schema.Types.ObjectId, default: null },
     title: { type: String, trim: true, default: "" },

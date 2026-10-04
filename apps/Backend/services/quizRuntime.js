@@ -1,0 +1,198 @@
+const mongoose = require("mongoose");
+const Quiz = require("../models/quizModel");
+const QuizAttempt = require("../models/quizAttemptModel");
+const QuizAttemptGrant = require("../models/quizAttemptGrantModel");
+const QuizGoalAchievement = require("../models/quizGoalAchievementModel");
+const Course = require("../models/courseModel");
+const Lesson = require("../models/lessonModel");
+const HomeworkSet = require("../models/homeworkSetModel");
+const { buildQuizSubmissionSnapshot } = require("./quizSubmissionSnapshot");
+const { authorizeStudentQuizAccess, QuizAccessError, unavailableQuizError } = require("./quizAccessPolicy");
+
+class QuizSubmissionError extends Error {
+  constructor(status, message, code) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+const FINAL_CONTEXTS = new Set(["course_final", "homework_final"]);
+const isFinalQuiz = (quiz) => FINAL_CONTEXTS.has(quiz.contextType);
+
+function validateAnswers(quiz, answers) {
+  if (!Array.isArray(answers) || answers.length !== quiz.questions.length) {
+    throw new QuizSubmissionError(400, "Submit one valid answer for every question.", "invalid_quiz_answers");
+  }
+  const normalized = answers.map(Number);
+  const invalid = quiz.questions.some((question, index) => !Number.isInteger(normalized[index]) || normalized[index] < 0 || normalized[index] >= question.options.length);
+  if (invalid) throw new QuizSubmissionError(400, "Submit one valid answer for every question.", "invalid_quiz_answers");
+  return normalized;
+}
+
+function safeQuizProjection(quiz, attemptsUsed, effectiveMaxAttempts) {
+  return {
+    _id: quiz._id,
+    id: String(quiz._id),
+    title: quiz.title,
+    contextType: quiz.contextType,
+    quizType: quiz.quizType,
+    revision: quiz.revision,
+    maxAttempts: effectiveMaxAttempts,
+    attemptsUsed,
+    questions: quiz.questions.map((question) => ({
+      _id: question._id,
+      prompt: question.prompt,
+      image: question.image,
+      audio: question.audio,
+      options: question.options,
+    })),
+  };
+}
+
+async function attemptAllowance({ quiz, userId, session }) {
+  if (!isFinalQuiz(quiz)) return null;
+  const [grants, attempts] = await Promise.all([
+    QuizAttemptGrant.countDocuments({ quiz: quiz._id, user: userId }).session(session),
+    QuizAttempt.countDocuments({ quiz: quiz._id, user: userId }).session(session),
+  ]);
+  const baseMaxAttempts = Number.isInteger(quiz.maxAttempts) ? quiz.maxAttempts : 3;
+  return { attemptsUsed: attempts, effectiveMaxAttempts: baseMaxAttempts + grants };
+}
+
+async function loadSnapshotParents(quiz, session) {
+  const [course, lesson, homeworkSet] = await Promise.all([
+    quiz.course ? Course.findById(quiz.course).select("title").session(session).lean() : null,
+    quiz.lesson ? Lesson.findById(quiz.lesson).select("title").session(session).lean() : null,
+    quiz.homeworkSet ? HomeworkSet.findById(quiz.homeworkSet).select("title").session(session).lean() : null,
+  ]);
+  return { course, lesson, homeworkSet };
+}
+
+function submissionReview(attempt) {
+  const questions = attempt.submissionSnapshot?.questions || [];
+  return {
+    score: attempt.score,
+    total: attempt.total,
+    attemptId: attempt._id,
+    attemptNumber: attempt.attemptNumber,
+    submittedAt: attempt.createdAt,
+    review: questions.map((question) => ({
+      questionId: question.questionId,
+      selectedAnswer: question.selectedAnswer,
+      correctAnswer: question.correctAnswer,
+      isCorrect: question.isCorrect,
+    })),
+  };
+}
+
+async function submitQuiz({ quizId, user, submittedRevision, answers }) {
+  const userId = user?.id || user?._id;
+  if (!userId) throw new QuizSubmissionError(401, "User is not authorized.", "quiz_unauthorized");
+  if (!mongoose.isValidObjectId(quizId)) throw unavailableQuizError();
+
+  for (let retry = 0; retry < 4; retry += 1) {
+    try {
+      return await mongoose.connection.transaction(async (session) => {
+        const quiz = await Quiz.findById(quizId).session(session);
+        await authorizeStudentQuizAccess({ quiz, user, session, requireAvailable: true });
+        if (!Number.isInteger(Number(submittedRevision)) || Number(submittedRevision) !== quiz.revision) {
+          throw new QuizSubmissionError(409, "The quiz has been updated. Please reload and start again.", "stale_quiz_revision");
+        }
+
+        const normalizedAnswers = validateAnswers(quiz, answers);
+        const allowance = await attemptAllowance({ quiz, userId, session });
+        if (allowance && allowance.attemptsUsed >= allowance.effectiveMaxAttempts) {
+          throw new QuizSubmissionError(403, "No final quiz attempts remain.", "quiz_attempt_limit_reached");
+        }
+
+        const score = quiz.questions.reduce((total, question, index) => total + (question.correctAnswer === normalizedAnswers[index] ? 1 : 0), 0);
+        const parents = await loadSnapshotParents(quiz, session);
+        const submittedAt = new Date();
+        const snapshot = buildQuizSubmissionSnapshot({
+          quiz,
+          answers: normalizedAnswers,
+          score,
+          total: quiz.questions.length,
+          submittedAt,
+          ...parents,
+        });
+        const attemptNumber = (allowance?.attemptsUsed || await QuizAttempt.countDocuments({ quiz: quiz._id, user: userId }).session(session)) + 1;
+        const [attempt] = await QuizAttempt.create([{
+          quiz: quiz._id,
+          user: userId,
+          attemptNumber,
+          answers: normalizedAnswers,
+          score,
+          total: quiz.questions.length,
+          submissionSnapshot: snapshot,
+          createdAt: submittedAt,
+        }], { session });
+
+        const scorePercent = quiz.questions.length ? (score / quiz.questions.length) * 100 : 0;
+        if (isFinalQuiz(quiz) && quiz.goalPercent !== null && scorePercent >= quiz.goalPercent) {
+          const existing = await QuizGoalAchievement.exists({ user: userId, quiz: quiz._id }).session(session);
+          if (!existing) {
+            await QuizGoalAchievement.create([{
+              user: userId,
+              quiz: quiz._id,
+              goalPercentAtAchievement: quiz.goalPercent,
+              scorePercentAtAchievement: scorePercent,
+            }], { session });
+          }
+        }
+
+        const attemptsUsed = attemptNumber;
+        return {
+          ...submissionReview(attempt),
+          attemptsUsed,
+          maxAttempts: allowance ? allowance.effectiveMaxAttempts : null,
+          timesTaken: attemptsUsed,
+        };
+      });
+    } catch (error) {
+      if (error?.code === 11000 && retry < 3) continue;
+      throw error;
+    }
+  }
+  throw new QuizSubmissionError(409, "Please try submitting the quiz again.", "quiz_submission_conflict");
+}
+
+async function studentQuizHistory({ quizId, user }) {
+  if (!mongoose.isValidObjectId(quizId)) throw unavailableQuizError();
+  const quiz = await Quiz.findById(quizId);
+  await authorizeStudentQuizAccess({ quiz, user, requireAvailable: false });
+  const attempts = await QuizAttempt.find({ quiz: quiz._id, user: user.id || user._id })
+    .select("attemptNumber answers score total createdAt submissionSnapshot")
+    .sort({ attemptNumber: 1 })
+    .lean();
+  const bestScore = attempts.reduce((best, attempt) => Math.max(best, attempt.total ? (attempt.score / attempt.total) * 100 : 0), 0);
+  const allowance = await attemptAllowance({ quiz, userId: user.id || user._id });
+  return {
+    attempts: attempts.map((attempt) => ({
+      attemptNumber: attempt.attemptNumber,
+      answers: attempt.answers,
+      score: attempt.score,
+      total: attempt.total,
+      createdAt: attempt.createdAt,
+      review: attempt.submissionSnapshot ? submissionReview(attempt).review : null,
+    })),
+    attemptsUsed: attempts.length,
+    timesTaken: attempts.length,
+    maxAttempts: allowance?.effectiveMaxAttempts ?? null,
+    bestScore,
+  };
+}
+
+async function studentQuizProjection({ quiz, user, session }) {
+  await authorizeStudentQuizAccess({ quiz, user, session, requireAvailable: true });
+  const allowance = await attemptAllowance({ quiz, userId: user.id || user._id, session });
+  const attemptsUsed = allowance?.attemptsUsed ?? await QuizAttempt.countDocuments({ quiz: quiz._id, user: user.id || user._id }).session(session || null);
+  return safeQuizProjection(quiz, attemptsUsed, allowance?.effectiveMaxAttempts ?? null);
+}
+
+function statusForError(error) {
+  return error instanceof QuizSubmissionError || error instanceof QuizAccessError ? error.status : 500;
+}
+
+module.exports = { submitQuiz, studentQuizHistory, studentQuizProjection, safeQuizProjection, QuizSubmissionError, statusForError };
