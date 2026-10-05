@@ -22,6 +22,7 @@ function validateQuizImageFields(req, res, next) {
 router.get("/admin", validateToken, requireAdmin, controller.getAdminQuizzes);
 router.get("/admin/:quizId", validateToken, requireAdmin, controller.getAdminQuiz);
 router.get("/admin/:quizId/attempts", validateToken, requireAdmin, controller.getQuizAttempts);
+router.post("/admin/:quizId/attempt-grants", validateToken, requireAdmin, controller.grantQuizAttempt);
 router.post("/admin", validateToken, requireAdmin, upload.any(), validateImageFileContent, validateQuizImageFields, controller.createQuiz);
 router.put("/admin/:quizId", validateToken, requireAdmin, upload.any(), validateImageFileContent, validateQuizImageFields, controller.updateQuiz);
 router.delete("/admin/:quizId", validateToken, requireAdmin, controller.deleteQuiz);

@@ -1,4 +1,5 @@
 const Enrollment = require("../models/enrollmentModel");
+const { courseFinalProgress } = require("./courseFinalProgress");
 
 class QuizAccessError extends Error {
   constructor(status, message, code) {
@@ -28,6 +29,10 @@ async function authorizeStudentQuizAccess({ quiz, user, session, requireAvailabl
     // Match an unknown quiz so a guessed Quiz ID cannot confirm a private
     // course assessment exists.
     if (!enrollment) throw unavailableQuizError();
+    if (quiz.contextType === "course_final") {
+      const progress = await courseFinalProgress({ quiz, userId: user?.id || user?._id, session, recover: true });
+      if (progress.locked) throw unavailableQuizError();
+    }
     return;
   }
 

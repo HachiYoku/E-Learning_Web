@@ -37,6 +37,32 @@ beforeEach(() => {
 });
 
 describe("CourseLessons quick save", () => {
+  it('keeps the course and lessons available when optional Course Final state cannot load', async () => {
+    fetchCourseQuizzes.mockRejectedValueOnce(new Error('Quiz is unavailable.'));
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByText('Your lessons')).toBeTruthy();
+    expect(screen.getByText('Greetings')).toBeTruthy();
+  });
+
+  it('renders a locked Course Final with published lesson quiz progress and no start action', async () => {
+    fetchCourseQuizzes.mockResolvedValueOnce([{ id: 'final-1', _id: 'final-1', title: 'Course final', locked: true, requiredLessonQuizCount: 3, completedLessonQuizCount: 2, maxAttempts: 3, attemptsUsed: 0, questions: [] }]);
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+
+    expect((await screen.findAllByText('Course final')).length).toBeGreaterThan(0);
+    expect(screen.getByText('2 of 3 lesson quizzes completed')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Locked' }).disabled).toBe(true);
+  });
+
+  it('renders an unlocked zero-requirement Course Final as ready to start', async () => {
+    fetchCourseQuizzes.mockResolvedValueOnce([{ id: 'final-1', _id: 'final-1', title: 'Course final', locked: false, requiredLessonQuizCount: 0, completedLessonQuizCount: 0, maxAttempts: 3, attemptsUsed: 0, timesTaken: 0, goalPercent: 80, goalReached: false, questions: [{ _id: 'q1' }] }]);
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByText('Ready to start')).toBeTruthy();
+    expect(screen.getByText(/Goal: 80%/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start final' })).toBeTruthy();
+  });
+
   it('opens only the requested authorized lesson and consumes the resume URL intent', async () => {
     fetchLessonsByCourse.mockResolvedValue([
       { id: 'lesson-1', title: 'Greetings', videoUrl: 'https://example.com/greetings', order: 1 },

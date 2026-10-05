@@ -48,3 +48,7 @@ export async function deleteQuiz(id) {
 export function fetchQuizAttempts(id) {
   return apiClient.get(`/quizzes/admin/${id}/attempts`);
 }
+
+export function grantQuizAttempt(id, studentId, reason = "") {
+  return apiClient.post(`/quizzes/admin/${id}/attempt-grants`, { studentId, reason });
+}

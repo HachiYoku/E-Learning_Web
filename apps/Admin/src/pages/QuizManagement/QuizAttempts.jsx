@@ -1,7 +1,7 @@
 import { ArrowLeft, BarChart3, Check, ChevronDown, ChevronUp, Search, TrendingUp, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { fetchQuizAttempts } from "../../services/quizService";
+import { fetchQuizAttempts, grantQuizAttempt } from "../../services/quizService";
 
 const percentage = (attempt) => attempt.total ? Math.round((attempt.score / attempt.total) * 100) : 0;
 
@@ -26,10 +26,13 @@ function QuizAttempts() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("recent");
   const [expandedStudentId, setExpandedStudentId] = useState(null);
+  const [grantTarget, setGrantTarget] = useState(null);
+  const [grantReason, setGrantReason] = useState("");
+  const [grantError, setGrantError] = useState("");
+  const [granting, setGranting] = useState(false);
 
-  useEffect(() => {
-    fetchQuizAttempts(id).then(setData).catch((err) => setError(err.message));
-  }, [id]);
+  const loadAttempts = () => fetchQuizAttempts(id).then(setData).catch((err) => setError(err.message));
+  useEffect(() => { loadAttempts(); }, [id]);
 
   const students = useMemo(() => {
     if (!data) return [];
@@ -43,7 +46,8 @@ function QuizAttempts() {
       const attempts = [...student.attempts].sort((a, b) => a.attemptNumber - b.attemptNumber || new Date(a.createdAt) - new Date(b.createdAt));
       const bestAttempt = attempts.reduce((best, attempt) => !best || percentage(attempt) > percentage(best) ? attempt : best, null);
       const latestAttempt = attempts.reduce((latest, attempt) => !latest || new Date(attempt.createdAt) > new Date(latest.createdAt) ? attempt : latest, null);
-      return { ...student, attempts, bestAttempt, latestAttempt };
+      const extraGrants = data.extraGrantsByStudent?.[student.id] || 0;
+      return { ...student, attempts, bestAttempt, latestAttempt, extraGrants, goalReached: data.goalReachedStudentIds?.includes(student.id) || false };
     });
   }, [data]);
 
@@ -72,15 +76,17 @@ function QuizAttempts() {
       {students.length === 0 ? <div className="rounded-3xl border-2 border-dashed border-[#E58C1A]/35 bg-[#FFF9EA] p-12 text-center"><Users size={30} className="mx-auto text-[#C97112]" /><h2 className="mt-4 text-lg font-bold text-[#2D2E30]">No submissions yet</h2><p className="mt-2 text-sm text-[#765F55]">Students will appear here after completing the quiz.</p></div> : <>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#C97112]" /><input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search student name or email..." className="w-full rounded-xl border border-[#2D2E30]/15 bg-white py-2.5 pl-10 pr-4 text-sm text-[#2D2E30] outline-none focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10" /></div><SortSelect value={sortBy} onChange={setSortBy} /></div>
         <p className="mb-3 text-sm text-[#765F55]">Showing {visibleStudents.length} of {students.length} student{students.length === 1 ? "" : "s"}. Select a student to view their attempts.</p>
-        {visibleStudents.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">No students match your search.</div> : <div className="space-y-3">{visibleStudents.map((student) => <StudentRow key={student.id} student={student} expanded={expandedStudentId === student.id} onToggle={() => setExpandedStudentId((current) => current === student.id ? null : student.id)} />)}</div>}
+        {visibleStudents.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">No students match your search.</div> : <div className="space-y-3">{visibleStudents.map((student) => <StudentRow key={student.id} student={student} baseMaxAttempts={data.quiz.maxAttempts} expanded={expandedStudentId === student.id} onToggle={() => setExpandedStudentId((current) => current === student.id ? null : student.id)} onGrant={() => { setGrantTarget(student); setGrantReason(""); setGrantError(""); }} />)}</div>}
       </>}
     </section>
+    {grantTarget ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div role="dialog" aria-modal="true" aria-labelledby="grant-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><p className="text-xs font-bold uppercase tracking-[.18em] text-[#C97112]">Course final</p><h2 id="grant-title" className="mt-2 text-xl font-bold text-[#2D2E30]">Grant +1 submission</h2><p className="mt-2 text-sm text-[#765F55]">Grant one additional submission to {grantTarget.name}. This does not reset their history or scores.</p><label className="mt-5 block text-sm font-bold text-[#2D2E30]">Reason <span className="font-normal text-[#765F55]">(optional)</span><textarea value={grantReason} onChange={(event) => setGrantReason(event.target.value)} maxLength={300} className="mt-2 min-h-24 w-full rounded-xl border border-[#2D2E30]/15 p-3 text-sm font-normal outline-none focus:border-[#E58C1A]" placeholder="Connection problem during final submission." /></label>{grantError ? <p role="alert" className="mt-3 text-sm text-red-700">{grantError}</p> : null}<div className="mt-6 flex justify-end gap-3"><button type="button" disabled={granting} onClick={() => setGrantTarget(null)} className="rounded-xl px-4 py-2.5 text-sm font-bold text-[#765F55]">Cancel</button><button type="button" disabled={granting} onClick={async () => { setGranting(true); setGrantError(""); try { await grantQuizAttempt(id, grantTarget.id, grantReason); setGrantTarget(null); loadAttempts(); } catch (err) { setGrantError(err.message); } finally { setGranting(false); } }} className="rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{granting ? "Granting..." : "Confirm +1 submission"}</button></div></div></div> : null}
   </div></div>;
 }
 
-function StudentRow({ student, expanded, onToggle }) {
+function StudentRow({ student, baseMaxAttempts, expanded, onToggle, onGrant }) {
   const best = percentage(student.bestAttempt);
-  return <article className="overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]"><button onClick={onToggle} className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-[#FFF9EA] sm:p-5"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF1CE] font-bold text-[#C97112]">{student.name.charAt(0).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate font-bold text-[#2D2E30]">{student.name}</p><p className="truncate text-sm text-[#765F55]">{student.email || "No email available"}</p></div><div className="hidden text-right sm:block"><p className="text-xs font-bold uppercase tracking-wide text-[#765F55]">Best score</p><p className="mt-1 font-bold text-[#C97112]">{student.bestAttempt.score} / {student.bestAttempt.total} · {best}%</p></div><div className="hidden w-32 text-right md:block"><p className="text-xs font-bold uppercase tracking-wide text-[#765F55]">Attempts</p><p className="mt-1 font-semibold text-[#2D2E30]">{student.attempts.length}</p></div><span className="ml-1 rounded-lg p-2 text-[#C97112]">{expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</span></button>{expanded && <div className="border-t border-[#2D2E30]/10 bg-[#FFFDF8] p-4 sm:p-5"><div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-[#2D2E30]">Attempt history</h3><span className="text-sm font-bold text-[#C97112]">Best: {best}%</span></div><div className="space-y-2">{student.attempts.map((attempt) => <div key={attempt._id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#2D2E30]/8 bg-white px-4 py-3 text-sm"><div><span className="font-semibold text-[#2D2E30]">Attempt {attempt.attemptNumber}</span><span className="ml-2 text-[#765F55]">{new Date(attempt.createdAt).toLocaleString()}</span></div><span className="rounded-lg bg-[#FFF1CE] px-3 py-1 font-bold text-[#C97112]">{attempt.score} / {attempt.total} · {percentage(attempt)}%</span></div>)}</div></div>}</article>;
+  const effectiveMax = (baseMaxAttempts || 0) + student.extraGrants;
+  return <article className="overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]"><button onClick={onToggle} className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-[#FFF9EA] sm:p-5"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF1CE] font-bold text-[#C97112]">{student.name.charAt(0).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate font-bold text-[#2D2E30]">{student.name}</p><p className="truncate text-sm text-[#765F55]">{student.email || "No email available"}</p></div><div className="hidden text-right sm:block"><p className="text-xs font-bold uppercase tracking-wide text-[#765F55]">Best score</p><p className="mt-1 font-bold text-[#C97112]">{student.bestAttempt.score} / {student.bestAttempt.total} · {best}%</p></div><div className="hidden w-32 text-right md:block"><p className="text-xs font-bold uppercase tracking-wide text-[#765F55]">Submissions</p><p className="mt-1 font-semibold text-[#2D2E30]">{student.attempts.length} / {effectiveMax}</p></div><span className="ml-1 rounded-lg p-2 text-[#C97112]">{expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</span></button>{expanded && <div className="border-t border-[#2D2E30]/10 bg-[#FFFDF8] p-4 sm:p-5"><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-bold text-[#2D2E30]">Submission history</h3><p className="mt-1 text-xs text-[#765F55]">Submissions {student.attempts.length} / {effectiveMax} · Extra grants: {student.extraGrants} · {student.goalReached ? "Goal reached" : "Keep practicing"}</p></div><button type="button" onClick={onGrant} className="rounded-xl bg-[#2D2E30] px-3 py-2 text-xs font-bold text-white hover:bg-[#E58C1A]">Grant +1 submission</button></div><div className="space-y-2">{student.attempts.map((attempt) => <div key={attempt._id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#2D2E30]/8 bg-white px-4 py-3 text-sm"><div><span className="font-semibold text-[#2D2E30]">Submission {attempt.attemptNumber}</span><span className="ml-2 text-[#765F55]">{new Date(attempt.createdAt).toLocaleString()}</span></div><span className="rounded-lg bg-[#FFF1CE] px-3 py-1 font-bold text-[#C97112]">{attempt.score} / {attempt.total} · {percentage(attempt)}%</span></div>)}</div></div>}</article>;
 }
 
 function Stat({ icon, label, value }) { return <div className="min-w-0 px-2 py-3 text-center sm:min-w-[92px] sm:px-5"><span className="mx-auto flex w-fit items-center gap-1 whitespace-nowrap text-[10px] font-semibold text-[#765F55] sm:text-xs">{icon}{label}</span><p className="mt-1 text-xl font-bold text-[#2D2E30]">{value}</p></div>; }

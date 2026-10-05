@@ -14,8 +14,8 @@ const freePort = () => new Promise((resolve, reject) => {
   server.listen(0, "127.0.0.1", () => { const { port } = server.address(); server.close((error) => error ? reject(error) : resolve(port)); });
 });
 const stop = (child) => new Promise((resolve) => { if (!child || child.exitCode !== null) return resolve(); child.once("exit", resolve); child.kill("SIGTERM"); });
-let mongo; let directory; let Quiz; let Course; let Lesson; let Enrollment; let QuizAttempt; let QuizAttemptGrant; let QuizGoalAchievement;
-let submitQuiz; let studentQuizProjection; let studentQuizHistory; let quizController;
+let mongo; let directory; let Quiz; let Course; let Lesson; let Enrollment; let QuizAttempt; let QuizAttemptGrant; let QuizGoalAchievement; let User;
+let submitQuiz; let studentQuizProjection; let studentQuizHistory; let courseFinalProgress; let quizController;
 let sequence = 0;
 const id = () => new mongoose.Types.ObjectId();
 const unique = (value) => `${value}-${++sequence}`;
@@ -50,14 +50,15 @@ before(async () => {
   await new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("mongod startup timed out")), 15000); mongo.stdout.on("data", (data) => { if (data.toString().includes("Waiting for connections")) { clearTimeout(timer); resolve(); } }); mongo.once("error", reject); });
   await initiateReplicaSet(port);
   await mongoose.connect(`mongodb://127.0.0.1:${port}/quiz_runtime?replicaSet=paymentTests`);
-  Quiz = require("../models/quizModel"); Course = require("../models/courseModel"); Lesson = require("../models/lessonModel"); Enrollment = require("../models/enrollmentModel"); QuizAttempt = require("../models/quizAttemptModel"); QuizAttemptGrant = require("../models/quizAttemptGrantModel"); QuizGoalAchievement = require("../models/quizGoalAchievementModel");
+  Quiz = require("../models/quizModel"); Course = require("../models/courseModel"); Lesson = require("../models/lessonModel"); Enrollment = require("../models/enrollmentModel"); QuizAttempt = require("../models/quizAttemptModel"); QuizAttemptGrant = require("../models/quizAttemptGrantModel"); QuizGoalAchievement = require("../models/quizGoalAchievementModel"); User = require("../models/userModel");
   ({ submitQuiz, studentQuizProjection, studentQuizHistory } = require("../services/quizRuntime"));
+  ({ courseFinalProgress } = require("../services/courseFinalProgress"));
   quizController = require("../controllers/quizController");
 });
 
 beforeEach(async () => {
   await mongoose.connection.db.dropDatabase();
-  await Promise.all([Quiz, QuizAttempt, QuizAttemptGrant, QuizGoalAchievement].map((Model) => Model.syncIndexes()));
+  await Promise.all([Quiz, QuizAttempt, QuizAttemptGrant, QuizGoalAchievement, User].map((Model) => Model.syncIndexes()));
 });
 after(async () => { await mongoose.disconnect(); await stop(mongo); if (directory) await fs.rm(directory, { recursive: true, force: true }); });
 
@@ -151,6 +152,60 @@ test("final answer reveal state remains private to the student who exhausted att
   const otherHistory = await studentQuizHistory({ quizId: quiz._id, user: otherUser });
   assert.equal(otherHistory.attempts.length, 1);
   assert.equal("correctAnswer" in otherHistory.attempts[0].review[0], false);
+});
+
+test("published lesson quiz submissions unlock a course final dynamically and durably", async () => {
+  const { course, lesson: firstLesson, quiz: firstLessonQuiz } = await setupQuiz();
+  const secondLesson = await Lesson.create({ course: course._id, title: unique("Second lesson"), videoUrl: "https://www.youtube.com/watch?v=second", order: 2 });
+  const thirdLesson = await Lesson.create({ course: course._id, title: unique("Third lesson"), videoUrl: "https://www.youtube.com/watch?v=third", order: 3 });
+  const secondLessonQuiz = await Quiz.create({ course: course._id, lesson: secondLesson._id, contextType: "course_lesson", status: "published", title: unique("Second quiz"), questions: [question()] });
+  const thirdLessonQuiz = await Quiz.create({ course: course._id, lesson: thirdLesson._id, contextType: "course_lesson", status: "published", title: unique("Third quiz"), questions: [question()] });
+  const finalQuiz = await Quiz.create({ course: course._id, contextType: "course_final", status: "published", title: unique("Final"), questions: [question()] });
+  const user = { id: id() };
+  await Enrollment.create({ userId: user.id, courseId: course._id });
+  assert.deepEqual(await courseFinalProgress({ quiz: finalQuiz, userId: user.id }), { locked: true, unlocked: false, requiredCount: 3, completedCount: 0 });
+  await assert.rejects(studentQuizProjection({ quiz: finalQuiz, user }), /unavailable/);
+  await submitQuiz({ quizId: firstLessonQuiz._id, user, submittedRevision: firstLessonQuiz.revision, answers: [1] });
+  assert.equal((await courseFinalProgress({ quiz: finalQuiz, userId: user.id })).completedCount, 1);
+  await submitQuiz({ quizId: secondLessonQuiz._id, user, submittedRevision: secondLessonQuiz.revision, answers: [0] });
+  assert.equal((await courseFinalProgress({ quiz: finalQuiz, userId: user.id })).completedCount, 2);
+  await submitQuiz({ quizId: thirdLessonQuiz._id, user, submittedRevision: thirdLessonQuiz.revision, answers: [0] });
+  assert.equal((await courseFinalProgress({ quiz: finalQuiz, userId: user.id })).unlocked, true);
+  assert.equal((await studentQuizProjection({ quiz: finalQuiz, user })).title, finalQuiz.title);
+  const laterLesson = await Lesson.create({ course: course._id, title: unique("Later lesson"), videoUrl: "https://www.youtube.com/watch?v=later", order: 4 });
+  await Quiz.create({ course: course._id, lesson: laterLesson._id, contextType: "course_lesson", status: "published", title: unique("Later quiz"), questions: [question()] });
+  const durable = await courseFinalProgress({ quiz: finalQuiz, userId: user.id });
+  assert.equal(durable.unlocked, true); assert.equal(durable.requiredCount, 4); assert.equal(durable.completedCount, 3);
+});
+
+test("zero published lesson quizzes recover a course final unlock while non-published lessons do not block it", async () => {
+  const { course, lesson } = await setupQuiz();
+  const lessonQuiz = await Quiz.findOne({ lesson: lesson._id });
+  lessonQuiz.status = "draft"; await lessonQuiz.save();
+  const finalQuiz = await Quiz.create({ course: course._id, contextType: "course_final", status: "published", title: unique("Final"), questions: [question()] });
+  const user = { id: id() };
+  await Enrollment.create({ userId: user.id, courseId: course._id });
+  const first = await courseFinalProgress({ quiz: finalQuiz, userId: user.id });
+  const second = await courseFinalProgress({ quiz: finalQuiz, userId: user.id });
+  assert.equal(first.requiredCount, 0); assert.equal(first.unlocked, true); assert.equal(second.unlocked, true);
+  assert.equal(await require("../models/quizUnlockModel").countDocuments({ quiz: finalQuiz._id, user: user.id }), 1);
+});
+
+test("admin grants add one final submission without changing history, goal, or base allowance", async () => {
+  const { course, quiz } = await setupQuiz({ contextType: "course_final", maxAttempts: 3, goalPercent: 50 });
+  const student = await User.create({ name: unique("Student"), email: `${unique("student")}@example.test`, password: "password", role: "user" });
+  const admin = { id: id(), role: "admin" };
+  await Enrollment.create({ userId: student._id, courseId: course._id });
+  await submitQuiz({ quizId: quiz._id, user: { id: student._id }, submittedRevision: quiz.revision, answers: [0] });
+  const first = responseRecorder();
+  await quizController.grantQuizAttempt({ params: { quizId: String(quiz._id) }, body: { studentId: String(student._id), reason: "Connection problem" }, user: admin }, first);
+  assert.equal(first.statusCode, 201); assert.equal(first.body.baseMaxAttempts, 3); assert.equal(first.body.effectiveMaxAttempts, 4); assert.equal(first.body.timesTaken, 1);
+  const second = responseRecorder();
+  await quizController.grantQuizAttempt({ params: { quizId: String(quiz._id) }, body: { studentId: String(student._id) }, user: admin }, second);
+  assert.equal(second.statusCode, 201); assert.equal(second.body.effectiveMaxAttempts, 5); assert.equal(second.body.timesTaken, 1);
+  assert.equal(await QuizAttempt.countDocuments({ quiz: quiz._id, user: student._id }), 1);
+  assert.equal(await QuizAttemptGrant.countDocuments({ quiz: quiz._id, user: student._id }), 2);
+  assert.equal((await Quiz.findById(quiz._id)).maxAttempts, 3);
 });
 
 test("direct student quiz requests conceal unavailable and unauthorized quiz identifiers", async () => {

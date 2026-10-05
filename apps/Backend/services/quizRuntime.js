@@ -8,6 +8,7 @@ const Lesson = require("../models/lessonModel");
 const HomeworkSet = require("../models/homeworkSetModel");
 const { buildQuizSubmissionSnapshot } = require("./quizSubmissionSnapshot");
 const { authorizeStudentQuizAccess, QuizAccessError, unavailableQuizError } = require("./quizAccessPolicy");
+const { recoverCourseFinalUnlocks } = require("./courseFinalProgress");
 
 class QuizSubmissionError extends Error {
   constructor(status, message, code) {
@@ -148,6 +149,16 @@ async function submitQuiz({ quizId, user, submittedRevision, answers }) {
           submissionSnapshot: snapshot,
           createdAt: submittedAt,
         }], { session });
+
+        if (quiz.contextType === "course_lesson") {
+          // A learner's completed submission is authoritative. If recovery
+          // unexpectedly fails, the next Final-state request will retry it.
+          try {
+            await recoverCourseFinalUnlocks({ courseId: quiz.course, userId, session });
+          } catch (error) {
+            console.error("Course final unlock recovery after lesson submission failed", { name: error?.name });
+          }
+        }
 
         const scorePercent = quiz.questions.length ? (score / quiz.questions.length) * 100 : 0;
         if (isFinalQuiz(quiz) && quiz.goalPercent !== null && scorePercent >= quiz.goalPercent) {

@@ -268,6 +268,14 @@ function Quiz() {
               Return to {isCourseQuiz ? "course" : "lessons"}
             </Link>
           </div>
+        ) : quiz.locked ? (
+          <div className="rounded-[1.75rem] border border-[#E58C1A]/25 bg-white p-8 text-center shadow-[0_18px_45px_-32px_rgba(80,48,19,0.35)] sm:p-10">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">Course final</p>
+            <h1 className="mt-3 text-2xl font-bold text-[#2D2E30]">Final quiz locked</h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#765F55]">Finish all published lesson quizzes to unlock this final.</p>
+            <p className="mt-4 font-bold text-[#9A5816]">{quiz.completedLessonQuizCount} of {quiz.requiredLessonQuizCount} lesson quizzes completed</p>
+            <button onClick={() => navigate(backPath)} className="mt-7 rounded-xl bg-[#F8C56A] px-5 py-3 font-bold text-[#2D2E30] transition hover:bg-[#E58C1A]">Back to course</button>
+          </div>
         ) : (
           <>
             {quizzes.length > 1 && (

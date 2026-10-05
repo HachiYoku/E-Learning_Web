@@ -24,6 +24,7 @@ const TWELVE_MONTH_ACTIONS = new Set([
   "payment.proof_retention_hold_opened",
   "payment.proof_retention_hold_resolved",
   "payment_receipt_generated",
+  "quiz.attempt_granted",
   "user.activated",
   "user.deactivated",
   "user.course_access_updated",
