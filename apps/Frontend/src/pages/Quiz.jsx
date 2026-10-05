@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { fetchQuizzesForLesson, fetchCourseQuizzes, fetchQuizHistory, submitQuiz } from "../services/quizService";
+import { fetchQuizzesForLesson, fetchCourseQuizzes, fetchQuizHistory, submitQuiz, fetchQuizAttemptRequests, createQuizAttemptRequest, cancelQuizAttemptRequest } from "../services/quizService";
 import { learningCoursePath } from "../utils/learningNavigation";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -58,6 +58,24 @@ function FinalAnswerReview({ questions, review }) {
   );
 }
 
+const requestStatusLabel = { pending: "Pending", approved: "Approved", rejected: "Rejected", cancelled: "Cancelled", superseded: "Superseded" };
+
+function ExtraSubmissionRequests({ quiz, requests, pendingRequest, formOpen, setFormOpen, reason, setReason, busy, onCreate, onCancel }) {
+  const exhausted = Boolean(quiz.maxAttempts) && (quiz.attemptsUsed || 0) >= quiz.maxAttempts;
+  if (!exhausted && requests.length === 0) return null;
+  return <section className="mx-auto mt-6 max-w-2xl text-left" aria-label="Extra submission requests">
+    {exhausted ? <div className="rounded-2xl border border-[#E58C1A]/25 bg-white p-4 sm:p-5">
+      <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#C97112]">Need another submission?</p>
+      {pendingRequest ? <>
+        <h3 className="mt-2 font-bold text-[#2D2E30]">Extra submission requested</h3>
+        <p className="mt-1 text-sm text-[#765F55]">Waiting for Admin review.</p>
+        <button type="button" disabled={busy} onClick={onCancel} className="mt-4 rounded-xl border border-[#2D2E30]/15 px-4 py-2.5 text-sm font-bold text-[#765F55] hover:bg-[#FFF9EA] disabled:opacity-60">Cancel request</button>
+      </> : formOpen ? <div className="mt-3"><label className="block text-sm font-bold text-[#2D2E30]">Reason <span className="text-[#A84646]">*</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} rows="4" className="mt-2 w-full rounded-xl border border-[#2D2E30]/15 p-3 font-normal outline-none focus:border-[#E58C1A]" placeholder="Tell us why you need one more submission." /></label><p className="mt-1 text-right text-xs text-[#765F55]">{reason.length}/500</p><div className="mt-3 flex flex-wrap gap-3"><button type="button" disabled={busy || !reason.trim()} onClick={onCreate} className="rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#E58C1A] disabled:opacity-60">{busy ? "Submitting..." : "Submit request"}</button><button type="button" disabled={busy} onClick={() => { setFormOpen(false); setReason(""); }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-[#765F55]">Cancel</button></div></div> : <><p className="mt-2 text-sm text-[#765F55]">You have used all available submissions. You can ask Admin to review one additional submission.</p><button type="button" onClick={() => setFormOpen(true)} className="mt-4 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#E58C1A]">Request extra submission</button></>}
+    </div> : null}
+    {requests.length ? <div className="mt-4 space-y-3"><h3 className="text-sm font-bold text-[#2D2E30]">Request history</h3>{requests.map((request) => <article key={request._id} className="rounded-xl border border-[#2D2E30]/10 bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-bold text-[#2D2E30]">{requestStatusLabel[request.status] || request.status}</span><time className="text-xs text-[#765F55]">{new Date(request.createdAt).toLocaleDateString()}</time></div><p className="mt-2 whitespace-pre-wrap text-sm text-[#765F55]">{request.reason}</p>{request.status === "approved" ? <p className="mt-2 text-sm font-semibold text-[#4D7C57]">One additional submission was granted.</p> : null}{request.adminNote ? <p className="mt-2 rounded-lg bg-[#FFF9EA] p-2.5 text-sm text-[#765F55]"><span className="font-bold text-[#2D2E30]">Admin response: </span>{request.adminNote}</p> : null}</article>)}</div> : null}
+  </section>;
+}
+
 function Quiz() {
   const { courseId, lessonId, quizId } = useParams();
   const { user } = useAuth();
@@ -68,6 +86,10 @@ function Quiz() {
   const [answers, setAnswers] = useState([]);
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState(null);
+  const [requestHistory, setRequestHistory] = useState([]);
+  const [isRequestFormOpen, setIsRequestFormOpen] = useState(false);
+  const [requestReason, setRequestReason] = useState("");
+  const [requestBusy, setRequestBusy] = useState(false);
   const [isAttemptHistoryOpen, setIsAttemptHistoryOpen] = useState(false);
   const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -162,6 +184,13 @@ function Quiz() {
     };
   }, [quiz?._id, quiz?.attemptsUsed, quiz?.maxAttempts]);
 
+  useEffect(() => {
+    if (!isCourseQuiz || !quiz?._id || quiz.locked) return undefined;
+    let isMounted = true;
+    fetchQuizAttemptRequests(quiz._id).then((data) => { if (isMounted) setRequestHistory(data.requests || []); }).catch(() => { if (isMounted) setRequestHistory([]); });
+    return () => { isMounted = false; };
+  }, [isCourseQuiz, quiz?._id, quiz?.locked, quiz?.attemptsUsed, quiz?.maxAttempts]);
+
   const chooseQuiz = (index) => {
     setQuizIndex(index);
     setQuestionIndex(0);
@@ -240,6 +269,7 @@ function Quiz() {
   const noQuizMessage = isCourseQuiz ? "This course quiz is not available." : "Your teacher has not added a quiz for this lesson.";
   const attemptsRemaining = quiz ? Math.max((quiz.maxAttempts ?? Infinity) - (quiz.attemptsUsed ?? 0), 0) : 0;
   const isQuizLocked = Boolean(quiz?.maxAttempts) && (quiz?.attemptsUsed ?? 0) >= quiz.maxAttempts && !result;
+  const pendingRequest = requestHistory.find((request) => request.status === "pending");
   const bestAttempt = history?.attempts?.reduce(
     (best, attempt) => (!best || attempt.score / attempt.total > best.score / best.total ? attempt : best),
     null
@@ -379,6 +409,25 @@ function Quiz() {
                       </button>
                     )}
                   </div>
+                  {isCourseQuiz ? <ExtraSubmissionRequests
+                    quiz={quiz}
+                    requests={requestHistory}
+                    pendingRequest={pendingRequest}
+                    formOpen={isRequestFormOpen}
+                    setFormOpen={setIsRequestFormOpen}
+                    reason={requestReason}
+                    setReason={setRequestReason}
+                    busy={requestBusy}
+                    onCreate={async () => {
+                      try { setRequestBusy(true); setError(""); const data = await createQuizAttemptRequest(quiz._id, requestReason); setRequestHistory((current) => [data.request, ...current]); setRequestReason(""); setIsRequestFormOpen(false); }
+                      catch (err) { setError(err.message); } finally { setRequestBusy(false); }
+                    }}
+                    onCancel={async () => {
+                      if (!pendingRequest) return;
+                      try { setRequestBusy(true); setError(""); const data = await cancelQuizAttemptRequest(quiz._id, pendingRequest._id); setRequestHistory((current) => current.map((request) => String(request._id) === String(data.request._id) ? data.request : request)); }
+                      catch (err) { setError(err.message); } finally { setRequestBusy(false); }
+                    }}
+                  /> : null}
                 </div>
               ) : isQuizLocked ? (
                 <div className="py-10 text-center">
@@ -397,6 +446,25 @@ function Quiz() {
                     >
                       Back to course
                     </button>
+                    {isCourseQuiz ? <ExtraSubmissionRequests
+                      quiz={quiz}
+                      requests={requestHistory}
+                      pendingRequest={pendingRequest}
+                      formOpen={isRequestFormOpen}
+                      setFormOpen={setIsRequestFormOpen}
+                      reason={requestReason}
+                      setReason={setRequestReason}
+                      busy={requestBusy}
+                      onCreate={async () => {
+                        try { setRequestBusy(true); setError(""); const data = await createQuizAttemptRequest(quiz._id, requestReason); setRequestHistory((current) => [data.request, ...current]); setRequestReason(""); setIsRequestFormOpen(false); }
+                        catch (err) { setError(err.message); } finally { setRequestBusy(false); }
+                      }}
+                      onCancel={async () => {
+                        if (!pendingRequest) return;
+                        try { setRequestBusy(true); setError(""); const data = await cancelQuizAttemptRequest(quiz._id, pendingRequest._id); setRequestHistory((current) => current.map((request) => String(request._id) === String(data.request._id) ? data.request : request)); }
+                        catch (err) { setError(err.message); } finally { setRequestBusy(false); }
+                      }}
+                    /> : null}
                   </div>
                 </div>
               ) : (
@@ -484,6 +552,25 @@ function Quiz() {
                       </button>
                     )}
                   </div>
+                  {isCourseQuiz ? <ExtraSubmissionRequests
+                    quiz={quiz}
+                    requests={requestHistory}
+                    pendingRequest={pendingRequest}
+                    formOpen={isRequestFormOpen}
+                    setFormOpen={setIsRequestFormOpen}
+                    reason={requestReason}
+                    setReason={setRequestReason}
+                    busy={requestBusy}
+                    onCreate={async () => {
+                      try { setRequestBusy(true); setError(""); const data = await createQuizAttemptRequest(quiz._id, requestReason); setRequestHistory((current) => [data.request, ...current]); setRequestReason(""); setIsRequestFormOpen(false); }
+                      catch (err) { setError(err.message); } finally { setRequestBusy(false); }
+                    }}
+                    onCancel={async () => {
+                      if (!pendingRequest) return;
+                      try { setRequestBusy(true); setError(""); const data = await cancelQuizAttemptRequest(quiz._id, pendingRequest._id); setRequestHistory((current) => current.map((request) => String(request._id) === String(data.request._id) ? data.request : request)); }
+                      catch (err) { setError(err.message); } finally { setRequestBusy(false); }
+                    }}
+                  /> : null}
                 </>
               )}
               </section>

@@ -3,6 +3,7 @@ const Lesson = require("../models/lessonModel");
 const Quiz = require("../models/quizModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const QuizAttemptGrant = require("../models/quizAttemptGrantModel");
+const QuizAttemptRequest = require("../models/quizAttemptRequestModel");
 const QuizGoalAchievement = require("../models/quizGoalAchievementModel");
 const Enrollment = require("../models/enrollmentModel");
 const User = require("../models/userModel");
@@ -10,6 +11,20 @@ const { writeAuditLog } = require("../services/auditLogger");
 const { uploadStream } = require("../services/uploadStream");
 const { submitQuiz: submitQuizRuntime, studentQuizHistory, studentQuizProjection, statusForError } = require("../services/quizRuntime");
 const { courseFinalProgress } = require("../services/courseFinalProgress");
+const { createRequest, listStudentRequests, cancelRequest, reviewRequest, QuizAttemptRequestError } = require("../services/quizAttemptRequestService");
+const { createNotification } = require("./notificationController");
+
+function requestError(res, error) {
+  if (error instanceof QuizAttemptRequestError || error?.code === "quiz_unavailable") {
+    return res.status(error.status || 404).json({ message: error.message });
+  }
+  console.error("Quiz attempt request failed", { name: error?.name });
+  return res.status(500).json({ message: "Unable to process the extra submission request." });
+}
+
+async function notifyBestEffort(payload) {
+  try { await createNotification(payload); } catch (error) { console.warn("Quiz attempt request notification failed", { name: error?.name }); }
+}
 
 function studentQuizError(res, error) {
   const status = statusForError(error);
@@ -219,14 +234,15 @@ const getQuizAttempts = async (req, res) => {
     const quiz = await Quiz.findById(req.params.quizId).select("title maxAttempts goalPercent contextType course");
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
     const attempts = await QuizAttempt.find({ quiz: quiz._id }).populate("user", "name email").sort({ createdAt: -1 });
-    const studentIds = [...new Set(attempts.map((attempt) => String(attempt.user?._id)).filter(Boolean))];
-    const [grants, goals] = await Promise.all([
-      QuizAttemptGrant.find({ quiz: quiz._id }).select("user").lean(),
+    const [grants, goals, requests] = await Promise.all([
+      QuizAttemptGrant.find({ quiz: quiz._id }).select("user source reason grantedAt request").lean(),
       QuizGoalAchievement.find({ quiz: quiz._id }).select("user").lean(),
+      QuizAttemptRequest.find({ quiz: quiz._id }).populate("user", "name email").populate("reviewedBy", "name").sort({ createdAt: -1 }).lean(),
     ]);
+    const studentIds = [...new Set([...attempts.map((attempt) => String(attempt.user?._id)), ...requests.map((request) => String(request.user?._id))].filter(Boolean))];
     const extraGrantsByStudent = grants.reduce((result, grant) => ({ ...result, [String(grant.user)]: (result[String(grant.user)] || 0) + 1 }), {});
     const goalReachedStudentIds = goals.map((goal) => String(goal.user));
-    return res.json({ quiz, attempts, extraGrantsByStudent, goalReachedStudentIds, studentIds });
+    return res.json({ quiz, attempts, grants, requests, extraGrantsByStudent, goalReachedStudentIds, studentIds });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -245,17 +261,51 @@ const grantQuizAttempt = async (req, res) => {
       Enrollment.exists({ userId: studentId, courseId: quiz.course }),
     ]);
     if (!student || !enrollment) return res.status(404).json({ message: "Student is unavailable for this course final." });
-    const grant = await QuizAttemptGrant.create({ user: studentId, quiz: quiz._id, grantedBy: req.user.id || req.user._id, reason });
+    const grant = await QuizAttemptGrant.create({ user: studentId, quiz: quiz._id, grantedBy: req.user.id || req.user._id, reason, source: "direct_admin" });
     const [timesTaken, extraGrants, goalReached] = await Promise.all([
       QuizAttempt.countDocuments({ user: studentId, quiz: quiz._id }),
       QuizAttemptGrant.countDocuments({ user: studentId, quiz: quiz._id }),
       QuizGoalAchievement.exists({ user: studentId, quiz: quiz._id }),
     ]);
     await writeAuditLog({ actorId: req.user.id || req.user._id, action: "quiz.attempt_granted", targetType: "QuizAttemptGrant", targetId: grant._id, metadata: { studentId: String(studentId), quizId: String(quiz._id), reason } });
-    return res.status(201).json({ grant: { id: grant._id, grantedAt: grant.grantedAt, reason: grant.reason }, timesTaken, extraGrants, effectiveMaxAttempts: quiz.maxAttempts + extraGrants, baseMaxAttempts: quiz.maxAttempts, goalReached: Boolean(goalReached) });
+    return res.status(201).json({ grant: { id: grant._id, grantedAt: grant.grantedAt, reason: grant.reason, source: grant.source }, timesTaken, extraGrants, effectiveMaxAttempts: quiz.maxAttempts + extraGrants, baseMaxAttempts: quiz.maxAttempts, goalReached: Boolean(goalReached) });
   } catch (error) {
     return res.status(500).json({ message: "Unable to grant an extra submission." });
   }
+};
+
+const createStudentAttemptRequest = async (req, res) => {
+  try {
+    const result = await createRequest({ quizId: req.params.quizId, user: req.user, reason: req.body?.reason });
+    await writeAuditLog({ actorId: req.user.id || req.user._id, action: "quiz.attempt_request_created", targetType: "QuizAttemptRequest", targetId: result.request._id, metadata: { quizId: String(result.quiz._id) } });
+    const admins = await User.find({ role: "admin", isActive: true }).select("_id").lean();
+    await Promise.all(admins.map((admin) => notifyBestEffort({ userId: admin._id, courseId: result.quiz.course, type: "info", title: "New extra quiz submission request", message: `A student requested an additional submission for “${result.quiz.title}”.` })));
+    return res.status(201).json({ request: result.request, allowance: result.state });
+  } catch (error) { return requestError(res, error); }
+};
+
+const getStudentAttemptRequests = async (req, res) => {
+  try { return res.json({ requests: await listStudentRequests({ quizId: req.params.quizId, user: req.user }) }); }
+  catch (error) { return requestError(res, error); }
+};
+
+const cancelStudentAttemptRequest = async (req, res) => {
+  try {
+    const request = await cancelRequest({ quizId: req.params.quizId, requestId: req.params.requestId, user: req.user });
+    await writeAuditLog({ actorId: req.user.id || req.user._id, action: "quiz.attempt_request_cancelled", targetType: "QuizAttemptRequest", targetId: request._id, metadata: { quizId: String(req.params.quizId) } });
+    return res.json({ request });
+  } catch (error) { return requestError(res, error); }
+};
+
+const reviewStudentAttemptRequest = async (req, res) => {
+  try {
+    const result = await reviewRequest({ quizId: req.params.quizId, requestId: req.params.requestId, adminId: req.user.id || req.user._id, decision: req.body?.decision, note: req.body?.note });
+    const action = result.decision === "approved" ? "quiz.attempt_request_approved" : result.decision === "rejected" ? "quiz.attempt_request_rejected" : "quiz.attempt_request_superseded";
+    await writeAuditLog({ actorId: req.user.id || req.user._id, action, targetType: "QuizAttemptRequest", targetId: result.request._id, metadata: { quizId: String(result.quiz._id), studentId: String(result.request.user), grantId: result.grant ? String(result.grant._id) : undefined } });
+    if (result.decision === "approved") await notifyBestEffort({ userId: result.request.user, courseId: result.quiz.course, type: "info", title: "Extra quiz submission approved", message: `Your request for an additional submission for “${result.quiz.title}” was approved.`, link: `/app/course-quiz/${result.quiz.course}/${result.quiz._id}` });
+    if (result.decision === "rejected") await notifyBestEffort({ userId: result.request.user, courseId: result.quiz.course, type: "info", title: "Extra quiz submission request declined", message: `Your request for “${result.quiz.title}” was not approved.`, link: `/app/course-quiz/${result.quiz.course}/${result.quiz._id}` });
+    return res.json({ request: result.request, decision: result.decision, allowance: result.state });
+  } catch (error) { return requestError(res, error); }
 };
 
 const getStudentQuizHistory = async (req, res) => {
@@ -300,4 +350,4 @@ const getStudentCourseQuizzes = async (req, res) => {
   }
 };
 
-module.exports = { createQuiz, getAdminQuizzes, getAdminQuiz, updateQuiz, deleteQuiz, getStudentQuizzesForLesson, submitQuiz, getQuizAttempts, getStudentQuizHistory, getStudentCourseQuizzes, grantQuizAttempt };
+module.exports = { createQuiz, getAdminQuizzes, getAdminQuiz, updateQuiz, deleteQuiz, getStudentQuizzesForLesson, submitQuiz, getQuizAttempts, getStudentQuizHistory, getStudentCourseQuizzes, grantQuizAttempt, createStudentAttemptRequest, getStudentAttemptRequests, cancelStudentAttemptRequest, reviewStudentAttemptRequest };

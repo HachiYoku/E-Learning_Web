@@ -19,6 +19,7 @@ export default defineConfig({
       'src/pages/ReelManagement/Reels.test.jsx',
       'src/pages/Payment/ReviewPayment.test.jsx',
       'src/pages/Payment/reviewPaymentDeepLink.test.js',
+      'src/pages/QuizManagement/QuizAttempts.test.jsx',
       'src/utils/adminReturnDestination.test.js',
     ],
   },

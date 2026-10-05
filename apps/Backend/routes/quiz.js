@@ -23,12 +23,16 @@ router.get("/admin", validateToken, requireAdmin, controller.getAdminQuizzes);
 router.get("/admin/:quizId", validateToken, requireAdmin, controller.getAdminQuiz);
 router.get("/admin/:quizId/attempts", validateToken, requireAdmin, controller.getQuizAttempts);
 router.post("/admin/:quizId/attempt-grants", validateToken, requireAdmin, controller.grantQuizAttempt);
+router.post("/admin/:quizId/attempt-requests/:requestId/review", validateToken, requireAdmin, controller.reviewStudentAttemptRequest);
 router.post("/admin", validateToken, requireAdmin, upload.any(), validateImageFileContent, validateQuizImageFields, controller.createQuiz);
 router.put("/admin/:quizId", validateToken, requireAdmin, upload.any(), validateImageFileContent, validateQuizImageFields, controller.updateQuiz);
 router.delete("/admin/:quizId", validateToken, requireAdmin, controller.deleteQuiz);
 router.get("/course/:courseId/lesson/:lessonId", validateToken, controller.getStudentQuizzesForLesson);
 router.get("/course/:courseId", validateToken, controller.getStudentCourseQuizzes);
 router.get("/:quizId/history", validateToken, controller.getStudentQuizHistory);
+router.get("/:quizId/attempt-requests", validateToken, controller.getStudentAttemptRequests);
+router.post("/:quizId/attempt-requests", validateToken, controller.createStudentAttemptRequest);
+router.patch("/:quizId/attempt-requests/:requestId/cancel", validateToken, controller.cancelStudentAttemptRequest);
 router.post("/:quizId/submit", validateToken, controller.submitQuiz);
 
 module.exports = router;

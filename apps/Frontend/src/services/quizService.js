@@ -21,3 +21,15 @@ export function submitQuiz(quizId, answers, revision) {
 export function fetchQuizHistory(quizId) {
   return apiClient.get(`/quizzes/${quizId}/history`);
 }
+
+export function fetchQuizAttemptRequests(quizId) {
+  return apiClient.get(`/quizzes/${quizId}/attempt-requests`);
+}
+
+export function createQuizAttemptRequest(quizId, reason) {
+  return apiClient.post(`/quizzes/${quizId}/attempt-requests`, { reason });
+}
+
+export function cancelQuizAttemptRequest(quizId, requestId) {
+  return apiClient.patch(`/quizzes/${quizId}/attempt-requests/${requestId}/cancel`);
+}

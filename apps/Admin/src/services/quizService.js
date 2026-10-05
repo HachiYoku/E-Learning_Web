@@ -52,3 +52,7 @@ export function fetchQuizAttempts(id) {
 export function grantQuizAttempt(id, studentId, reason = "") {
   return apiClient.post(`/quizzes/admin/${id}/attempt-grants`, { studentId, reason });
 }
+
+export function reviewQuizAttemptRequest(quizId, requestId, decision, note = "") {
+  return apiClient.post(`/quizzes/admin/${quizId}/attempt-requests/${requestId}/review`, { decision, note });
+}

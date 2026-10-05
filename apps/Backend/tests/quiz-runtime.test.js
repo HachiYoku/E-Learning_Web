@@ -14,8 +14,8 @@ const freePort = () => new Promise((resolve, reject) => {
   server.listen(0, "127.0.0.1", () => { const { port } = server.address(); server.close((error) => error ? reject(error) : resolve(port)); });
 });
 const stop = (child) => new Promise((resolve) => { if (!child || child.exitCode !== null) return resolve(); child.once("exit", resolve); child.kill("SIGTERM"); });
-let mongo; let directory; let Quiz; let Course; let Lesson; let Enrollment; let QuizAttempt; let QuizAttemptGrant; let QuizGoalAchievement; let User;
-let submitQuiz; let studentQuizProjection; let studentQuizHistory; let courseFinalProgress; let quizController;
+let mongo; let directory; let Quiz; let Course; let Lesson; let Enrollment; let QuizAttempt; let QuizAttemptGrant; let QuizAttemptRequest; let QuizGoalAchievement; let Notification; let User;
+let submitQuiz; let studentQuizProjection; let studentQuizHistory; let courseFinalProgress; let quizController; let attemptRequestService;
 let sequence = 0;
 const id = () => new mongoose.Types.ObjectId();
 const unique = (value) => `${value}-${++sequence}`;
@@ -50,15 +50,16 @@ before(async () => {
   await new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("mongod startup timed out")), 15000); mongo.stdout.on("data", (data) => { if (data.toString().includes("Waiting for connections")) { clearTimeout(timer); resolve(); } }); mongo.once("error", reject); });
   await initiateReplicaSet(port);
   await mongoose.connect(`mongodb://127.0.0.1:${port}/quiz_runtime?replicaSet=paymentTests`);
-  Quiz = require("../models/quizModel"); Course = require("../models/courseModel"); Lesson = require("../models/lessonModel"); Enrollment = require("../models/enrollmentModel"); QuizAttempt = require("../models/quizAttemptModel"); QuizAttemptGrant = require("../models/quizAttemptGrantModel"); QuizGoalAchievement = require("../models/quizGoalAchievementModel"); User = require("../models/userModel");
+  Quiz = require("../models/quizModel"); Course = require("../models/courseModel"); Lesson = require("../models/lessonModel"); Enrollment = require("../models/enrollmentModel"); QuizAttempt = require("../models/quizAttemptModel"); QuizAttemptGrant = require("../models/quizAttemptGrantModel"); QuizAttemptRequest = require("../models/quizAttemptRequestModel"); QuizGoalAchievement = require("../models/quizGoalAchievementModel"); Notification = require("../models/notificationModel"); User = require("../models/userModel");
   ({ submitQuiz, studentQuizProjection, studentQuizHistory } = require("../services/quizRuntime"));
   ({ courseFinalProgress } = require("../services/courseFinalProgress"));
+  attemptRequestService = require("../services/quizAttemptRequestService");
   quizController = require("../controllers/quizController");
 });
 
 beforeEach(async () => {
   await mongoose.connection.db.dropDatabase();
-  await Promise.all([Quiz, QuizAttempt, QuizAttemptGrant, QuizGoalAchievement, User].map((Model) => Model.syncIndexes()));
+  await Promise.all([Quiz, QuizAttempt, QuizAttemptGrant, QuizAttemptRequest, QuizGoalAchievement, Notification, User].map((Model) => Model.syncIndexes()));
 });
 after(async () => { await mongoose.disconnect(); await stop(mongo); if (directory) await fs.rm(directory, { recursive: true, force: true }); });
 
@@ -246,4 +247,65 @@ test("final allowance uses grants atomically and records durable goal achievemen
   assert.equal(await QuizGoalAchievement.countDocuments({ user: firstUser.id, quiz: quiz._id }), 1);
   quiz.goalPercent = 100; await quiz.save();
   assert.equal(await QuizGoalAchievement.countDocuments({ user: firstUser.id, quiz: quiz._id }), 1);
+});
+
+test("course-final extra submission requests require exhaustion, remain unique, and can be cancelled", async () => {
+  const { course, quiz } = await setupQuiz({ contextType: "course_final", maxAttempts: 2 });
+  const student = { id: id() };
+  await Enrollment.create({ userId: student.id, courseId: course._id });
+  await assert.rejects(attemptRequestService.createRequest({ quizId: quiz._id, user: student, reason: "Please help" }), /only be requested/);
+  await submitQuiz({ quizId: quiz._id, user: student, submittedRevision: quiz.revision, answers: [0] });
+  await submitQuiz({ quizId: quiz._id, user: student, submittedRevision: quiz.revision, answers: [0] });
+  await assert.rejects(attemptRequestService.createRequest({ quizId: quiz._id, user: student, reason: "   " }), /reason is required/i);
+  const [first, duplicate] = await Promise.allSettled([
+    attemptRequestService.createRequest({ quizId: quiz._id, user: student, reason: "Need one more chance" }),
+    attemptRequestService.createRequest({ quizId: quiz._id, user: student, reason: "Second browser request" }),
+  ]);
+  assert.equal([first, duplicate].filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(await QuizAttemptRequest.countDocuments({ user: student.id, quiz: quiz._id, status: "pending" }), 1);
+  const request = await QuizAttemptRequest.findOne({ user: student.id, quiz: quiz._id });
+  await attemptRequestService.cancelRequest({ quizId: quiz._id, requestId: request._id, user: student });
+  assert.equal((await QuizAttemptRequest.findById(request._id)).status, "cancelled");
+  assert.equal(await QuizAttemptGrant.countDocuments({ user: student.id, quiz: quiz._id }), 0);
+  await assert.rejects(attemptRequestService.cancelRequest({ quizId: quiz._id, requestId: request._id, user: student }), /no longer be cancelled/);
+});
+
+test("approving an exhausted course-final request creates exactly one request-sourced grant and stale requests are superseded", async () => {
+  const { course, quiz } = await setupQuiz({ contextType: "course_final", maxAttempts: 1 });
+  const student = await User.create({ name: unique("Student"), email: `${unique("student")}@example.test`, password: "password", role: "user" });
+  const admin = id();
+  await Enrollment.create({ userId: student._id, courseId: course._id });
+  await submitQuiz({ quizId: quiz._id, user: { id: student._id }, submittedRevision: quiz.revision, answers: [0] });
+  const created = await attemptRequestService.createRequest({ quizId: quiz._id, user: { id: student._id }, reason: "I need another learning attempt" });
+  const approved = await attemptRequestService.reviewRequest({ quizId: quiz._id, requestId: created.request._id, adminId: admin, decision: "approved", note: "Approved" });
+  assert.equal(approved.decision, "approved");
+  assert.equal(approved.state.effectiveMaxAttempts, 2);
+  const grant = await QuizAttemptGrant.findOne({ request: created.request._id }).lean();
+  assert.equal(grant.source, "student_request");
+  assert.equal((await QuizAttemptRequest.findById(created.request._id)).status, "approved");
+  await assert.rejects(attemptRequestService.reviewRequest({ quizId: quiz._id, requestId: created.request._id, adminId: id(), decision: "approved" }), /already been reviewed/);
+  await submitQuiz({ quizId: quiz._id, user: { id: student._id }, submittedRevision: quiz.revision, answers: [0] });
+  const stale = await attemptRequestService.createRequest({ quizId: quiz._id, user: { id: student._id }, reason: "Another request" });
+  await QuizAttemptGrant.create({ user: student._id, quiz: quiz._id, grantedBy: admin, source: "direct_admin" });
+  const superseded = await attemptRequestService.reviewRequest({ quizId: quiz._id, requestId: stale.request._id, adminId: admin, decision: "approved" });
+  assert.equal(superseded.decision, "superseded");
+  assert.equal(await QuizAttemptGrant.countDocuments({ user: student._id, quiz: quiz._id }), 2);
+});
+
+test("request-review notifications use the authenticated Course Final route for approval and rejection", async () => {
+  const { course, quiz } = await setupQuiz({ contextType: "course_final", maxAttempts: 1 });
+  const student = await User.create({ name: unique("Student"), email: `${unique("student")}@example.test`, password: "password", role: "user" });
+  await Enrollment.create({ userId: student._id, courseId: course._id });
+  await submitQuiz({ quizId: quiz._id, user: { id: student._id }, submittedRevision: quiz.revision, answers: [0] });
+  const approvedRequest = await attemptRequestService.createRequest({ quizId: quiz._id, user: { id: student._id }, reason: "One more try" });
+  const approvedResponse = responseRecorder();
+  await quizController.reviewStudentAttemptRequest({ params: { quizId: String(quiz._id), requestId: String(approvedRequest.request._id) }, body: { decision: "approved", note: "Okay" }, user: { id: id(), role: "admin" } }, approvedResponse);
+  assert.equal(approvedResponse.statusCode, 200);
+  assert.equal((await Notification.findOne({ title: "Extra quiz submission approved" }).lean()).link, `/app/course-quiz/${course._id}/${quiz._id}`);
+  await submitQuiz({ quizId: quiz._id, user: { id: student._id }, submittedRevision: quiz.revision, answers: [0] });
+  const rejectedRequest = await attemptRequestService.createRequest({ quizId: quiz._id, user: { id: student._id }, reason: "Please review again" });
+  const rejectedResponse = responseRecorder();
+  await quizController.reviewStudentAttemptRequest({ params: { quizId: String(quiz._id), requestId: String(rejectedRequest.request._id) }, body: { decision: "rejected", note: "Complete the practice first." }, user: { id: id(), role: "admin" } }, rejectedResponse);
+  assert.equal(rejectedResponse.statusCode, 200);
+  assert.equal((await Notification.findOne({ title: "Extra quiz submission request declined" }).lean()).link, `/app/course-quiz/${course._id}/${quiz._id}`);
 });

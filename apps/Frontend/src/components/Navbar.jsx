@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom"
 import { useState } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import { useNotification } from "../contexts/NotificationContext"
-import { getSafeNotificationPath } from "../utils/notificationLink"
+import { getSafeNotificationDestination } from "../utils/notificationLink"
 import LogoutConfirmModal from "./LogoutConfirmModal"
 import Avatar from "./Avatar"
 
@@ -99,7 +99,7 @@ function NotificationBell({ compact = false }) {
                   onClick={() => {
                     if (!notification.isRead) markAsRead(notification._id);
                     setNotificationOpen(false);
-                    const destination = getSafeNotificationPath(notification.link);
+                    const destination = getSafeNotificationDestination(notification);
                     if (destination) navigate(destination);
                   }}
                   className={`flex w-full items-start gap-3 border-b border-[#2D2E30]/8 px-4 py-3 text-left transition hover:bg-[#FFF4D8]/50 ${

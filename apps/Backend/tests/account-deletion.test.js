@@ -11,7 +11,7 @@ const bcrypt = require("bcryptjs");
 const backendDirectory = path.resolve(__dirname, "..");
 const password = "CorrectHorseBattery1";
 let mongoDirectory; let mongoProcess; let apiProcess; let apiBaseUrl;
-let User; let Enrollment; let Payment; let PromoRedemption; let RefreshSession; let PersonalFlashcardDeck; let PersonalFlashcard; let FlashcardReviewProgress; let QuizAttempt; let Notification; let SupportTicket; let AuditLog; let AccountAssetCleanup; let AccountDeletionConfirmation; let HomeworkSetAssignment; let QuizUnlock; let QuizAttemptGrant; let QuizGoalAchievement;
+let User; let Enrollment; let Payment; let PromoRedemption; let RefreshSession; let PersonalFlashcardDeck; let PersonalFlashcard; let FlashcardReviewProgress; let QuizAttempt; let Notification; let SupportTicket; let AuditLog; let AccountAssetCleanup; let AccountDeletionConfirmation; let HomeworkSetAssignment; let QuizUnlock; let QuizAttemptGrant; let QuizAttemptRequest; let QuizGoalAchievement;
 let sequence = 0;
 const unique = (label) => `${label}-${++sequence}`;
 
@@ -34,7 +34,7 @@ before(async () => {
   apiProcess = spawn(process.execPath, ["server.js"], { cwd: backendDirectory, env: { ...process.env, NODE_ENV: "production", PORT: String(apiPort), MONGO_DB: mongoUri, JWT_SECRET: "account-delete-test-secret", BACKEND_URL: "https://api.example.test", FRONTEND_URL_PROD: "https://student.example.test", ADMIN_URL_PROD: "https://admin.example.test", TRUST_PROXY: "true" }, stdio: ["ignore", "pipe", "pipe"] });
   await waitFor(apiProcess, "Example app listening");
   await mongoose.connect(mongoUri);
-  User = require("../models/userModel"); Enrollment = require("../models/enrollmentModel"); Payment = require("../models/paymentModel"); PromoRedemption = require("../models/promoRedemptionModel"); RefreshSession = require("../models/refreshSessionModel"); PersonalFlashcardDeck = require("../models/personalFlashcardDeckModel"); PersonalFlashcard = require("../models/personalFlashcardModel"); FlashcardReviewProgress = require("../models/flashcardReviewProgressModel"); QuizAttempt = require("../models/quizAttemptModel"); Notification = require("../models/notificationModel"); SupportTicket = require("../models/supportTicketModel"); AuditLog = require("../models/auditLogModel"); AccountAssetCleanup = require("../models/accountAssetCleanupModel"); AccountDeletionConfirmation = require("../models/accountDeletionConfirmationModel"); HomeworkSetAssignment = require("../models/homeworkSetAssignmentModel"); QuizUnlock = require("../models/quizUnlockModel"); QuizAttemptGrant = require("../models/quizAttemptGrantModel"); QuizGoalAchievement = require("../models/quizGoalAchievementModel");
+  User = require("../models/userModel"); Enrollment = require("../models/enrollmentModel"); Payment = require("../models/paymentModel"); PromoRedemption = require("../models/promoRedemptionModel"); RefreshSession = require("../models/refreshSessionModel"); PersonalFlashcardDeck = require("../models/personalFlashcardDeckModel"); PersonalFlashcard = require("../models/personalFlashcardModel"); FlashcardReviewProgress = require("../models/flashcardReviewProgressModel"); QuizAttempt = require("../models/quizAttemptModel"); Notification = require("../models/notificationModel"); SupportTicket = require("../models/supportTicketModel"); AuditLog = require("../models/auditLogModel"); AccountAssetCleanup = require("../models/accountAssetCleanupModel"); AccountDeletionConfirmation = require("../models/accountDeletionConfirmationModel"); HomeworkSetAssignment = require("../models/homeworkSetAssignmentModel"); QuizUnlock = require("../models/quizUnlockModel"); QuizAttemptGrant = require("../models/quizAttemptGrantModel"); QuizAttemptRequest = require("../models/quizAttemptRequestModel"); QuizGoalAchievement = require("../models/quizGoalAchievementModel");
   await Promise.all([PersonalFlashcardDeck.init(), PersonalFlashcard.init(), FlashcardReviewProgress.init(), AccountAssetCleanup.init(), AccountDeletionConfirmation.init()]);
 });
 
@@ -44,12 +44,13 @@ after(async () => { await mongoose.disconnect(); await Promise.all([stop(apiProc
 async function seedStudentData(student) {
   const deck = await PersonalFlashcardDeck.create({ ownerId: student._id, name: "Private" });
   const card = await PersonalFlashcard.create({ ownerId: student._id, deckId: deck._id, prompt: "Front", answer: "Back" });
-  await Enrollment.create({ userId: student._id, courseId: new mongoose.Types.ObjectId() });
+  const enrollment = await Enrollment.create({ userId: student._id, courseId: new mongoose.Types.ObjectId() });
   await QuizAttempt.create({ user: student._id, quiz: new mongoose.Types.ObjectId(), attemptNumber: 1, answers: [0], score: 1, total: 1 });
   const homeworkSet = new mongoose.Types.ObjectId(); const quiz = new mongoose.Types.ObjectId();
   await HomeworkSetAssignment.create({ homeworkSet, user: student._id });
   await QuizUnlock.create({ user: student._id, quiz });
   await QuizAttemptGrant.create({ user: student._id, quiz, grantedBy: new mongoose.Types.ObjectId() });
+  await QuizAttemptRequest.create({ user: student._id, quiz, course: enrollment.courseId, reason: "Please review" });
   await QuizGoalAchievement.create({ user: student._id, quiz, goalPercentAtAchievement: 70, scorePercentAtAchievement: 80 });
   await Notification.create({ userId: student._id, title: "Private", message: "Private" });
   await SupportTicket.create({ studentId: student._id, subject: "Help", message: "Private support message" });
@@ -81,12 +82,12 @@ test("admin deletion removes private student data, retains business history, and
   const otherReview = await FlashcardReviewProgress.create({ userId: other._id, cardType: "personal", cardId: otherCard._id, lastReviewedAt: new Date(), nextReviewAt: new Date(), lastRating: "again", reviewCount: 1, intervalMinutes: 10 });
   const response = await request(`/user/${student._id}`, { method: "DELETE", token: adminLogin.token, body: { adminPassword: password } });
   assert.equal(response.status, 200); assert.equal(await User.exists({ _id: student._id }), null);
-  await Promise.all([Enrollment, PersonalFlashcardDeck, PersonalFlashcard, FlashcardReviewProgress, QuizAttempt, Notification, SupportTicket, HomeworkSetAssignment, QuizUnlock, QuizAttemptGrant, QuizGoalAchievement].map(async (Model) => assert.equal(await Model.countDocuments(Model === QuizAttempt || Model === HomeworkSetAssignment || Model === QuizUnlock || Model === QuizAttemptGrant || Model === QuizGoalAchievement ? { user: student._id } : Model === PersonalFlashcardDeck || Model === PersonalFlashcard ? { ownerId: student._id } : Model === SupportTicket ? { studentId: student._id } : { userId: student._id }), 0)));
+  await Promise.all([Enrollment, PersonalFlashcardDeck, PersonalFlashcard, FlashcardReviewProgress, QuizAttempt, Notification, SupportTicket, HomeworkSetAssignment, QuizUnlock, QuizAttemptGrant, QuizAttemptRequest, QuizGoalAchievement].map(async (Model) => assert.equal(await Model.countDocuments(Model === QuizAttempt || Model === HomeworkSetAssignment || Model === QuizUnlock || Model === QuizAttemptGrant || Model === QuizAttemptRequest || Model === QuizGoalAchievement ? { user: student._id } : Model === PersonalFlashcardDeck || Model === PersonalFlashcard ? { ownerId: student._id } : Model === SupportTicket ? { studentId: student._id } : { userId: student._id }), 0)));
   assert.ok(await Payment.exists({ _id: payment._id })); assert.ok(await PromoRedemption.exists({ _id: redemption._id }));
   const deletionAudit = await AuditLog.findOne({ targetId: student._id, action: "user.deleted" }).lean();
   assert.ok(deletionAudit); assert.equal(String(deletionAudit.actorId), String(admin._id)); assert.equal(String(deletionAudit.targetId), String(student._id)); assert.equal(deletionAudit.metadata.initiatedBy, "admin"); assert.equal("name" in deletionAudit.metadata, false); assert.equal("email" in deletionAudit.metadata, false);
   assert.ok(await PersonalFlashcardDeck.exists({ _id: otherDeck._id })); assert.ok(await FlashcardReviewProgress.exists({ _id: otherReview._id }));
-  await Promise.all([QuizAttempt, HomeworkSetAssignment, QuizUnlock, QuizAttemptGrant, QuizGoalAchievement].map(async (Model) => {
+  await Promise.all([QuizAttempt, HomeworkSetAssignment, QuizUnlock, QuizAttemptGrant, QuizAttemptRequest, QuizGoalAchievement].map(async (Model) => {
     assert.equal(await Model.countDocuments({ user: other._id }), 1);
   }));
   assert.ok(await User.exists({ _id: admin._id }));

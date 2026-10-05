@@ -14,6 +14,12 @@ const DYNAMIC_PATHS = [
   /^\/course-lessons\/[A-Za-z0-9_-]+\/quiz\/[A-Za-z0-9_-]+$/, /^\/course-quiz\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/,
 ];
 
+const LEGACY_COURSE_FINAL_REQUEST_TITLES = new Set([
+  "Extra quiz submission approved",
+  "Extra quiz submission request declined",
+]);
+const LEGACY_COURSE_FINAL_REQUEST_PATH = /^\/app\/learn\/([A-Za-z0-9_-]+)\/quiz\/([A-Za-z0-9_-]+)$/;
+
 function decodeRepeatedly(value) {
   let decoded = value;
   for (let index = 0; index < 4; index += 1) {
@@ -47,4 +53,21 @@ export function getSafeNotificationPath(link) {
   } catch {
     return "";
   }
+}
+
+// Phase 3B originally stored Course Final notifications using the lesson-quiz
+// route. Keep those existing notifications usable without changing valid lesson
+// links or accepting a target that does not agree with the notification course.
+export function getSafeNotificationDestination(notification) {
+  const destination = getSafeNotificationPath(notification?.link);
+  if (!destination) return "";
+
+  const legacyMatch = destination.match(LEGACY_COURSE_FINAL_REQUEST_PATH);
+  if (!legacyMatch || !LEGACY_COURSE_FINAL_REQUEST_TITLES.has(notification?.title)) {
+    return destination;
+  }
+
+  const [, courseId, quizId] = legacyMatch;
+  if (String(notification?.courseId || "") !== courseId) return "";
+  return getSafeNotificationPath(`/app/course-quiz/${courseId}/${quizId}`);
 }

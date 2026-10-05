@@ -10,10 +10,10 @@ const storage = new Map()
 vi.mock('../components/Navbar', () => ({ default: () => <nav>Student navigation</nav> }))
 vi.mock('../components/Footer', () => ({ default: () => <footer>Student footer</footer> }))
 vi.mock('../components/LoadingSpinner', () => ({ default: () => <p>Loading</p> }))
-vi.mock('../services/quizService', () => ({ fetchQuizzesForLesson: vi.fn(), fetchCourseQuizzes: vi.fn(), fetchQuizHistory: vi.fn(), submitQuiz: vi.fn() }))
+vi.mock('../services/quizService', () => ({ fetchQuizzesForLesson: vi.fn(), fetchCourseQuizzes: vi.fn(), fetchQuizHistory: vi.fn(), submitQuiz: vi.fn(), fetchQuizAttemptRequests: vi.fn(), createQuizAttemptRequest: vi.fn(), cancelQuizAttemptRequest: vi.fn() }))
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }))
 
-import { fetchCourseQuizzes, fetchQuizHistory, fetchQuizzesForLesson, submitQuiz } from '../services/quizService'
+import { fetchCourseQuizzes, fetchQuizHistory, fetchQuizzesForLesson, submitQuiz, fetchQuizAttemptRequests, createQuizAttemptRequest, cancelQuizAttemptRequest } from '../services/quizService'
 
 function LocationProbe() {
   const location = useLocation()
@@ -50,6 +50,7 @@ describe('Quiz result navigation', () => {
     authState.user = { id: 'student-a' }
     fetchQuizzesForLesson.mockResolvedValue([lessonQuiz])
     fetchQuizHistory.mockResolvedValue({ attempts: [], attemptsUsed: 0, maxAttempts: null, bestScore: 0 })
+    fetchQuizAttemptRequests.mockResolvedValue({ requests: [] })
     submitQuiz.mockResolvedValue({ score: 1, total: 1, showCorrectAnswers: false, attemptsUsed: 1, maxAttempts: null })
   })
 
@@ -155,5 +156,45 @@ describe('Quiz result navigation', () => {
     await submitSingleQuestion(user)
     await screen.findByRole('button', { name: 'Try again' })
     expect(screen.queryByRole('button', { name: 'Back to Lesson' })).toBeNull()
+  })
+
+  it('lets an exhausted course-final student request and cancel one extra submission', async () => {
+    const user = userEvent.setup()
+    fetchCourseQuizzes.mockResolvedValue([{ ...lessonQuiz, _id: 'course-final-1', id: 'course-final-1', title: 'Course final', maxAttempts: 3, attemptsUsed: 3 }])
+    fetchQuizHistory.mockResolvedValue({ attempts: [], attemptsUsed: 3, maxAttempts: 3, bestScore: 0 })
+    createQuizAttemptRequest.mockResolvedValue({ request: { _id: 'request-1', status: 'pending', reason: 'I would like one more chance.', createdAt: '2026-10-05T00:00:00.000Z' } })
+    cancelQuizAttemptRequest.mockResolvedValue({ request: { _id: 'request-1', status: 'cancelled', reason: 'I would like one more chance.', createdAt: '2026-10-05T00:00:00.000Z' } })
+    render(<MemoryRouter initialEntries={['/app/course-quiz/course-1/course-final-1']}><Routes><Route path="/app/course-quiz/:courseId/:quizId" element={<Quiz />} /></Routes></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: /request extra submission/i }))
+    await user.type(screen.getByRole('textbox', { name: /reason/i }), 'I would like one more chance.')
+    await user.click(screen.getByRole('button', { name: /submit request/i }))
+    expect(createQuizAttemptRequest).toHaveBeenCalledWith('course-final-1', 'I would like one more chance.')
+    expect(await screen.findByText(/waiting for admin review/i)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /cancel request/i }))
+    expect(cancelQuizAttemptRequest).toHaveBeenCalledWith('course-final-1', 'request-1')
+    expect(await screen.findByText('Cancelled')).toBeTruthy()
+  })
+
+  it('loads the requested Course Final by both route identities and shows a rejection reason', async () => {
+    fetchCourseQuizzes.mockResolvedValue([{ ...lessonQuiz, _id: 'final-1', id: 'final-1', title: 'Course final', maxAttempts: 3, attemptsUsed: 3 }])
+    fetchQuizHistory.mockResolvedValue({ attempts: [], attemptsUsed: 3, maxAttempts: 3, bestScore: 0 })
+    fetchQuizAttemptRequests.mockResolvedValue({ requests: [{ _id: 'request-1', status: 'rejected', reason: 'Please review.', adminNote: 'Complete the practice first.', createdAt: '2026-10-05T00:00:00.000Z' }] })
+    render(<MemoryRouter initialEntries={['/app/course-quiz/course-1/final-1']}><Routes><Route path="/app/course-quiz/:courseId/:quizId" element={<Quiz />} /></Routes></MemoryRouter>)
+
+    expect(await screen.findByText('Course final')).toBeTruthy()
+    expect(fetchCourseQuizzes).toHaveBeenCalledWith('course-1')
+    expect(fetchQuizAttemptRequests).toHaveBeenCalledWith('final-1')
+    expect(screen.getByText(/admin response:/i).parentElement.textContent).toContain('Complete the practice first.')
+  })
+
+  it('keeps an approved request visible while its additional Course Final submission is actionable', async () => {
+    fetchCourseQuizzes.mockResolvedValue([{ ...lessonQuiz, _id: 'final-1', id: 'final-1', title: 'Course final', maxAttempts: 4, attemptsUsed: 3 }])
+    fetchQuizHistory.mockResolvedValue({ attempts: [], attemptsUsed: 3, maxAttempts: 4, bestScore: 0 })
+    fetchQuizAttemptRequests.mockResolvedValue({ requests: [{ _id: 'request-1', status: 'approved', reason: 'Please review.', adminNote: 'Approved for one more attempt.', createdAt: '2026-10-05T00:00:00.000Z' }] })
+    render(<MemoryRouter initialEntries={['/app/course-quiz/course-1/final-1']}><Routes><Route path="/app/course-quiz/:courseId/:quizId" element={<Quiz />} /></Routes></MemoryRouter>)
+
+    expect(await screen.findByText('One additional submission was granted.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Finish quiz' })).toBeTruthy()
   })
 })

@@ -3,7 +3,7 @@ import { Bell, CheckCheck, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import { getSafeNotificationPath } from "../utils/notificationLink";
+import { getSafeNotificationDestination } from "../utils/notificationLink";
 import { useNotification } from "../contexts/NotificationContext";
 
 const FILTER_OPTIONS = [
@@ -23,7 +23,7 @@ function Notifications() {
       await markAsRead(notification._id);
     }
 
-    const destination = getSafeNotificationPath(notification.link);
+    const destination = getSafeNotificationDestination(notification);
     if (destination) {
       navigate(destination);
       return;

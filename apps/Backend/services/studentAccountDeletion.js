@@ -8,6 +8,7 @@ const QuizAttempt = require("../models/quizAttemptModel");
 const HomeworkSetAssignment = require("../models/homeworkSetAssignmentModel");
 const QuizUnlock = require("../models/quizUnlockModel");
 const QuizAttemptGrant = require("../models/quizAttemptGrantModel");
+const QuizAttemptRequest = require("../models/quizAttemptRequestModel");
 const QuizGoalAchievement = require("../models/quizGoalAchievementModel");
 const Notification = require("../models/notificationModel");
 const SupportTicket = require("../models/supportTicketModel");
@@ -73,6 +74,7 @@ async function deleteStudentAccount(userId, { actorId, initiatedBy, deletionConf
       HomeworkSetAssignment.deleteMany({ user: student._id }, { session }),
       QuizUnlock.deleteMany({ user: student._id }, { session }),
       QuizAttemptGrant.deleteMany({ user: student._id }, { session }),
+      QuizAttemptRequest.deleteMany({ user: student._id }, { session }),
       QuizGoalAchievement.deleteMany({ user: student._id }, { session }),
       Notification.deleteMany({ userId: student._id }, { session }),
       SupportTicket.deleteMany({ studentId: student._id }, { session }),

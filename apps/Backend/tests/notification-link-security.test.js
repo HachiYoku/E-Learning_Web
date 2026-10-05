@@ -13,6 +13,7 @@ test("notification links accept supported internal application routes", () => {
     ["/my-courses", "/my-courses"],
     ["/profile", "/app/profile"],
     ["/app/learn/course_123/quiz/lesson-456", "/app/learn/course_123/quiz/lesson-456"],
+    ["/app/course-quiz/course_123/final-456", "/app/course-quiz/course_123/final-456"],
     ["/course-lessons/course-123", "/course-lessons/course-123"],
     ["/practice/thai-vowels?level=beginner#exercise", "/practice/thai-vowels?level=beginner#exercise"],
   ];
