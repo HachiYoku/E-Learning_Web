@@ -29,6 +29,7 @@
     "payments:migrate-multi-currency-local": "node scripts/migrateMultiCurrencyPaymentLocal.js",
     "payments:reconciliation-report": "node scripts/reportPaymentIntegrityReconciliation.js --read-only",
     "payments:verify-integrity-migration": "node scripts/verifyPaymentIntegrityMigration.js --read-only",
+    "quizzes:prepare-indexes": "node scripts/prepareQuizIndexes.js",
     "payments:cleanup-disposable-promo-tests": "node scripts/cleanupDisposablePromoTests.js",
     "payments:cleanup-proofs": "node scripts/cleanupPaymentProofs.js",
     "payments:cleanup-retained-proofs": "node scripts/cleanupExpiredPaymentProofs.js",
