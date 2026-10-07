@@ -112,6 +112,29 @@ test("unlimited lesson submissions provide immediate review and immutable snapsh
   assert.equal((await studentQuizHistory({ quizId: quiz._id, user: other })).attempts.length, 0);
 });
 
+test("submitted accessibility metadata survives QuizAttempt persistence and historical reads", async () => {
+  const { course, quiz } = await setupQuiz();
+  const user = { id: id() };
+  await Enrollment.create({ userId: user.id, courseId: course._id });
+  quiz.questions[0].imageAlt = "Student reading a Thai book";
+  quiz.questions[0].audio = "https://example.test/pronunciation.mp3";
+  quiz.questions[0].audioLabel = "Thai pronunciation";
+  quiz.questions.push(question({ prompt: "Decorative image", imageDecorative: true }));
+  await quiz.save();
+
+  const submitted = await submitQuiz({ quizId: quiz._id, user, submittedRevision: quiz.revision, answers: [0, 0] });
+  const stored = await QuizAttempt.findById(submitted.attemptId).lean();
+  assert.equal(stored.submissionSnapshot.questions[0].imageAlt, "Student reading a Thai book");
+  assert.equal(stored.submissionSnapshot.questions[0].imageDecorative, false);
+  assert.equal(stored.submissionSnapshot.questions[0].audioLabel, "Thai pronunciation");
+  assert.equal(stored.submissionSnapshot.questions[1].imageDecorative, true);
+
+  const history = await studentQuizHistory({ quizId: quiz._id, user });
+  assert.equal(history.attempts[0].snapshot.questions[0].imageAlt, "Student reading a Thai book");
+  assert.equal(history.attempts[0].snapshot.questions[0].audioLabel, "Thai pronunciation");
+  assert.equal(history.attempts[0].snapshot.questions[1].imageDecorative, true);
+});
+
 test("Course Final submissions and history never reveal answers, including after exhaustion and a direct grant", async () => {
   const { course, quiz } = await setupQuiz({ contextType: "course_final" }); const user = { id: id() };
   await Enrollment.create({ userId: user.id, courseId: course._id });
