@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Notifications from "./Notifications";
+import { getSafeNotificationPath } from "../utils/notificationLink";
 
 const state = vi.hoisted(() => ({ notifications: [], markAsRead: vi.fn(), markAllRead: vi.fn() }));
 
@@ -26,6 +27,15 @@ describe("Course Final notification links", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.markAsRead.mockResolvedValue(undefined);
+  });
+
+  it.each([0x00, 0x1F, 0x7F])("rejects an embedded control character U+%s", (code) => {
+    expect(getSafeNotificationPath(`/app/course-quiz/course-1/final-1?note=x${String.fromCharCode(code)}y`)).toBe("");
+  });
+
+  it("accepts a nearby printable character in an otherwise valid Course Final link", () => {
+    expect(getSafeNotificationPath("/app/course-quiz/course-1/final-1?note=x!y"))
+      .toBe("/app/course-quiz/course-1/final-1?note=x!y");
   });
 
   for (const [title, message] of [

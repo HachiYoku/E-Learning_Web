@@ -34,13 +34,21 @@ function decodeRepeatedly(value) {
   return decoded;
 }
 
+function hasControlCharacter(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1F || code === 0x7F) return true;
+  }
+  return false;
+}
+
 // This is defence in depth. The backend is the authority and never stores or
 // returns unsafe links, but clients must not trust API data blindly.
 export function getSafeNotificationPath(link) {
   if (typeof link !== "string") return "";
   const value = link.trim();
   const decoded = decodeRepeatedly(value);
-  if (!value || !decoded || /[\u0000-\u001F\u007F]/.test(value)
+  if (!value || !decoded || hasControlCharacter(value)
     || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")
     || !decoded.startsWith("/") || decoded.startsWith("//") || decoded.includes("\\")) return "";
 
