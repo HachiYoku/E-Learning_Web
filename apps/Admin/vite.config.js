@@ -20,6 +20,8 @@ export default defineConfig({
       'src/pages/Payment/ReviewPayment.test.jsx',
       'src/pages/Payment/reviewPaymentDeepLink.test.js',
       'src/pages/QuizManagement/QuizAttempts.test.jsx',
+      'src/pages/QuizManagement/Quizzes.test.jsx',
+      'src/pages/QuizManagement/QuizEditor.test.jsx',
       'src/utils/adminReturnDestination.test.js',
     ],
   },

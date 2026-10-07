@@ -5,6 +5,7 @@ const PersonalFlashcardDeck = require("../models/personalFlashcardDeckModel");
 const PersonalFlashcard = require("../models/personalFlashcardModel");
 const FlashcardReviewProgress = require("../models/flashcardReviewProgressModel");
 const QuizAttempt = require("../models/quizAttemptModel");
+const QuizSession = require("../models/quizSessionModel");
 const HomeworkSetAssignment = require("../models/homeworkSetAssignmentModel");
 const QuizUnlock = require("../models/quizUnlockModel");
 const QuizAttemptGrant = require("../models/quizAttemptGrantModel");
@@ -71,6 +72,7 @@ async function deleteStudentAccount(userId, { actorId, initiatedBy, deletionConf
       FlashcardReviewProgress.deleteMany({ userId: student._id }, { session }),
       PersonalFlashcardDeck.deleteMany({ ownerId: student._id }, { session }),
       QuizAttempt.deleteMany({ user: student._id }, { session }),
+      QuizSession.deleteMany({ user: student._id }, { session }),
       HomeworkSetAssignment.deleteMany({ user: student._id }, { session }),
       QuizUnlock.deleteMany({ user: student._id }, { session }),
       QuizAttemptGrant.deleteMany({ user: student._id }, { session }),

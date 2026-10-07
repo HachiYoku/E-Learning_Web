@@ -10,13 +10,13 @@ vi.mock("../components/Footer", () => ({ default: () => <footer>Student footer</
 vi.mock("../components/LoadingSpinner", () => ({ default: () => <p>Loading</p> }));
 vi.mock("../services/courseService", () => ({ fetchCourseById: vi.fn() }));
 vi.mock("../services/lessonService", () => ({ fetchLessonsByCourse: vi.fn() }));
-vi.mock("../services/quizService", () => ({ fetchCourseQuizzes: vi.fn() }));
+vi.mock("../services/quizService", () => ({ fetchCourseQuizzes: vi.fn(), fetchQuizzesForLesson: vi.fn() }));
 vi.mock("../services/enrollmentService", () => ({ fetchEnrollmentProgress: vi.fn(), saveLastOpenedLesson: vi.fn(), setLessonCompleted: vi.fn() }));
 vi.mock("../services/personalFlashcardService", () => ({ fetchPersonalFlashcardDecks: vi.fn(), createPersonalFlashcardDeck: vi.fn(), createPersonalFlashcard: vi.fn(), deletePersonalFlashcard: vi.fn() }));
 
 import { fetchCourseById } from "../services/courseService";
 import { fetchLessonsByCourse } from "../services/lessonService";
-import { fetchCourseQuizzes } from "../services/quizService";
+import { fetchCourseQuizzes, fetchQuizzesForLesson } from "../services/quizService";
 import { fetchEnrollmentProgress, saveLastOpenedLesson, setLessonCompleted } from "../services/enrollmentService";
 
 function LocationProbe() {
@@ -29,6 +29,7 @@ beforeEach(() => {
   fetchCourseById.mockResolvedValue({ id: "course-1", title: "Thai Basics", description: "Learn Thai", features: [] });
   fetchLessonsByCourse.mockResolvedValue([{ id: "lesson-1", title: "Greetings", videoUrl: "https://example.com/greetings", order: 1 }]);
   fetchCourseQuizzes.mockResolvedValue([]);
+  fetchQuizzesForLesson.mockResolvedValue([{ _id: "lesson-quiz-1" }]);
   fetchEnrollmentProgress.mockResolvedValue({ completedLessonIds: [], completedLessons: 0, totalLessons: 1, percentage: 0 });
   saveLastOpenedLesson.mockResolvedValue({ completedLessonIds: [], completedLessons: 0, totalLessons: 1, percentage: 0 });
   setLessonCompleted.mockResolvedValue({ completedLessonIds: ['lesson-1'], completedLessons: 1, totalLessons: 1, percentage: 100 });
@@ -51,7 +52,9 @@ describe("CourseLessons quick save", () => {
 
     expect((await screen.findAllByText('Course final')).length).toBeGreaterThan(0);
     expect(screen.getByText('2 of 3 lesson quizzes completed')).toBeTruthy();
+    expect(screen.getByText('Complete all required lesson quizzes to unlock the Course Final.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Locked' }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Locked' }).querySelector('svg')).toBeTruthy();
   });
 
   it('renders an unlocked zero-requirement Course Final as ready to start', async () => {
@@ -61,6 +64,23 @@ describe("CourseLessons quick save", () => {
     expect(await screen.findByText('Ready to start')).toBeTruthy();
     expect(screen.getByText(/Goal: 80%/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start final' })).toBeTruthy();
+  });
+
+  it('retains the existing Goal reached Course Final treatment', async () => {
+    fetchCourseQuizzes.mockResolvedValueOnce([{ id: 'final-1', _id: 'final-1', title: 'Course final', locked: false, maxAttempts: 3, attemptsUsed: 2, timesTaken: 2, goalPercent: 80, goalReached: true, questions: [{ _id: 'q1' }] }]);
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+    expect(await screen.findByText('Goal reached')).toBeTruthy();
+    expect(screen.getByText(/Goal: 80%/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start final' })).toBeTruthy();
+  });
+
+  it('does not offer a Quiz action for a lesson without a published Quiz', async () => {
+    fetchQuizzesForLesson.mockResolvedValueOnce([]);
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+    await screen.findByText('Your lessons');
+    expect(screen.queryByRole('button', { name: 'Quiz', exact: true })).toBeNull();
+    await userEvent.setup().click(screen.getByRole('button', { name: /greetings/i }));
+    expect(screen.queryByRole('button', { name: 'Take lesson quiz' })).toBeNull();
   });
 
   it('opens only the requested authorized lesson and consumes the resume URL intent', async () => {

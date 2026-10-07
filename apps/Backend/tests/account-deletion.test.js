@@ -47,6 +47,7 @@ async function seedStudentData(student) {
   const enrollment = await Enrollment.create({ userId: student._id, courseId: new mongoose.Types.ObjectId() });
   await QuizAttempt.create({ user: student._id, quiz: new mongoose.Types.ObjectId(), attemptNumber: 1, answers: [0], score: 1, total: 1 });
   const homeworkSet = new mongoose.Types.ObjectId(); const quiz = new mongoose.Types.ObjectId();
+  await require("../models/quizSessionModel").create({ user: student._id, quiz, revision: 1, contextType: "course_final", snapshot: { questions: [] }, expiresAt: new Date(Date.now() + 86400000) });
   await HomeworkSetAssignment.create({ homeworkSet, user: student._id });
   await QuizUnlock.create({ user: student._id, quiz });
   await QuizAttemptGrant.create({ user: student._id, quiz, grantedBy: new mongoose.Types.ObjectId() });
@@ -82,6 +83,8 @@ test("admin deletion removes private student data, retains business history, and
   const otherReview = await FlashcardReviewProgress.create({ userId: other._id, cardType: "personal", cardId: otherCard._id, lastReviewedAt: new Date(), nextReviewAt: new Date(), lastRating: "again", reviewCount: 1, intervalMinutes: 10 });
   const response = await request(`/user/${student._id}`, { method: "DELETE", token: adminLogin.token, body: { adminPassword: password } });
   assert.equal(response.status, 200); assert.equal(await User.exists({ _id: student._id }), null);
+  assert.equal(await require("../models/quizSessionModel").countDocuments({ user: student._id }), 0);
+  assert.equal(await require("../models/quizSessionModel").countDocuments({ user: other._id }), 1);
   await Promise.all([Enrollment, PersonalFlashcardDeck, PersonalFlashcard, FlashcardReviewProgress, QuizAttempt, Notification, SupportTicket, HomeworkSetAssignment, QuizUnlock, QuizAttemptGrant, QuizAttemptRequest, QuizGoalAchievement].map(async (Model) => assert.equal(await Model.countDocuments(Model === QuizAttempt || Model === HomeworkSetAssignment || Model === QuizUnlock || Model === QuizAttemptGrant || Model === QuizAttemptRequest || Model === QuizGoalAchievement ? { user: student._id } : Model === PersonalFlashcardDeck || Model === PersonalFlashcard ? { ownerId: student._id } : Model === SupportTicket ? { studentId: student._id } : { userId: student._id }), 0)));
   assert.ok(await Payment.exists({ _id: payment._id })); assert.ok(await PromoRedemption.exists({ _id: redemption._id }));
   const deletionAudit = await AuditLog.findOne({ targetId: student._id, action: "user.deleted" }).lean();

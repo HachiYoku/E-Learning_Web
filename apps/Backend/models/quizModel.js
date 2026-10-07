@@ -15,10 +15,13 @@ const questionSchema = new mongoose.Schema(
     imagePublicId: { type: String, trim: true },
     imageResourceType: { type: String, trim: true, default: "image" },
     imageFormat: { type: String, trim: true, default: "" },
+    imageAlt: { type: String, trim: true, maxlength: 280, default: "" },
+    imageDecorative: { type: Boolean, default: false },
     audio: { type: String, trim: true, default: "" },
     audioPublicId: { type: String, trim: true, default: "" },
     audioResourceType: { type: String, trim: true, default: "" },
     audioFormat: { type: String, trim: true, default: "" },
+    audioLabel: { type: String, trim: true, maxlength: 280, default: "" },
     options: {
       type: [{ type: String, trim: true }],
       validate: {

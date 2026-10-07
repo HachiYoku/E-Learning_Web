@@ -25,7 +25,7 @@ const request = {
 };
 
 const payload = {
-  quiz: { _id: "quiz-1", title: "Course Final", maxAttempts: 3 },
+  quiz: { _id: "quiz-1", title: "Course Final", contextType: "course_final", maxAttempts: 3 },
   attempts: [{ _id: "attempt-1", user: request.user, attemptNumber: 3, score: 2, total: 3, createdAt: "2026-10-05T00:00:00.000Z" }],
   grants: [],
   requests: [request],
@@ -71,5 +71,14 @@ describe("QuizAttempts request review", () => {
     await user.click(reject);
     await waitFor(() => expect(reviewQuizAttemptRequest).toHaveBeenCalledWith("quiz-1", "request-1", "rejected", "Please complete the assigned practice first."));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("does not offer an extra grant for unlimited Lesson Quiz results", async () => {
+    const user = userEvent.setup();
+    fetchQuizAttempts.mockResolvedValueOnce({ ...payload, quiz: { ...payload.quiz, contextType: "course_lesson", maxAttempts: null }, requests: [] });
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: /student one/i }));
+    expect(screen.getAllByText(/Unlimited/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Grant \+1 submission/i })).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
-import { BarChart3, BookOpen, Check, ChevronDown, Edit2, Filter, GraduationCap, Plus, Search, Trash2, X } from "lucide-react";
+import { Archive, BarChart3, BookOpen, Check, ChevronDown, Edit2, Filter, GraduationCap, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deleteQuiz, fetchQuizzes } from "../../services/quizService";
+import { archiveQuiz, changeQuizAvailability, deleteQuiz, fetchQuizzes, restoreQuiz } from "../../services/quizService";
 import ConfirmationModal from "../../components/ConfirmationModal";
 
 const getId = (value) => String(value?._id || value?.id || value || "");
@@ -19,8 +19,11 @@ function Quizzes() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [quizToDelete, setQuizToDelete] = useState(null);
+  const [quizToDisable, setQuizToDisable] = useState(null);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [quizType, setQuizType] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("current");
   const [courseFilter, setCourseFilter] = useState("all");
   const [lessonFilter, setLessonFilter] = useState("all");
 
@@ -52,9 +55,9 @@ function Quizzes() {
     const query = searchTerm.trim().toLowerCase();
     return quizzes.filter((quiz) => {
       const matchesSearch = !query || [quiz.title, quiz.course?.title, quiz.lesson?.title].filter(Boolean).some((value) => value.toLowerCase().includes(query));
-      return matchesSearch && (quizType === "all" || quiz.quizType === quizType) && (courseFilter === "all" || getId(quiz.course) === courseFilter) && (lessonFilter === "all" || getId(quiz.lesson) === lessonFilter);
+      return matchesSearch && (statusFilter === "all" || (statusFilter === "archived" ? quiz.status === "archived" : quiz.status !== "archived")) && (quizType === "all" || quiz.quizType === quizType) && (courseFilter === "all" || getId(quiz.course) === courseFilter) && (lessonFilter === "all" || getId(quiz.lesson) === lessonFilter);
     });
-  }, [quizzes, searchTerm, quizType, courseFilter, lessonFilter]);
+  }, [quizzes, searchTerm, statusFilter, quizType, courseFilter, lessonFilter]);
 
   const groupedQuizzes = useMemo(() => {
     const groups = new Map([
@@ -67,12 +70,35 @@ function Quizzes() {
     return [...groups.values()].filter((group) => group.quizzes.length > 0);
   }, [filteredQuizzes]);
 
-  const hasActiveFilters = Boolean(searchTerm || quizType !== "all" || courseFilter !== "all" || lessonFilter !== "all");
-  const clearFilters = () => { setSearchTerm(""); setQuizType("all"); setCourseFilter("all"); setLessonFilter("all"); };
+  const hasActiveFilters = Boolean(searchTerm || statusFilter !== "current" || quizType !== "all" || courseFilter !== "all" || lessonFilter !== "all");
+  const clearFilters = () => { setSearchTerm(""); setStatusFilter("current"); setQuizType("all"); setCourseFilter("all"); setLessonFilter("all"); };
   const confirmDelete = async () => {
     try { await deleteQuiz(quizToDelete.id); setQuizzes((current) => current.filter((quiz) => quiz.id !== quizToDelete.id)); }
     catch (err) { setError(err.message); }
     finally { setQuizToDelete(null); }
+  };
+  const archive = async (quiz) => {
+    try {
+      const result = await archiveQuiz(quiz.id);
+      setQuizzes((current) => current.map((item) => item.id === quiz.id ? { ...item, status: result.quiz.status, revision: result.quiz.revision } : item));
+    } catch (err) { setError(err.message); }
+  };
+  const restore = async (quiz) => {
+    try {
+      const result = await restoreQuiz(quiz.id);
+      setQuizzes((current) => current.map((item) => item.id === quiz.id ? { ...item, status: result.quiz.status, revision: result.quiz.revision } : item));
+    } catch (err) { setError(err.message); }
+  };
+  const changeAvailability = async (quiz, status) => {
+    if (!quiz) return;
+    try {
+      setAvailabilitySaving(true);
+      setError("");
+      const result = await changeQuizAvailability(quiz.id, status);
+      setQuizzes((current) => current.map((item) => item.id === quiz.id ? { ...item, status: result.quiz.status, revision: result.quiz.revision } : item));
+      setQuizToDisable(null);
+    } catch (err) { setError(err.message); }
+    finally { setAvailabilitySaving(false); }
   };
 
   return (
@@ -91,24 +117,51 @@ function Quizzes() {
       </section>
       <section className="mb-7 rounded-2xl border border-[#2D2E30]/10 bg-white p-4 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)] sm:p-5">
         <div className="mb-4 flex items-center justify-between"><span className="flex items-center gap-2 font-bold text-[#2D2E30]"><Filter size={18} className="text-[#C97112]" /> Filter quizzes</span>{hasActiveFilters && <button onClick={clearFilters} className="inline-flex items-center gap-1 text-sm font-semibold text-[#765F55] hover:text-[#C97112]"><X size={15} /> Clear filters</button>}</div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <div className="relative"><Search size={17} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[#C97112]" /><input aria-label="Search quizzes" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search quiz, course, lesson..." className="w-full rounded-xl border border-[#2D2E30]/15 py-2.5 pl-10 pr-3 text-sm text-[#2D2E30] outline-none focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10" /></div>
           <FilterSelect ariaLabel="Quiz type" value={quizType} onChange={setQuizType} options={[{ value: "all", label: "All quiz types" }, { value: "lesson", label: "Lesson quizzes" }, { value: "course", label: "Course quizzes" }]} />
+          <FilterSelect ariaLabel="Quiz status" value={statusFilter} onChange={setStatusFilter} options={[{ value: "current", label: "Current quizzes" }, { value: "archived", label: "Archived quizzes" }, { value: "all", label: "All quizzes" }]} />
           <FilterSelect ariaLabel="Course" value={courseFilter} onChange={(value) => { setCourseFilter(value); setLessonFilter("all"); }} options={[{ value: "all", label: "All courses" }, ...courses.map((course) => ({ value: course.id, label: course.title }))]} />
           <FilterSelect ariaLabel="Lesson" disabled={!lessons.length} value={lessonFilter} onChange={setLessonFilter} options={[{ value: "all", label: "All lessons" }, ...lessons.map((lesson) => ({ value: lesson.id, label: lesson.label }))]} />
         </div>
       </section>
-      {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">{error}</div>}
-      {loading ? <div className="rounded-2xl bg-white p-10 text-center text-gray-600 shadow-sm">Loading quizzes...</div> : quizzes.length === 0 ? <EmptyState icon={<BookOpen size={34} />} title="No quizzes yet" message="Create your first quiz to assess your students." action={() => navigate("/quizzes/new")} actionText="Create quiz" /> : groupedQuizzes.length === 0 ? <EmptyState icon={<Search size={34} />} title="No matching quizzes" message="Try changing or clearing your filters." action={clearFilters} actionText="Clear filters" /> : <div className="space-y-8">{groupedQuizzes.map((group) => <section key={group.id}><div className="mb-3 flex items-center justify-between"><div><h2 className="flex items-center gap-2 text-xl font-bold text-gray-900">{group.id === "lesson" ? <BookOpen className="text-emerald-600" size={20} /> : <GraduationCap className="text-blue-600" size={20} />}{group.title}</h2><p className="mt-1 text-sm text-gray-500">{group.description}</p></div><span className="rounded-full bg-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-600">{group.quizzes.length} quiz{group.quizzes.length === 1 ? "" : "zes"}</span></div><div className="grid gap-4 lg:grid-cols-2">{group.quizzes.map((quiz) => <QuizCard key={quiz.id} quiz={quiz} navigate={navigate} onDelete={setQuizToDelete} />)}</div></section>)}</div>}
-      <ConfirmationModal isOpen={Boolean(quizToDelete)} title="Delete Quiz" message={`Delete “${quizToDelete?.title || ""}” and all its questions? This cannot be undone.`} confirmText="Delete" cancelText="Cancel" onConfirm={confirmDelete} onCancel={() => setQuizToDelete(null)} isDangerous />
+      {error && <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">{error}</div>}
+      {loading ? <div className="rounded-2xl bg-white p-10 text-center text-gray-600 shadow-sm">Loading quizzes...</div> : quizzes.length === 0 ? <EmptyState icon={<BookOpen size={34} />} title="No quizzes yet" message="Create your first quiz to assess your students." action={() => navigate("/quizzes/new")} actionText="Create quiz" /> : groupedQuizzes.length === 0 ? <EmptyState icon={<Search size={34} />} title="No matching quizzes" message="Try changing or clearing your filters." action={clearFilters} actionText="Clear filters" /> : <div className="space-y-8">{groupedQuizzes.map((group) => <section key={group.id}><div className="mb-3 flex items-center justify-between"><div><h2 className="flex items-center gap-2 text-xl font-bold text-gray-900">{group.id === "lesson" ? <BookOpen className="text-emerald-600" size={20} /> : <GraduationCap className="text-blue-600" size={20} />}{group.title}</h2><p className="mt-1 text-sm text-gray-500">{group.description}</p></div><span className="rounded-full bg-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-600">{group.quizzes.length} quiz{group.quizzes.length === 1 ? "" : "zes"}</span></div><div className="grid gap-4 lg:grid-cols-2">{group.quizzes.map((quiz) => <QuizCard key={quiz.id} quiz={quiz} navigate={navigate} onDelete={setQuizToDelete} onArchive={archive} onRestore={restore} onDisable={setQuizToDisable} onPublish={(item) => changeAvailability(item, "published")} />)}</div></section>)}</div>}
+      <ConfirmationModal isOpen={Boolean(quizToDelete)} title="Delete Quiz" message={`Delete “${quizToDelete?.title || ""}” permanently? This is only available when the quiz has no student results.`} confirmText="Delete" cancelText="Cancel" onConfirm={confirmDelete} onCancel={() => setQuizToDelete(null)} isDangerous />
+      <ConfirmationModal isOpen={Boolean(quizToDisable)} title="Disable Quiz" message="Students will no longer be able to start or continue this quiz. Quiz history and results will be preserved. You can publish it again later." confirmText="Disable Quiz" cancelText="Cancel" onConfirm={() => changeAvailability(quizToDisable, "disabled")} onCancel={() => setQuizToDisable(null)} isSaving={availabilitySaving} />
     </div></div>
   );
 }
 
-function QuizCard({ quiz, navigate, onDelete }) {
+function QuizCard({ quiz, navigate, onDelete, onArchive, onRestore, onDisable, onPublish }) {
   const isLesson = quiz.quizType === "lesson";
   const lessonLabel = isLesson ? `Lesson ${quiz.lesson?.order || ""}${quiz.lesson?.title ? `: ${quiz.lesson.title}` : ""}` : "Course-wide quiz";
-  return <article className="rounded-2xl border border-[#2D2E30]/10 bg-white p-4 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.55)] transition-all hover:-translate-y-1 hover:border-[#E58C1A]/35 hover:shadow-[0_20px_38px_-24px_rgba(201,113,18,0.4)] sm:p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isLesson ? "bg-[#EDF8EE] text-[#246B35]" : "bg-[#FFF1CE] text-[#9A5816]"}`}>{isLesson ? <BookOpen size={13} /> : <GraduationCap size={13} />}{isLesson ? "Lesson quiz" : "Course quiz"}</span><span className="text-xs text-[#765F55]">{quiz.maxAttempts ? `${quiz.maxAttempts} attempts` : "Unlimited attempts"}</span></div><h3 className="mt-3 break-words text-lg font-bold text-[#2D2E30] sm:truncate" title={quiz.title}>{quiz.title}</h3><p className="mt-1 break-words text-sm font-semibold text-[#2D2E30] sm:truncate" title={quiz.course?.title}>{quiz.course?.title || "Course unavailable"}</p><p className="mt-1 break-words text-sm text-[#765F55] sm:truncate" title={lessonLabel}>{lessonLabel}</p></div><div className="flex w-full justify-end gap-1.5 sm:w-auto sm:shrink-0 sm:self-auto"><button onClick={() => navigate(`/quizzes/${quiz.id}/attempts`)} className="rounded-lg bg-[#FFF1CE] p-2.5 text-[#C97112] hover:bg-[#F8C56A]" title="View student scores" aria-label="View student scores"><BarChart3 size={18} /></button><button onClick={() => navigate(`/quizzes/${quiz.id}/edit`)} className="rounded-lg bg-[#FFF9EA] p-2.5 text-[#2D2E30] hover:bg-[#FFF1CE]" title="Edit quiz" aria-label="Edit quiz"><Edit2 size={18} /></button><button onClick={() => onDelete(quiz)} className="rounded-lg bg-[#FFF0EE] p-2.5 text-[#A34D45] hover:bg-[#FFE1DD]" title="Delete quiz" aria-label="Delete quiz"><Trash2 size={18} /></button></div></div><div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#2D2E30]/10 pt-4 text-sm"><span className="font-bold text-[#C97112]">{quiz.questions.length} question{quiz.questions.length === 1 ? "" : "s"}</span><button onClick={() => navigate(`/quizzes/${quiz.id}/attempts`)} className="inline-flex items-center gap-1.5 rounded-xl bg-[#2D2E30] px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-[#E58C1A]">View results <span aria-hidden="true">→</span></button></div></article>;
+  const hasHistory = quiz.attemptCount > 0;
+  return <article className="rounded-2xl border border-[#2D2E30]/10 bg-white p-4 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.55)] transition-all hover:-translate-y-1 hover:border-[#E58C1A]/35 hover:shadow-[0_20px_38px_-24px_rgba(201,113,18,0.4)] sm:p-5">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isLesson ? "bg-[#EDF8EE] text-[#246B35]" : "bg-[#FFF1CE] text-[#9A5816]"}`}>{isLesson ? <BookOpen size={13} /> : <GraduationCap size={13} />}{isLesson ? "Lesson quiz" : "Course quiz"}</span>
+          {quiz.status === "archived" && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">Archived</span>}
+          {quiz.status === "disabled" && <span className="rounded-full bg-[#FFF0EE] px-2.5 py-1 text-xs font-bold text-[#A34D45]">Disabled</span>}
+          {quiz.status === "published" && <span className="rounded-full bg-[#EDF8EE] px-2.5 py-1 text-xs font-bold text-[#246B35]">Published</span>}
+          {quiz.status === "draft" && <span className="rounded-full bg-[#FFF9EA] px-2.5 py-1 text-xs font-bold text-[#9A5816]">Draft</span>}
+          <span className="text-xs text-[#765F55]">{quiz.maxAttempts ? `${quiz.maxAttempts} attempts` : "Unlimited attempts"}</span>
+        </div>
+        <h3 className="mt-3 break-words text-lg font-bold text-[#2D2E30] sm:truncate" title={quiz.title}>{quiz.title}</h3>
+        <p className="mt-1 break-words text-sm font-semibold text-[#2D2E30] sm:truncate" title={quiz.course?.title}>{quiz.course?.title || "Course unavailable"}</p>
+        <p className="mt-1 break-words text-sm text-[#765F55] sm:truncate" title={lessonLabel}>{lessonLabel}</p>
+        {hasHistory && quiz.status !== "archived" && <p className="mt-2 text-xs text-[#765F55]">This quiz has student results and cannot be permanently deleted. Archive it instead to preserve student history.</p>}
+        {quiz.status === "archived" && <p className="mt-2 text-xs text-[#765F55]">Restore keeps this quiz disabled until you publish it separately.</p>}
+      </div>
+      <div className="flex w-full justify-end gap-1.5 sm:w-auto sm:shrink-0 sm:self-auto">
+        <button onClick={() => navigate(`/quizzes/${quiz.id}/attempts`)} className="rounded-lg bg-[#FFF1CE] p-2.5 text-[#C97112] hover:bg-[#F8C56A]" title="View student scores" aria-label="View student scores"><BarChart3 size={18} /></button>
+        <button onClick={() => navigate(`/quizzes/${quiz.id}/edit`)} className="rounded-lg bg-[#FFF9EA] p-2.5 text-[#2D2E30] hover:bg-[#FFF1CE]" title="Edit quiz" aria-label="Edit quiz"><Edit2 size={18} /></button>
+        {quiz.status === "archived" ? <button onClick={() => onRestore(quiz)} className="rounded-lg bg-[#EDF8EE] p-2.5 text-[#246B35] hover:bg-[#DDF1DE]" title="Restore quiz as disabled" aria-label="Restore quiz as disabled"><RotateCcw size={18} /></button> : hasHistory ? <button onClick={() => onArchive(quiz)} className="rounded-lg bg-[#FFF1CE] p-2.5 text-[#9A5816] hover:bg-[#F8C56A]" title="Archive quiz" aria-label="Archive quiz"><Archive size={18} /></button> : <button onClick={() => onDelete(quiz)} className="rounded-lg bg-[#FFF0EE] p-2.5 text-[#A34D45] hover:bg-[#FFE1DD]" title="Delete quiz" aria-label="Delete quiz"><Trash2 size={18} /></button>}
+      </div>
+    </div>
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#2D2E30]/10 pt-4 text-sm"><span className="font-bold text-[#C97112]">{quiz.questions.length} question{quiz.questions.length === 1 ? "" : "s"}</span><div className="flex flex-wrap items-center gap-2">{quiz.status === "published" ? <button type="button" onClick={() => onDisable(quiz)} className="rounded-xl border border-[#A34D45]/25 px-3 py-2 text-xs font-bold text-[#A34D45] hover:bg-[#FFF0EE]">Disable Quiz</button> : quiz.status === "disabled" || quiz.status === "draft" ? <button type="button" onClick={() => onPublish(quiz)} className="rounded-xl border border-[#246B35]/25 px-3 py-2 text-xs font-bold text-[#246B35] hover:bg-[#EDF8EE]">Publish Quiz</button> : null}<button onClick={() => navigate(`/quizzes/${quiz.id}/attempts`)} className="inline-flex items-center gap-1.5 rounded-xl bg-[#2D2E30] px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-[#E58C1A]">View results <span aria-hidden="true">→</span></button></div></div>
+  </article>;
 }
 
 function EmptyState({ icon, title, message, action, actionText }) {

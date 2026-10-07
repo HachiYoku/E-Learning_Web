@@ -9,6 +9,7 @@ const HomeworkSet = require("../models/homeworkSetModel");
 const { buildQuizSubmissionSnapshot } = require("./quizSubmissionSnapshot");
 const { authorizeStudentQuizAccess, QuizAccessError, unavailableQuizError } = require("./quizAccessPolicy");
 const { recoverCourseFinalUnlocks } = require("./courseFinalProgress");
+const { loadSubmissionSession } = require("./quizSessionService");
 
 class QuizSubmissionError extends Error {
   constructor(status, message, code) {
@@ -45,6 +46,7 @@ function validateAnswers(quiz, answers) {
 }
 
 function safeQuizProjection(quiz, attemptsUsed, effectiveMaxAttempts) {
+  const contextValue = (value) => value ? { id: String(value._id || value), title: String(value.title || "") } : null;
   return {
     _id: quiz._id,
     id: String(quiz._id),
@@ -54,11 +56,16 @@ function safeQuizProjection(quiz, attemptsUsed, effectiveMaxAttempts) {
     revision: quiz.revision,
     maxAttempts: effectiveMaxAttempts,
     attemptsUsed,
+    courseContext: contextValue(quiz.course),
+    lessonContext: contextValue(quiz.lesson),
     questions: quiz.questions.map((question) => ({
       _id: question._id,
       prompt: question.prompt,
       image: question.image,
+      imageAlt: question.imageAlt || "",
+      imageDecorative: Boolean(question.imageDecorative),
       audio: question.audio,
+      audioLabel: question.audioLabel || "",
       options: question.options,
     })),
   };
@@ -100,7 +107,20 @@ function submissionReview(attempt, { revealCorrectAnswers = true } = {}) {
   };
 }
 
-async function submitQuiz({ quizId, user, submittedRevision, answers }) {
+function quizAtSessionRevision(quiz, quizSession) {
+  const snapshot = quizSession.snapshot || {};
+  return {
+    ...quiz.toObject(),
+    title: snapshot.title || quiz.title,
+    revision: quizSession.revision,
+    questions: (snapshot.questions || []).map((question) => ({
+      ...question,
+      _id: question.questionId,
+    })),
+  };
+}
+
+async function submitQuiz({ quizId, user, submittedRevision, sessionId, answers }) {
   const userId = user?.id || user?._id;
   if (!userId) throw new QuizSubmissionError(401, "User is not authorized.", "quiz_unauthorized");
   if (!mongoose.isValidObjectId(quizId)) throw unavailableQuizError();
@@ -110,41 +130,43 @@ async function submitQuiz({ quizId, user, submittedRevision, answers }) {
       return await mongoose.connection.transaction(async (session) => {
         const quiz = await Quiz.findById(quizId).session(session);
         await authorizeStudentQuizAccess({ quiz, user, session, requireAvailable: true });
-        if (!Number.isInteger(Number(submittedRevision)) || Number(submittedRevision) !== quiz.revision) {
-          throw new QuizSubmissionError(409, "The quiz has been updated. Please reload and start again.", "stale_quiz_revision");
+        const quizSession = await loadSubmissionSession({ sessionId, quiz, user, session });
+        if (!Number.isInteger(Number(submittedRevision)) || Number(submittedRevision) !== quizSession.revision) {
+          throw new QuizSubmissionError(409, "The quiz session is no longer valid. Please reload and start again.", "invalid_quiz_session");
         }
+        const sessionQuiz = quizAtSessionRevision(quiz, quizSession);
 
-        const normalizedAnswers = validateAnswers(quiz, answers);
+        const normalizedAnswers = validateAnswers(sessionQuiz, answers);
         const allowance = await attemptAllowance({ quiz, userId, session });
         if (allowance && allowance.attemptsUsed >= allowance.effectiveMaxAttempts) {
           throw new QuizSubmissionError(403, "No final quiz attempts remain.", "quiz_attempt_limit_reached");
         }
 
-        const answersAlreadyRevealed = isFinalQuiz(quiz)
+        const answersAlreadyRevealed = isFinalQuiz(quiz) && quiz.contextType !== "course_final"
           ? Boolean(await QuizAttempt.exists(revealedCorrectAnswerQuery(quiz._id, userId)).session(session))
-          : true;
-        const score = quiz.questions.reduce((total, question, index) => total + (question.correctAnswer === normalizedAnswers[index] ? 1 : 0), 0);
+          : false;
+        const score = sessionQuiz.questions.reduce((total, question, index) => total + (question.correctAnswer === normalizedAnswers[index] ? 1 : 0), 0);
         const parents = await loadSnapshotParents(quiz, session);
         const submittedAt = new Date();
         const snapshot = buildQuizSubmissionSnapshot({
-          quiz,
+          quiz: sessionQuiz,
           answers: normalizedAnswers,
           score,
-          total: quiz.questions.length,
+          total: sessionQuiz.questions.length,
           submittedAt,
           ...parents,
         });
         const attemptNumber = (allowance?.attemptsUsed || await QuizAttempt.countDocuments({ quiz: quiz._id, user: userId }).session(session)) + 1;
-        const revealCorrectAnswers = !isFinalQuiz(quiz)
-          || answersAlreadyRevealed
-          || attemptNumber >= allowance.effectiveMaxAttempts;
+        const revealCorrectAnswers = quiz.contextType !== "course_final" && (
+          !isFinalQuiz(quiz) || answersAlreadyRevealed || attemptNumber >= allowance.effectiveMaxAttempts
+        );
         const [attempt] = await QuizAttempt.create([{
           quiz: quiz._id,
           user: userId,
           attemptNumber,
           answers: normalizedAnswers,
           score,
-          total: quiz.questions.length,
+          total: sessionQuiz.questions.length,
           correctAnswersRevealed: revealCorrectAnswers && isFinalQuiz(quiz),
           submissionSnapshot: snapshot,
           createdAt: submittedAt,
@@ -160,7 +182,7 @@ async function submitQuiz({ quizId, user, submittedRevision, answers }) {
           }
         }
 
-        const scorePercent = quiz.questions.length ? (score / quiz.questions.length) * 100 : 0;
+        const scorePercent = sessionQuiz.questions.length ? (score / sessionQuiz.questions.length) * 100 : 0;
         if (isFinalQuiz(quiz) && quiz.goalPercent !== null && scorePercent >= quiz.goalPercent) {
           const existing = await QuizGoalAchievement.exists({ user: userId, quiz: quiz._id }).session(session);
           if (!existing) {
@@ -197,18 +219,35 @@ async function studentQuizHistory({ quizId, user }) {
     .select("attemptNumber answers score total createdAt submissionSnapshot")
     .sort({ attemptNumber: 1 })
     .lean();
-  const correctAnswersRevealed = !isFinalQuiz(quiz)
-    || Boolean(await QuizAttempt.exists(revealedCorrectAnswerQuery(quiz._id, user.id || user._id)));
+  const correctAnswersRevealed = quiz.contextType !== "course_final" && (
+    !isFinalQuiz(quiz) || Boolean(await QuizAttempt.exists(revealedCorrectAnswerQuery(quiz._id, user.id || user._id)))
+  );
   const bestScore = attempts.reduce((best, attempt) => Math.max(best, attempt.total ? (attempt.score / attempt.total) * 100 : 0), 0);
   const allowance = await attemptAllowance({ quiz, userId: user.id || user._id });
   return {
     attempts: attempts.map((attempt) => ({
+      _id: attempt._id,
       attemptNumber: attempt.attemptNumber,
       answers: attempt.answers,
       score: attempt.score,
       total: attempt.total,
       createdAt: attempt.createdAt,
       review: attempt.submissionSnapshot ? submissionReview(attempt, { revealCorrectAnswers: correctAnswersRevealed }).review : null,
+      snapshot: attempt.submissionSnapshot ? {
+        title: attempt.submissionSnapshot.quizTitle,
+        revision: attempt.submissionSnapshot.quizRevision,
+        contextType: attempt.submissionSnapshot.contextType,
+        questions: (attempt.submissionSnapshot.questions || []).map((question) => ({
+          _id: question.questionId,
+          prompt: question.prompt,
+          options: question.options,
+          image: question.image?.url || "",
+          imageAlt: question.imageAlt || "",
+          imageDecorative: Boolean(question.imageDecorative),
+          audio: question.audio?.url || "",
+          audioLabel: question.audioLabel || "",
+        })),
+      } : null,
     })),
     attemptsUsed: attempts.length,
     timesTaken: attempts.length,

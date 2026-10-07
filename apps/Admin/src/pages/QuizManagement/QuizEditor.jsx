@@ -1,20 +1,47 @@
 ﻿import { ArrowLeft, BookOpenText, CheckCircle2, ImagePlus, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { UNSAFE_NavigationContext, useNavigate, useParams } from "react-router-dom";
 import { fetchCourses } from "../../services/courseService";
 import { fetchLessonsByCourse } from "../../services/lessonService";
-import { createQuiz, fetchQuiz, updateQuiz } from "../../services/quizService";
+import { createQuiz, createQuizQuestion, fetchQuiz, updateQuiz, updateQuizQuestion } from "../../services/quizService";
 import { validateFileSize } from "../../utils/fileValidation";
+import QuizDialog from "./QuizDialog";
 
 const newQuestion = () => ({
+  localId: crypto.randomUUID(),
   prompt: "",
   image: "",
   imageFile: null,
   preview: "",
+  audio: "",
+  audioFile: null,
+  audioPreview: "",
   options: ["", "", "", ""],
   correctAnswer: 0,
 });
+
+const questionKey = (question) => question._id || question.localId;
+const questionDraft = (question) => ({ ...question, imageFile: null, audioFile: null, preview: question.image || "", audioPreview: question.audio || "" });
+const comparableQuestion = (question) => JSON.stringify({
+  prompt: question?.prompt || "", image: question?.image || "", audio: question?.audio || "",
+  imageAlt: question?.imageAlt || "", imageDecorative: Boolean(question?.imageDecorative), audioLabel: question?.audioLabel || "",
+  options: question?.options || [], correctAnswer: question?.correctAnswer,
+});
+const isDirtyQuestion = (question, baseline) => !baseline || Boolean(question.imageFile || question.audioFile) || comparableQuestion(question) !== comparableQuestion(baseline);
+function questionProblems(question) {
+  const problems = [];
+  if (!(question.prompt?.trim() || question.image || question.imageFile || question.audio || question.audioFile)) problems.push("Add question content");
+  if (question.prompt?.length > 280) problems.push("Keep prompt text within 280 characters");
+  const count = question.options.filter((option) => option.trim()).length;
+  if (count < 2 || count > 6) problems.push("Complete required answer choices (2–6)");
+  if (!Number.isInteger(question.correctAnswer) || !question.options[question.correctAnswer]?.trim()) problems.push("Select the correct answer");
+  return problems;
+}
+
+function releaseDraftMedia(question) {
+  for (const url of [question?.preview, question?.audioPreview]) if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+}
 
 function QuizSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,6 +54,9 @@ function QuizEditor() {
   const navigate = useNavigate();
   const { id } = useParams();
   const editing = Boolean(id);
+  const navigation = useContext(UNSAFE_NavigationContext);
+  const savesInFlight = useRef(new Set());
+  const permitNavigation = useRef(false);
   const [courses, setCourses] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [form, setForm] = useState({
@@ -40,6 +70,14 @@ function QuizEditor() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [questionStates, setQuestionStates] = useState({});
+  const [persistedQuestions, setPersistedQuestions] = useState([]);
+  const [pendingConfirmation, setPendingConfirmation] = useState(null);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [persistedForm, setPersistedForm] = useState(null);
+  const dirtyQuestions = form.questions.some((question) => isDirtyQuestion(question, persistedQuestions.find((item) => item._id === question._id)));
+  const formMetadata = JSON.stringify({ ...form, questions: form.questions.map(questionKey) });
+  const hasUnsavedChanges = !loading && (editing ? dirtyQuestions || formMetadata !== persistedForm : Boolean(form.title || form.questions.some((q) => q.prompt || q.imageFile || q.audioFile || q.options.some(Boolean))));
 
   useEffect(() => {
     fetchCourses().then(setCourses).catch((err) => setError(err.message));
@@ -63,25 +101,109 @@ function QuizEditor() {
     }
 
     fetchQuiz(id)
-      .then((quiz) =>
-        setForm({
+      .then((quiz) => {
+        setPersistedQuestions(quiz.questions);
+        const loadedForm = {
           courseId: quiz.course?._id || quiz.course,
           lessonId: quiz.lesson?._id || quiz.lesson,
           quizType: quiz.quizType || "lesson",
           title: quiz.title,
           maxAttempts: quiz.maxAttempts || "",
-          questions: quiz.questions.map((q) => ({ ...q, imageFile: null, preview: q.image })),
-        })
-      )
+          questions: quiz.questions.map(questionDraft),
+        };
+        setForm(loadedForm);
+        setQuestionStates({});
+        setPersistedForm(JSON.stringify({ ...loadedForm, questions: loadedForm.questions.map(questionKey) }));
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [editing, id]);
 
-  const updateQuestion = (index, changes) =>
-    setForm((current) => ({
-      ...current,
-      questions: current.questions.map((q, qIndex) => (qIndex === index ? { ...q, ...changes } : q)),
-    }));
+  const updateQuestion = (index, changes) => {
+    const key = questionKey(form.questions[index]);
+    setForm((current) => ({ ...current, questions: current.questions.map((q, qIndex) => (qIndex === index ? { ...q, ...changes } : q)) }));
+    if (editing) setQuestionStates((current) => ({ ...current, [key]: { ...current[key], saved: false, error: "" } }));
+  };
+
+  useEffect(() => {
+    const beforeUnload = (event) => {
+      if (!hasUnsavedChanges || permitNavigation.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    const navigator = navigation?.navigator;
+    if (!navigator || !hasUnsavedChanges) return;
+    const originals = {};
+    for (const method of ["push", "replace", "go"]) {
+      originals[method] = navigator[method];
+      navigator[method] = (...args) => {
+        if (permitNavigation.current) return originals[method].apply(navigator, args);
+        setPendingNavigation(() => () => originals[method].apply(navigator, args));
+      };
+    }
+    return () => { for (const method of Object.keys(originals)) navigator[method] = originals[method]; };
+  }, [navigation, hasUnsavedChanges]);
+
+  const saveQuestion = async (index, confirmations = {}) => {
+    const question = form.questions[index];
+    const key = questionKey(question);
+    if (!editing || savesInFlight.current.has(key)) return;
+    const problems = questionProblems(question);
+    if (problems.length) { setQuestionStates((current) => ({ ...current, [key]: { error: problems.join(". ") } })); return; }
+    savesInFlight.current.add(key);
+    setQuestionStates((current) => ({ ...current, [key]: { saving: true, error: "" } }));
+    try {
+      const result = question._id
+        ? await updateQuizQuestion(id, question._id, question, confirmations)
+        : await createQuizQuestion(id, question, confirmations);
+      setForm((current) => ({ ...current, questions: current.questions.map((item) => questionKey(item) === key ? questionDraft(result.question) : item) }));
+      setPersistedQuestions((current) => question._id ? current.map((item) => item._id === key ? result.question : item) : [...current, result.question]);
+      if (!question._id) {
+        setPersistedForm((current) => {
+          const baseline = JSON.parse(current);
+          baseline.questions = form.questions.map((item) => questionKey(item) === key ? result.question._id : item._id).filter(Boolean);
+          return JSON.stringify(baseline);
+        });
+      }
+      releaseDraftMedia(question);
+      setQuestionStates((current) => {
+        const next = { ...current, [result.question._id]: { saved: true, error: "" } };
+        if (key !== result.question._id) delete next[key];
+        return next;
+      });
+    } catch (err) {
+      if (err.code === "question_history_requires_confirmation") {
+        setPendingConfirmation({ index, type: "history", confirmations });
+        return;
+      }
+      if (err.code === "active_sessions_require_confirmation") {
+        setPendingConfirmation({ index, type: "scoring", confirmations });
+        return;
+      }
+      setQuestionStates((current) => ({ ...current, [key]: { error: err.message || "Unable to save this question." } }));
+    } finally {
+      savesInFlight.current.delete(key);
+      setQuestionStates((current) => ({ ...current, [key]: { ...current[key], saving: false } }));
+    }
+  };
+
+  const revertQuestion = (index) => {
+    const key = questionKey(form.questions[index]);
+    const persisted = persistedQuestions.find((item) => item._id === key);
+    releaseDraftMedia(form.questions[index]);
+    if (!persisted) {
+      setForm((current) => ({ ...current, questions: current.questions.filter((item) => questionKey(item) !== key) }));
+      setQuestionStates((current) => { const next = { ...current }; delete next[key]; return next; });
+      return;
+    }
+    setForm((current) => ({ ...current, questions: current.questions.map((item) => questionKey(item) === key ? questionDraft(persisted) : item) }));
+    setQuestionStates((current) => ({ ...current, [key]: { saved: false, error: "" } }));
+  };
 
   const uploadImage = (index, file) => {
     if (!file) return;
@@ -90,21 +212,26 @@ function QuizEditor() {
     updateQuestion(index, { imageFile: file, preview: URL.createObjectURL(file), image: "" });
   };
 
-  const submit = async (event) => {
-    event.preventDefault();
+  const uploadAudio = (index, file) => {
+    if (!file) return;
+    if (!['audio/mpeg', 'audio/mp4', 'audio/x-m4a'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      return setError("Question audio must be an MP3 or M4A file no larger than 10 MB.");
+    }
+    updateQuestion(index, { audioFile: file, audioPreview: URL.createObjectURL(file), audio: "" });
+  };
+
+  const submit = async (event, confirmations = {}) => {
+    event?.preventDefault();
+    if ((event && pendingConfirmation) || savesInFlight.current.size) return;
     const { courseId, lessonId, quizType, title, questions } = form;
+    if (editing && questions.some((question) => !question._id)) return setError("Save each new question before saving the Quiz details.");
 
     if (!courseId || !title.trim()) return setError("Choose a course and enter a quiz title.");
     if (quizType === "lesson" && !lessonId) return setError("Select a lesson for lesson-type quizzes.");
     if (
-      questions.some(
-        (q) =>
-          !(q.image || q.imageFile) ||
-          q.options.filter(Boolean).length < 2 ||
-          q.correctAnswer >= q.options.filter(Boolean).length
-      )
+      questions.some((q) => questionProblems(q).length)
     ) {
-      return setError("Each question needs an image, at least two answers, and a valid correct answer.");
+      return setError("Each question needs text, an image, or audio, at least two answers, and a valid correct answer.");
     }
 
     try {
@@ -113,17 +240,19 @@ function QuizEditor() {
 
       const payload = {
         ...form,
-        questions: form.questions.map((q) => ({
-          ...q,
-          options: q.options.map((option) => option.trim()).filter(Boolean),
-        })),
+        ...confirmations,
       };
 
       if (editing) await updateQuiz(id, payload);
       else await createQuiz(payload);
 
+      permitNavigation.current = true;
       navigate("/quizzes");
     } catch (err) {
+      if (["question_history_requires_confirmation", "active_sessions_require_confirmation"].includes(err.code)) {
+        setPendingConfirmation({ type: err.code === "question_history_requires_confirmation" ? "history" : "scoring", confirmations });
+        return;
+      }
       setError(err.message);
     } finally {
       setSaving(false);
@@ -158,7 +287,7 @@ function QuizEditor() {
             <span className="hidden text-xs font-bold uppercase tracking-[0.18em] text-[#C97112] sm:block">{editing ? "Editing" : "New quiz"}</span>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || Object.values(questionStates).some((state) => state.saving)}
               className="rounded-xl bg-[#2D2E30] px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-[#2D2E30]/15 transition hover:bg-[#E58C1A] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {saving ? "Saving..." : editing ? "Save quiz" : "Create quiz"}
@@ -235,11 +364,15 @@ function QuizEditor() {
 
         <div className="mt-7 space-y-6">
           {form.questions.map((question, index) => {
-            const optionCount = question.options.filter(Boolean).length;
+            const optionCount = question.options.filter((option) => option.trim()).length;
+            const key = questionKey(question);
+            const state = questionStates[key] || {};
+            const dirty = isDirtyQuestion(question, persistedQuestions.find((item) => item._id === question._id));
+            const problems = questionProblems(question);
 
             return (
-              <section key={index} className="rounded-3xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)] sm:p-6">
-                <div className="mb-5 flex items-center justify-between gap-3">
+              <section key={key} aria-label={`Question ${index + 1}`} className={`rounded-3xl border p-5 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)] sm:p-6 ${problems.length ? "border-red-300 bg-red-50/50" : "border-[#2D2E30]/10 bg-white"}`}>
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF1CE] text-sm font-bold text-[#C97112]">
                       {index + 1}
@@ -247,20 +380,25 @@ function QuizEditor() {
                     <h2 className="text-xl font-bold text-[#2D2E30]">Question {index + 1}</h2>
                   </div>
 
-                  {form.questions.length > 1 && (
+                  {form.questions.length > 1 && question._id && (
                     <button
                       type="button"
-                      onClick={() => setForm((f) => ({ ...f, questions: f.questions.filter((_, i) => i !== index) }))}
+                      disabled={Object.values(questionStates).some((state) => state.saving)}
+                      onClick={() => { releaseDraftMedia(question); setForm((f) => ({ ...f, questions: f.questions.filter((_, i) => i !== index) })); }}
                       className="inline-flex items-center gap-2 rounded-xl border border-[#A34D45]/20 bg-[#FFF0EE] px-3 py-2 text-sm font-semibold text-[#A34D45] transition hover:bg-[#FFE1DD]"
                     >
                       <Trash2 size={15} />
                       Remove
                     </button>
                   )}
+                  {editing && <div className="flex gap-2"><button type="button" disabled={state.saving || !dirty || problems.length > 0} onClick={() => saveQuestion(index)} className="rounded-xl bg-[#2D2E30] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">{state.saving ? "Saving…" : state.error ? "Retry" : state.saved && !dirty ? "Saved" : "Save question"}</button><button type="button" disabled={state.saving || !dirty} onClick={() => revertQuestion(index)} className="rounded-xl border border-[#2D2E30]/15 px-3 py-2 text-sm font-bold text-[#765F55] disabled:opacity-45">{question._id ? "Cancel" : "Discard"}</button></div>}
                 </div>
+                {state.error ? <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p> : null}
 
-                <div className="grid gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
-                  <label className="relative flex min-h-[180px] cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#E58C1A]/35 bg-[#FFF9EA] transition hover:border-[#E58C1A] hover:bg-[#FFF1CE]">
+                {problems.length ? <div className="mb-4 text-sm text-red-700"><p className="font-bold">Incomplete question</p><ul className="mt-1 list-inside list-disc">{problems.map((problem) => <li key={problem}>{problem}</li>)}</ul></div> : null}
+                {editing && <p role="status" className="mb-3 text-sm text-[#765F55]">{state.saving ? "Saving question…" : state.error ? "Not saved — retry your changes" : !question._id ? "New unsaved question" : dirty ? "Unsaved changes" : state.saved ? "Changes saved" : "Saved question"}</p>}
+                <fieldset disabled={state.saving} className="grid gap-6 lg:grid-cols-2">
+                  <label className="relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#E58C1A]/35 bg-[#FFF9EA] transition hover:border-[#E58C1A] hover:bg-[#FFF1CE]">
                     <input
                       type="file"
                       accept="image/*"
@@ -271,7 +409,7 @@ function QuizEditor() {
                       <img
                         src={question.preview || question.image}
                         alt={`Question ${index + 1}`}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-contain"
                       />
                     ) : (
                       <span className="flex flex-col items-center gap-2 text-sm font-semibold text-[#765F55]">
@@ -292,6 +430,13 @@ function QuizEditor() {
                         className="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-pink-300 focus:bg-white focus:ring-2 focus:ring-pink-100"
                       />
                     </label>
+
+                    <div className="rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-3">
+                      <label className="block text-sm font-semibold text-slate-800">Prompt audio <span className="ml-2 text-xs font-normal text-slate-500">optional · MP3 or M4A, up to 10 MB</span>
+                        <input type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,.mp3,.m4a" onChange={(e) => uploadAudio(index, e.target.files?.[0])} className="mt-2 block w-full text-sm text-[#765F55] file:mr-3 file:rounded-lg file:border-0 file:bg-[#FFF1CE] file:px-3 file:py-2 file:font-bold file:text-[#9A5816]" />
+                      </label>
+                      {question.audioPreview || question.audio ? <audio className="mt-3 w-full" controls preload="metadata" src={question.audioPreview || question.audio}>Your browser does not support audio playback.</audio> : null}
+                    </div>
 
                     <div>
                       <div className="mb-3 flex items-center justify-between gap-3">
@@ -328,7 +473,7 @@ function QuizEditor() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </fieldset>
               </section>
             );
           })}
@@ -350,6 +495,22 @@ function QuizEditor() {
           </div>
         </div>
       </div>
+      {pendingConfirmation && <QuizDialog
+        title={pendingConfirmation?.type === "scoring" ? "Active students will need to restart" : "Students have already taken this quiz"}
+        message={pendingConfirmation?.type === "scoring" ? "Updating scoring will require active students to restart this quiz. Continue only when you are ready to apply this change." : "Students have already answered this question. Your change will apply to new Quiz sessions only. Previous results will keep the original question content."}
+        confirmText={pendingConfirmation?.type === "scoring" ? "Update & Restart Sessions" : "Continue & Save"}
+        onCancel={() => setPendingConfirmation(null)}
+        onConfirm={() => {
+          const pending = pendingConfirmation;
+          setPendingConfirmation(null);
+          if (pending) {
+            const confirmations = pending.type === "scoring" ? { ...pending.confirmations, confirmScoringChange: true } : { ...pending.confirmations, confirmHistoryChange: true };
+            if (pending.index !== undefined) saveQuestion(pending.index, confirmations);
+            else submit(null, confirmations);
+          }
+        }}
+      />}
+      {pendingNavigation && <QuizDialog title="Leave without saving?" message="Your unsaved changes have not been saved. Stay here to save them, or leave and discard the local changes." confirmText="Leave without saving" onCancel={() => setPendingNavigation(null)} onConfirm={() => { permitNavigation.current = true; pendingNavigation(); }} />}
     </form>
   );
 }

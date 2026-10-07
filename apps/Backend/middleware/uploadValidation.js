@@ -1,6 +1,7 @@
 const multer = require("multer");
 
 const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_QUIZ_AUDIO_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -33,6 +34,28 @@ function createImageUpload({ maxFiles } = {}) {
   });
 }
 
+function quizMediaFileFilter(_req, file, callback) {
+  const isImage = /^questionImage_\d+$/.test(file.fieldname);
+  const isAudio = /^questionAudio_\d+$/.test(file.fieldname);
+  const imageOk = isImage && new Set(["image/jpeg", "image/png", "image/webp"]).has(file.mimetype);
+  const audioOk = isAudio && new Set(["audio/mpeg", "audio/mp4", "audio/x-m4a"]).has(file.mimetype);
+  if (!imageOk && !audioOk) {
+    const error = new Error("Quiz media must be JPG, PNG, WebP, MP3, or M4A.");
+    error.statusCode = 400;
+    return callback(error);
+  }
+  if (isImage && file.size > MAX_UPLOAD_SIZE_BYTES || isAudio && file.size > MAX_QUIZ_AUDIO_SIZE_BYTES) {
+    const error = new Error("Quiz media file is too large.");
+    error.statusCode = 400;
+    return callback(error);
+  }
+  return callback(null, true);
+}
+
+function createQuizMediaUpload({ maxFiles = 20 } = {}) {
+  return multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_QUIZ_AUDIO_SIZE_BYTES, files: maxFiles }, fileFilter: quizMediaFileFilter });
+}
+
 function hasExpectedImageSignature(file) {
   const buffer = file?.buffer;
   if (!Buffer.isBuffer(buffer)) return false;
@@ -55,9 +78,29 @@ function validateImageFileContent(req, res, next) {
   return next();
 }
 
+function hasExpectedAudioSignature(file) {
+  const buffer = file?.buffer;
+  if (!Buffer.isBuffer(buffer) || buffer.length < 4) return false;
+  if (file.mimetype === "audio/mpeg") return buffer.subarray(0, 3).toString("ascii") === "ID3" || (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0);
+  if (["audio/mp4", "audio/x-m4a"].includes(file.mimetype)) return buffer.length >= 12 && buffer.subarray(4, 8).toString("ascii") === "ftyp";
+  return false;
+}
+
+function validateQuizMediaContent(req, res, next) {
+  const files = Array.isArray(req.files) ? req.files : [];
+  const valid = files.every((file) => /^questionImage_\d+$/.test(file.fieldname)
+    ? file.buffer.length <= MAX_UPLOAD_SIZE_BYTES && hasExpectedImageSignature(file)
+    : /^questionAudio_\d+$/.test(file.fieldname) && file.buffer.length <= MAX_QUIZ_AUDIO_SIZE_BYTES && hasExpectedAudioSignature(file));
+  if (!valid) return res.status(400).json({ message: "Uploaded Quiz media contents do not match a supported format." });
+  return next();
+}
+
 module.exports = {
   ALLOWED_IMAGE_MIME_TYPES,
   MAX_UPLOAD_SIZE_BYTES,
   createImageUpload,
   validateImageFileContent,
+  MAX_QUIZ_AUDIO_SIZE_BYTES,
+  createQuizMediaUpload,
+  validateQuizMediaContent,
 };

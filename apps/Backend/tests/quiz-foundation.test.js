@@ -284,3 +284,131 @@ test("history helper identifies course and lesson Quiz records with submissions"
   assert.equal(await hasQuizHistoryFor({ courseId: course._id }), true);
   assert.equal(await hasQuizHistoryFor({ lessonId: lesson._id }), true);
 });
+
+test("question-level saves isolate persisted questions and reject invalid updates without mutation", async () => {
+  const { course, lesson } = await courseAndLesson();
+  const quiz = await Quiz.create({ course: course._id, lesson: lesson._id, contextType: "course_lesson", title: unique("Question isolation"), questions: [question({ prompt: "A" }), question({ prompt: "B", options: ["C", "D"] })] });
+  const saved = responseRecorder();
+  await quizController.updateQuizQuestion({ params: { quizId: String(quiz._id), questionId: String(quiz.questions[0]._id) }, body: { question: { prompt: "A updated", image: "", audio: "", options: ["One", "Two"], correctAnswer: 1 } }, files: [] }, saved);
+  assert.equal(saved.statusCode, 200);
+  const afterSave = await Quiz.findById(quiz._id).lean();
+  assert.equal(afterSave.questions[0].prompt, "A updated");
+  assert.equal(afterSave.questions[1].prompt, "B");
+  assert.deepEqual(afterSave.questions[1].options, ["C", "D"]);
+
+  const failed = responseRecorder();
+  await quizController.updateQuizQuestion({ params: { quizId: String(quiz._id), questionId: String(quiz.questions[0]._id) }, body: { question: { prompt: "Invalid", options: ["Only one"], correctAnswer: 0 } }, files: [] }, failed);
+  assert.equal(failed.statusCode, 400);
+  const afterFailure = await Quiz.findById(quiz._id).lean();
+  assert.equal(afterFailure.questions[0].prompt, "A updated");
+  assert.deepEqual(afterFailure.questions[0].options, ["One", "Two"]);
+});
+
+test("a new question is persisted only by its explicit save endpoint", async () => {
+  const { course, lesson } = await courseAndLesson();
+  const quiz = await Quiz.create({ course: course._id, lesson: lesson._id, status: "published", title: unique("Add question"), questions: [question({ prompt: "Existing" })] });
+  assert.equal((await Quiz.findById(quiz._id)).questions.length, 1);
+  const invalid = responseRecorder();
+  await quizController.createQuizQuestion({ params: { quizId: quiz._id }, body: { question: question({ prompt: "", options: ["A", ""] }) }, files: [] }, invalid);
+  assert.equal(invalid.statusCode, 400);
+  assert.equal((await Quiz.findById(quiz._id)).questions.length, 1);
+  const saved = responseRecorder();
+  await quizController.createQuizQuestion({ params: { quizId: quiz._id }, body: { question: question({ _id: quiz.questions[0]._id, prompt: "Explicitly saved" }) }, files: [] }, saved);
+  assert.equal(saved.statusCode, 201);
+  const persisted = await Quiz.findById(quiz._id);
+  assert.equal(persisted.questions.length, 2);
+  assert.equal(persisted.questions[0].prompt, "Existing");
+  assert.equal(persisted.questions[1].prompt, "Explicitly saved");
+  assert.equal(String(saved.body.question._id), String(persisted.questions[1]._id));
+  assert.notEqual(String(persisted.questions[0]._id), String(persisted.questions[1]._id));
+});
+
+test("question history confirmation is required before a meaningful persisted change", async () => {
+  const { course, lesson } = await courseAndLesson();
+  const quiz = await Quiz.create({ course: course._id, lesson: lesson._id, contextType: "course_lesson", title: unique("Question history"), questions: [question({ prompt: "Original" })] });
+  await QuizAttempt.create({ quiz: quiz._id, user: id(), attemptNumber: 1, answers: [0], score: 1, total: 1, submissionSnapshot: { questions: [{ questionId: quiz.questions[0]._id, prompt: "Original", options: ["A", "B"], selectedAnswer: 0, correctAnswer: 0, isCorrect: true }] } });
+  const refused = responseRecorder();
+  await quizController.updateQuizQuestion({ params: { quizId: String(quiz._id), questionId: String(quiz.questions[0]._id) }, body: { question: { prompt: "Changed", options: ["A", "B"], correctAnswer: 0 } }, files: [] }, refused);
+  assert.equal(refused.statusCode, 409);
+  assert.equal(refused.body.code, "question_history_requires_confirmation");
+  assert.equal((await Quiz.findById(quiz._id)).questions[0].prompt, "Original");
+});
+
+test("editing a question with empty answer slots preserves the selected answer and question identity after reload", async () => {
+  const { course, lesson } = await courseAndLesson();
+  const quiz = await Quiz.create({ course: course._id, lesson: lesson._id, title: "Edit regression", questions: [question(), question({ prompt: "Leave this alone" })] });
+  const response = responseRecorder();
+  await quizController.updateQuizQuestion({ params: { quizId: quiz._id, questionId: quiz.questions[0]._id }, body: { question: JSON.stringify({ ...quiz.questions[0].toObject(), prompt: "Changed", options: ["", "First", "", "Correct"], correctAnswer: 3 }) }, files: [] }, response);
+  assert.equal(response.statusCode, 200);
+  const persisted = await Quiz.findById(quiz._id).lean();
+  assert.equal(String(persisted.questions[0]._id), String(quiz.questions[0]._id));
+  assert.deepEqual(persisted.questions[0].options, ["First", "Correct"]);
+  assert.equal(persisted.questions[0].correctAnswer, 1);
+  assert.equal(persisted.questions[1].prompt, "Leave this alone");
+});
+
+for (const failingType of ["image", "audio"]) {
+  test(`${failingType} upload failure preserves the persisted question and saved neighbour`, async (t) => {
+    const { Writable } = require("node:stream");
+    const cloudinary = require("../config/cloudinary");
+    const { course, lesson } = await courseAndLesson();
+    const quiz = await Quiz.create({ course: course._id, lesson: lesson._id, title: "Upload regression", questions: [question({ prompt: "Saved A" }), question({ prompt: "Original B", image: "https://example.test/old.jpg", audio: "https://example.test/old.mp3" })] });
+    const before = await Quiz.findById(quiz._id).lean();
+    t.mock.method(cloudinary.uploader, "upload_stream", (_options, callback) => new Writable({ write(_chunk, _encoding, done) { done(); }, final(done) { done(); callback(new Error("private provider failure")); } }));
+    const response = responseRecorder();
+    await quizController.updateQuizQuestion({ params: { quizId: quiz._id, questionId: quiz.questions[1]._id }, body: { question: { ...quiz.questions[1].toObject(), prompt: "Unsaved B" } }, files: [{ fieldname: failingType === "image" ? "questionImage_0" : "questionAudio_0", buffer: Buffer.from("fixture") }] }, response);
+    assert.equal(response.statusCode, 400);
+    assert.doesNotMatch(response.body.message, /private provider/);
+    assert.deepEqual(await Quiz.findById(quiz._id).lean(), before);
+  });
+}
+
+for (const cleanupFails of [false, true]) {
+  test(`persistence failure after upload ${cleanupFails ? "retains recoverable cleanup failure" : "cleans the newly owned asset"}`, async (t) => {
+    const { Writable } = require("node:stream");
+    const cloudinary = require("../config/cloudinary");
+    const QuizMedia = require("../models/quizMediaModel");
+    const { cleanupQuizMedia } = require("../services/quizMediaLifecycle");
+    const { course, lesson } = await courseAndLesson();
+    const quiz = await Quiz.create({ course: course._id, lesson: lesson._id, title: "Persistence regression", questions: [question()] });
+    const before = await Quiz.findById(quiz._id).lean();
+    const publicId = `arun_thai/quiz_media/images/${unique("new-upload")}`;
+    t.mock.method(cloudinary.uploader, "upload_stream", (_options, callback) => new Writable({ write(_chunk, _encoding, done) { done(); }, final(done) { done(); callback(null, { public_id: publicId, secure_url: "https://example.test/new.jpg", resource_type: "image" }); } }));
+    const destroy = t.mock.method(cloudinary.uploader, "destroy", async () => { if (cleanupFails) throw new Error("provider unavailable"); return { result: "ok" }; });
+    t.mock.method(Quiz.prototype, "save", async () => { throw new Error("simulated persistence error"); });
+    const response = responseRecorder();
+    await quizController.updateQuizQuestion({ params: { quizId: quiz._id, questionId: quiz.questions[0]._id }, body: { question: quiz.questions[0].toObject() }, files: [{ fieldname: "questionImage_0", buffer: Buffer.from("fixture") }] }, response);
+    assert.equal(response.statusCode, 400);
+    assert.deepEqual(await Quiz.findById(quiz._id).lean(), before);
+    assert.equal(destroy.mock.calls.length, 1);
+    const owned = await QuizMedia.findOne({ publicId });
+    assert.equal(owned.cleanupState, cleanupFails ? "cleanup_failed" : "deleted");
+    if (cleanupFails) {
+      destroy.mock.mockImplementation(async () => ({ result: "ok" }));
+      assert.equal(await cleanupQuizMedia(owned), true);
+      assert.equal((await QuizMedia.findById(owned._id)).cleanupState, "deleted");
+    }
+  });
+}
+
+test("history and scoring confirmation precede replacement uploads, then confirmed scoring invalidates sessions", async (t) => {
+  const { Writable } = require("node:stream");
+  const cloudinary = require("../config/cloudinary");
+  const QuizSession = require("../models/quizSessionModel");
+  const { course, lesson } = await courseAndLesson();
+  const quiz = await Quiz.create({ course: course._id, lesson: lesson._id, title: "Confirmed change", status: "published", questions: [question()] });
+  const active = await QuizSession.create({ user: id(), quiz: quiz._id, revision: 1, contextType: "course_lesson", snapshot: {}, expiresAt: new Date(Date.now() + 86400000) });
+  await QuizAttempt.create({ quiz: quiz._id, user: id(), attemptNumber: 1, answers: [0], score: 1, total: 1, submissionSnapshot: { questions: [{ questionId: quiz.questions[0]._id, selectedAnswer: 0, correctAnswer: 0, isCorrect: true }] } });
+  const upload = t.mock.method(cloudinary.uploader, "upload_stream", (_options, callback) => new Writable({ write(_chunk, _encoding, done) { done(); }, final(done) { done(); callback(null, { public_id: `arun_thai/quiz_media/images/${unique("confirmed")}`, secure_url: "https://example.test/new.jpg", resource_type: "image" }); } }));
+  const req = { params: { quizId: quiz._id, questionId: quiz.questions[0]._id }, body: { question: { ...quiz.questions[0].toObject(), correctAnswer: 1 } }, files: [{ fieldname: "questionImage_0", buffer: Buffer.from("fixture") }] };
+  const history = responseRecorder(); await quizController.updateQuizQuestion(req, history);
+  assert.equal(history.body.code, "question_history_requires_confirmation"); assert.equal(upload.mock.calls.length, 0);
+  req.body.confirmHistoryChange = "true";
+  const scoring = responseRecorder(); await quizController.updateQuizQuestion(req, scoring);
+  assert.equal(scoring.body.code, "active_sessions_require_confirmation"); assert.equal(upload.mock.calls.length, 0);
+  req.body.confirmScoringChange = "true";
+  const saved = responseRecorder(); await quizController.updateQuizQuestion(req, saved);
+  assert.equal(saved.statusCode, 200); assert.equal(upload.mock.calls.length, 1);
+  assert.ok((await QuizSession.findById(active._id)).invalidatedAt);
+  assert.equal(await QuizAttempt.countDocuments({ quiz: quiz._id }), 1);
+});
