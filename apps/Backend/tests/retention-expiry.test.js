@@ -33,7 +33,9 @@ test("all currently emitted audit actions have an explicit retention classificat
     "announcement.deleted", "student_feedback.published", "student_feedback.not_selected", "student_feedback.removed_from_website",
     "course.deleted", "promo.created", "promo.updated", "promo.archived", "promo.deleted",
     "payment_method.created", "payment_method.updated", "payment_method.activated", "payment_method.deactivated", "payment_method.deactivated_with_history", "payment_method.deleted",
-    "payment.approved", "payment.rejected", "payment.proof_retention_hold_opened", "payment.proof_retention_hold_resolved", "user.activated", "user.deactivated", "user.course_access_updated", "user.self_deleted", "user.deleted",
+    "payment.approved", "payment.rejected", "payment.proof_retention_hold_opened", "payment.proof_retention_hold_resolved",
+    "quiz.attempt_granted", "quiz.attempt_request_created", "quiz.attempt_request_cancelled", "quiz.attempt_request_approved", "quiz.attempt_request_rejected", "quiz.attempt_request_superseded",
+    "user.activated", "user.deactivated", "user.course_access_updated", "user.self_deleted", "user.deleted",
     "payment_receipt_generated",
   ];
   for (const action of emittedActions) assert.ok(SIX_MONTH_ACTIONS.has(action) || TWELVE_MONTH_ACTIONS.has(action), action);
