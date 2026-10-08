@@ -189,9 +189,8 @@ const createQuiz = async (req, res) => {
     
     const quizId = new mongoose.Types.ObjectId();
     const questions = await uploadQuestionMedia(parseQuestions(req.body.questions, req.files), quizId, uploadedMedia);
-    // The current Admin flow predates status controls and has no status input.
-    // Publishing here preserves its established Video Course behavior.
-    const quizData = { _id: quizId, course: courseId, title: title.trim(), maxAttempts, questions, quizType: finalQuizType, status: "published" };
+    // Creation saves a Draft; publishing is a separate Admin action.
+    const quizData = { _id: quizId, course: courseId, title: title.trim(), maxAttempts, questions, quizType: finalQuizType, status: "draft" };
     if (finalQuizType === "lesson") quizData.lesson = lessonId;
     
     const quiz = await Quiz.create(quizData);

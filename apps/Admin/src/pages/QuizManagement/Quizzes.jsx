@@ -1,6 +1,6 @@
 import { Archive, BarChart3, BookOpen, Check, ChevronDown, Edit2, Filter, GraduationCap, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { archiveQuiz, changeQuizAvailability, deleteQuiz, fetchQuizzes, restoreQuiz } from "../../services/quizService";
 import ConfirmationModal from "../../components/ConfirmationModal";
 
@@ -15,6 +15,7 @@ function FilterSelect({ value, onChange, options, disabled = false, ariaLabel })
 
 function Quizzes() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [quizzes, setQuizzes] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -107,6 +108,7 @@ function Quizzes() {
         <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#C97112] sm:text-xs">Assessment library</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">Quiz management</h1><p className="mt-2 text-[#765F55]">Find and manage quizzes by course, lesson, or type.</p></div>
         <button onClick={() => navigate("/quizzes/new")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 font-bold text-white shadow-md shadow-[#2D2E30]/15 transition hover:-translate-y-0.5 hover:bg-[#E58C1A]"><Plus size={19} /> Create quiz</button>
       </header>
+      {location.state?.quizCreatedAsDraft && <p role="status" className="mb-5 rounded-xl border border-[#E58C1A]/20 bg-[#FFF9EA] px-4 py-3 text-sm font-semibold text-[#765F55]">Quiz saved as Draft. Publish it when you are ready for students to access it.</p>}
       <section className="mb-6 overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]">
         <div className="border-b border-[#E58C1A]/15 bg-[#FFF9EA] px-5 py-4"><h2 className="font-bold text-[#2D2E30]">Quiz overview</h2></div>
         <div className="grid grid-cols-1 divide-y divide-[#2D2E30]/10 sm:grid-cols-3 sm:divide-x sm:divide-y-0">

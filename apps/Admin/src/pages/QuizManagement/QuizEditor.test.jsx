@@ -3,11 +3,11 @@ import { UNSAFE_NavigationContext } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import QuizEditor from "./QuizEditor";
-const { navigationSpy } = vi.hoisted(() => ({ navigationSpy: vi.fn() }));
+const { navigationSpy, routeParams } = vi.hoisted(() => ({ navigationSpy: vi.fn(), routeParams: { id: "quiz-1" } }));
 vi.mock("react-router-dom", async () => {
   const { createContext, useContext } = await import("react");
   const context = createContext(null);
-  return { UNSAFE_NavigationContext: context, useParams: () => ({ id: "quiz-1" }), useNavigate: () => { const { navigator } = useContext(context); return (to) => navigator.push(to); } };
+  return { UNSAFE_NavigationContext: context, useParams: () => routeParams, useNavigate: () => { const { navigator } = useContext(context); return (to, options) => navigator.push(to, options); } };
 });
 
 vi.mock("../../services/courseService", () => ({ fetchCourses: vi.fn() }));
@@ -15,7 +15,7 @@ vi.mock("../../services/lessonService", () => ({ fetchLessonsByCourse: vi.fn() }
 vi.mock("../../services/quizService", () => ({ createQuiz: vi.fn(), createQuizQuestion: vi.fn(), fetchQuiz: vi.fn(), updateQuiz: vi.fn(), updateQuizQuestion: vi.fn() }));
 import { fetchCourses } from "../../services/courseService";
 import { fetchLessonsByCourse } from "../../services/lessonService";
-import { createQuizQuestion, fetchQuiz, updateQuizQuestion, updateQuiz } from "../../services/quizService";
+import { createQuiz, createQuizQuestion, fetchQuiz, updateQuizQuestion, updateQuiz } from "../../services/quizService";
 
 const quiz = { _id: "quiz-1", course: "course-1", lesson: "lesson-1", quizType: "lesson", title: "Quiz", maxAttempts: null, questions: [
   { _id: "question-a", prompt: "First", image: "", audio: "", options: ["A", "B", "", ""], correctAnswer: 0 },
@@ -36,6 +36,7 @@ function unloadPrevented() {
 describe("QuizEditor question save state", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    routeParams.id = "quiz-1";
     URL.createObjectURL = vi.fn(() => "blob:local-media");
     URL.revokeObjectURL = vi.fn();
     fetchCourses.mockResolvedValue([{ id: "course-1", title: "Course" }]);
@@ -43,6 +44,34 @@ describe("QuizEditor question save state", () => {
     fetchQuiz.mockResolvedValue(quiz);
     updateQuizQuestion.mockImplementation(async (_quizId, _questionId, question) => ({ question: { ...question, imageFile: undefined, audioFile: undefined }, revision: 2 }));
     createQuizQuestion.mockImplementation(async (_quizId, question) => ({ question: { ...question, _id: "question-new", imageFile: undefined, audioFile: undefined }, revision: 2 }));
+  });
+
+  it("describes a newly created Video Course quiz as Draft on return to management", async () => {
+    routeParams.id = undefined;
+    createQuiz.mockResolvedValue({ status: "draft" });
+    const user = userEvent.setup(); renderEditor();
+    await screen.findByRole("button", { name: "Course" });
+    await user.click(screen.getByRole("button", { name: "Course" }));
+    await user.click(screen.getByRole("option", { name: "Course" }));
+    await user.click(screen.getByRole("button", { name: "Lesson" }));
+    await user.click(screen.getByRole("option", { name: "Lesson 1: Lesson" }));
+    await user.type(screen.getByPlaceholderText("Grammar Review Quiz"), "Lesson Draft");
+    await user.type(screen.getByPlaceholderText("What is this?"), "Choose the answer");
+    await user.type(screen.getByPlaceholderText("Answer 1"), "Yes");
+    await user.type(screen.getByPlaceholderText("Answer 2"), "No");
+    await user.click(screen.getByRole("button", { name: "Create quiz" }));
+    await waitFor(() => expect(createQuiz).toHaveBeenCalledWith(expect.objectContaining({ quizType: "lesson", title: "Lesson Draft" })));
+    expect(navigationSpy).toHaveBeenCalledWith("/quizzes", { state: { quizCreatedAsDraft: true } });
+  });
+
+  it("renders controls for previously saved Cloudinary question audio", async () => {
+    fetchQuiz.mockResolvedValueOnce({ ...quiz, questions: [{ ...quiz.questions[0], audio: "https://res.cloudinary.com/example/video/upload/lesson.mp3" }, quiz.questions[1]] });
+    renderEditor();
+    await screen.findAllByPlaceholderText("What is this?");
+    const audio = screen.getByRole("region", { name: "Question 1" }).querySelector("audio");
+    expect(audio.getAttribute("src")).toBe("https://res.cloudinary.com/example/video/upload/lesson.mp3");
+    expect(audio.controls).toBe(true);
+    expect(audio.autoplay).toBe(false);
   });
 
   it("keeps Add Question local until explicit Save, then clears its unsaved state", async () => {

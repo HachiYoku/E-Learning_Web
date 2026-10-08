@@ -83,6 +83,76 @@ test("student projection enforces enrollment/status and never includes correct a
   await assert.rejects(studentQuizProjection({ quiz, user: enrolled }), /unavailable/);
 });
 
+test("Admin-created Video Course Lesson Quiz stays Draft through Save until explicit Publish", async () => {
+  const course = await Course.create({ title: unique("Course"), createdBy: id() });
+  const lesson = await Lesson.create({ course: course._id, title: unique("Lesson"), videoUrl: "https://www.youtube.com/watch?v=test", order: 1 });
+  const user = { id: id() };
+  await Enrollment.create({ userId: user.id, courseId: course._id });
+  const created = responseRecorder();
+  await quizController.createQuiz({ body: { courseId: String(course._id), lessonId: String(lesson._id), title: unique("Draft lesson quiz"), quizType: "lesson", questions: [question()] }, files: [] }, created);
+  assert.equal(created.statusCode, 201);
+  const quizId = created.body._id;
+  assert.equal(created.body.status, "draft");
+  assert.equal((await Quiz.findById(quizId)).status, "draft");
+
+  const saved = responseRecorder();
+  await quizController.updateQuiz({ params: { quizId: String(quizId) }, body: { courseId: String(course._id), lessonId: String(lesson._id), title: "Edited Draft", quizType: "lesson", questions: [question({ prompt: "Edited question" })] }, files: [] }, saved);
+  assert.equal(saved.statusCode, 200);
+  assert.equal(saved.body.status, "draft");
+
+  const hidden = responseRecorder();
+  await quizController.getStudentQuizzesForLesson({ params: { courseId: String(course._id), lessonId: String(lesson._id) }, user }, hidden);
+  assert.deepEqual(hidden.body, []);
+  await assert.rejects(startQuizSession({ quizId, user }), /unavailable/i);
+  await assert.rejects(submitQuizRuntime({ quizId, user, sessionId: id(), submittedRevision: saved.body.revision, answers: [0] }), /unavailable/i);
+  assert.equal(await QuizAttempt.countDocuments({ quiz: quizId }), 0);
+
+  const published = responseRecorder();
+  await quizController.changeQuizAvailability({ params: { quizId: String(quizId) }, body: { status: "published" } }, published);
+  assert.equal(published.statusCode, 200);
+  assert.equal(published.body.quiz.status, "published");
+  const visible = responseRecorder();
+  await quizController.getStudentQuizzesForLesson({ params: { courseId: String(course._id), lessonId: String(lesson._id) }, user }, visible);
+  assert.equal(visible.body.length, 1);
+  const session = await startQuizSession({ quizId, user });
+  await submitQuizRuntime({ quizId, user, sessionId: session.sessionId, submittedRevision: session.revision, answers: [0] });
+  assert.equal(await QuizAttempt.countDocuments({ quiz: quizId }), 1);
+
+  const disabled = responseRecorder();
+  await quizController.changeQuizAvailability({ params: { quizId: String(quizId) }, body: { status: "disabled" } }, disabled);
+  assert.equal(disabled.body.quiz.status, "disabled");
+  await assert.rejects(startQuizSession({ quizId, user }), /unavailable/i);
+  await assert.rejects(submitQuizRuntime({ quizId, user, sessionId: session.sessionId, submittedRevision: session.revision, answers: [0] }), /unavailable/i);
+  assert.equal(await QuizAttempt.countDocuments({ quiz: quizId }), 1);
+});
+
+test("Admin-created Video Course Final stays Draft until explicit Publish", async () => {
+  const course = await Course.create({ title: unique("Course"), createdBy: id() });
+  const user = { id: id() };
+  await Enrollment.create({ userId: user.id, courseId: course._id });
+  const created = responseRecorder();
+  await quizController.createQuiz({ body: { courseId: String(course._id), title: unique("Draft final"), quizType: "course", questions: [question()] }, files: [] }, created);
+  assert.equal(created.statusCode, 201);
+  assert.equal(created.body.contextType, "course_final");
+  assert.equal(created.body.status, "draft");
+  assert.equal((await Quiz.findById(created.body._id)).status, "draft");
+
+  const hidden = responseRecorder();
+  await quizController.getStudentCourseQuizzes({ params: { courseId: String(course._id) }, user }, hidden);
+  assert.deepEqual(hidden.body, []);
+  await assert.rejects(startQuizSession({ quizId: created.body._id, user }), /unavailable/i);
+  await assert.rejects(submitQuizRuntime({ quizId: created.body._id, user, sessionId: id(), submittedRevision: created.body.revision, answers: [0] }), /unavailable/i);
+  assert.equal(await QuizAttempt.countDocuments({ quiz: created.body._id }), 0);
+
+  const published = responseRecorder();
+  await quizController.changeQuizAvailability({ params: { quizId: String(created.body._id) }, body: { status: "published" } }, published);
+  assert.equal(published.statusCode, 200);
+  const visible = responseRecorder();
+  await quizController.getStudentCourseQuizzes({ params: { courseId: String(course._id) }, user }, visible);
+  assert.equal(visible.body.length, 1);
+  assert.ok((await startQuizSession({ quizId: created.body._id, user })).sessionId);
+});
+
 test("runtime rejects stale and malformed submissions without persisting an attempt", async () => {
   const { course, quiz } = await setupQuiz(); const user = { id: id() };
   await Enrollment.create({ userId: user.id, courseId: course._id });

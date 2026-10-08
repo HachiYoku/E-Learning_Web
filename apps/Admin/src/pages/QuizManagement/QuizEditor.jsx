@@ -247,7 +247,7 @@ function QuizEditor() {
       else await createQuiz(payload);
 
       permitNavigation.current = true;
-      navigate("/quizzes");
+      navigate("/quizzes", editing ? undefined : { state: { quizCreatedAsDraft: true } });
     } catch (err) {
       if (["question_history_requires_confirmation", "active_sessions_require_confirmation"].includes(err.code)) {
         setPendingConfirmation({ type: err.code === "question_history_requires_confirmation" ? "history" : "scoring", confirmations });
