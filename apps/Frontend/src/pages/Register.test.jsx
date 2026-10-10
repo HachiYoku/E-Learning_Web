@@ -81,6 +81,54 @@ describe("student registration Turnstile", () => {
     expect(screen.getByRole("button", { name: "Create account" }).disabled).toBe(false);
   });
 
+  it("retries registration with a fresh token after a server-side Turnstile rejection", async () => {
+    const rejection = Object.assign(new Error("Security verification failed or expired. Please try again."), {
+      status: 400,
+      code: "TURNSTILE_INVALID",
+    });
+    vi.mocked(registerRequest).mockRejectedValueOnce(rejection).mockResolvedValueOnce({ message: "Check email", emailSent: true });
+    renderRegister();
+    completeForm();
+    act(() => widgetCallbacks.callback("rejected-token"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    await waitFor(() => expect(registerRequest).toHaveBeenCalledTimes(1));
+    expect(registerRequest).toHaveBeenNthCalledWith(1, expect.objectContaining({ turnstileToken: "rejected-token" }));
+    expect(await screen.findByText(rejection.message)).toBeTruthy();
+    expect(turnstile.reset).toHaveBeenCalledWith("widget-1");
+    expect(screen.getByRole("button", { name: "Create account" }).disabled).toBe(true);
+    expect(screen.getByLabelText("Full name").value).toBe("Student");
+    expect(screen.getByLabelText("Email address").value).toBe("student@example.test");
+    expect(screen.getByPlaceholderText("Create a secure password").value).toBe("CorrectHorseBattery1");
+    expect(screen.getByLabelText("I am 18 or older").checked).toBe(true);
+
+    act(() => widgetCallbacks.callback("fresh-retry-token"));
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    await waitFor(() => expect(registerRequest).toHaveBeenCalledTimes(2));
+    expect(registerRequest).toHaveBeenNthCalledWith(2, {
+      name: "Student", email: "student@example.test", password: "CorrectHorseBattery1",
+      ageGroup: "18_plus", ageConfirmed: true, guardianPermission: false, turnstileToken: "fresh-retry-token",
+    });
+    expect(await screen.findByText("Login page")).toBeTruthy();
+  });
+
+  it("does not submit twice while registration is pending", async () => {
+    let finishRegistration;
+    vi.mocked(registerRequest).mockImplementation(() => new Promise((resolve) => { finishRegistration = resolve; }));
+    renderRegister();
+    completeForm();
+    act(() => widgetCallbacks.callback("pending-token"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    expect(registerRequest).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Creating your account..." }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Creating your account..." }));
+    expect(registerRequest).toHaveBeenCalledTimes(1);
+
+    await act(async () => finishRegistration({ message: "Check email", emailSent: true }));
+    expect(await screen.findByText("Login page")).toBeTruthy();
+  });
+
   it("uses a compact widget on narrow screens and invalidates the token when sizing changes", () => {
     vi.stubGlobal("innerWidth", 320);
     renderRegister();
