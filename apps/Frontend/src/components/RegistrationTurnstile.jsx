@@ -106,7 +106,7 @@ function RegistrationTurnstile({ siteKey, onToken, onError, controlRef }) {
     };
   }, [siteKey, controlRef, retryCount, compact]);
 
-  return <div role="group" aria-label="Security verification">
+  return <div role="group" aria-label="Security verification" className={compact ? "flex flex-col items-center" : undefined}>
     <div ref={containerRef} className="min-h-[65px] max-w-full" />
     {hasError ? <button type="button" className="mt-2 text-sm font-semibold text-[#C97112] underline" onClick={() => {
       setHasError(false);

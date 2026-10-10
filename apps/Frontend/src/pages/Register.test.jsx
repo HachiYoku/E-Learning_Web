@@ -85,14 +85,27 @@ describe("student registration Turnstile", () => {
     vi.stubGlobal("innerWidth", 320);
     renderRegister();
     expect(turnstile.render).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ size: "compact", action: "register" }));
+    expect(screen.getByRole("group", { name: "Security verification" }).className).toBe("flex flex-col items-center");
     act(() => widgetCallbacks.callback("mobile-token"));
     expect(screen.getByRole("button", { name: "Create account" }).disabled).toBe(false);
 
-    vi.stubGlobal("innerWidth", 1024);
+    vi.stubGlobal("innerWidth", 375);
+    fireEvent.resize(window);
+    expect(turnstile.render).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("group", { name: "Security verification" }).className).toBe("flex flex-col items-center");
+
+    vi.stubGlobal("innerWidth", 390);
     fireEvent.resize(window);
     expect(turnstile.remove).toHaveBeenCalledWith("widget-1");
     expect(turnstile.render).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ size: "normal", action: "register" }));
+    expect(screen.getByRole("group", { name: "Security verification" }).className).toBe("");
     expect(screen.getByRole("button", { name: "Create account" }).disabled).toBe(true);
+
+    vi.stubGlobal("innerWidth", 1024);
+    fireEvent.resize(window);
+    expect(turnstile.render).toHaveBeenCalledTimes(2);
+    expect(turnstile.render).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ size: "normal", action: "register" }));
+    expect(screen.getByRole("group", { name: "Security verification" }).className).toBe("");
   });
 
   it("offers an accessible Retry after a widget error", () => {
