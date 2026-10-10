@@ -50,7 +50,11 @@ function sanitizeServerErrorResponses(req, res, next) {
   res.json = (body) => {
     // `/health` intentionally uses this minimal 503 response to distinguish an
     // unavailable dependency from an application error.
-    if (res.statusCode >= 500 && !(res.statusCode === 503 && body?.status === "unavailable")) {
+    const safeTurnstileUnavailable = res.statusCode === 503
+      && body?.code === "TURNSTILE_UNAVAILABLE"
+      && body?.message === "Security verification is temporarily unavailable. Please try again shortly."
+      && Object.keys(body).length === 2;
+    if (res.statusCode >= 500 && !(res.statusCode === 503 && body?.status === "unavailable") && !safeTurnstileUnavailable) {
       if (body?.message !== "Internal server error") {
         logUnexpectedError(req, new Error(body?.message || "Unexpected server error"));
       }

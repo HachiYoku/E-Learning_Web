@@ -90,13 +90,14 @@ function cookieValue(response) {
   return setCookie.split(";", 1)[0];
 }
 
-async function request(route, { method = "GET", body, cookie, token, origin, portal } = {}) {
+async function request(route, { method = "GET", body, cookie, token, origin, portal, forwardedFor } = {}) {
   const headers = {};
   if (body) headers["Content-Type"] = "application/json";
   if (cookie) headers.Cookie = cookie;
   if (token) headers.Authorization = `Bearer ${token}`;
   if (origin) headers.Origin = origin;
   if (portal) headers["X-Auth-Portal"] = portal;
+  if (forwardedFor) headers["X-Forwarded-For"] = forwardedFor;
   return fetch(`${apiBaseUrl}${route}`, {
     method,
     headers,
@@ -147,7 +148,7 @@ before(async () => {
   await require("./helpers/replicaSet").initiateReplicaSet(mongoPort);
 
   apiBaseUrl = `http://127.0.0.1:${apiPort}`;
-  apiProcess = spawn(process.execPath, ["server.js"], {
+  apiProcess = spawn(process.execPath, ["--require", path.join(__dirname, "helpers/mockTurnstileSiteverify.js"), "server.js"], {
     cwd: backendDirectory,
     env: {
       ...process.env,
@@ -161,6 +162,8 @@ before(async () => {
       FRONTEND_URL_PROD: "https://student.example.test",
       ADMIN_URL_PROD: "https://admin.example.test",
       TRUST_PROXY: "true",
+      TURNSTILE_SECRET_KEY: "test-only-turnstile-secret",
+      TURNSTILE_ALLOWED_HOSTNAMES: "student.example.test",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -190,7 +193,7 @@ test("access tokens are not persisted in localStorage", async () => {
 
 test("registration enforces the minimal 13+ age and guardian attestation flow", async () => {
   const registration = async (suffix, extra) => {
-    const response = await request("/auth/register", { method: "POST", body: { name: "Age Test", email: `age-${suffix}@example.test`, password, ...extra } });
+    const response = await request("/auth/register", { method: "POST", body: { name: "Age Test", email: `age-${suffix}@example.test`, password, turnstileToken: `valid-${suffix}`, ...extra } });
     return { response, body: await responseJson(response) };
   };
   const adult = await registration("adult", { ageGroup: "18_plus", ageConfirmed: true });
@@ -213,6 +216,35 @@ test("registration enforces the minimal 13+ age and guardian attestation flow", 
     assert.equal(result.response.status, 400); assert.match(result.body.message, expected);
     assert.equal(await User.exists({ email: `age-${suffix}@example.test` }), null);
   }
+  const limited = await registration("rate-limit", { ageGroup: "18_plus", ageConfirmed: true });
+  assert.equal(limited.response.status, 429);
+  assert.equal(await User.exists({ email: "age-rate-limit@example.test" }), null);
+});
+
+test("registration rejects missing, invalid, wrong-action, and wrong-host Turnstile tokens before account creation", async () => {
+  for (const [suffix, turnstileToken] of [["missing", undefined], ["invalid", "invalid-token"], ["wrong-action", "valid-wrong-action"], ["wrong-host", "valid-wrong-host"]]) {
+    const email = `turnstile-${suffix}@example.test`;
+    const response = await request("/auth/register", {
+      method: "POST",
+      forwardedFor: "198.51.100.8",
+      body: { name: "Token Test", email, password, ageGroup: "18_plus", ageConfirmed: true, turnstileToken },
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await responseJson(response)).code, "TURNSTILE_INVALID");
+    assert.equal(await User.exists({ email }), null);
+  }
+});
+
+test("registration fails closed on a Siteverify service error without creating an account", async () => {
+  const email = "turnstile-service-error@example.test";
+  const response = await request("/auth/register", {
+    method: "POST",
+    forwardedFor: "198.51.100.9",
+    body: { name: "Token Test", email, password, ageGroup: "18_plus", ageConfirmed: true, turnstileToken: "service-error" },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await responseJson(response)).code, "TURNSTILE_UNAVAILABLE");
+  assert.equal(await User.exists({ email }), null);
 });
 
 test("admin source has no persistent auth/user storage writes", async () => {

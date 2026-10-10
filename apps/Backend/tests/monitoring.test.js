@@ -94,3 +94,18 @@ test("intentional safe 4xx messages are unchanged", async () => {
     assert.match(response.headers.get("x-request-id"), /^[0-9a-f-]{36}$/i);
   });
 });
+
+test("only the fixed Turnstile outage response survives 5xx sanitization", async () => {
+  const message = "Security verification is temporarily unavailable. Please try again shortly.";
+  await withServer((app) => {
+    app.get("/turnstile-outage", (_req, res) => res.status(503).json({ message, code: "TURNSTILE_UNAVAILABLE" }));
+    app.get("/turnstile-leak", (_req, res) => res.status(503).json({ message, code: "TURNSTILE_UNAVAILABLE", secret: "private" }));
+  }, async (baseUrl) => {
+    const safe = await fetch(`${baseUrl}/turnstile-outage`);
+    assert.equal(safe.status, 503);
+    assert.deepEqual(await safe.json(), { message, code: "TURNSTILE_UNAVAILABLE" });
+    const unsafe = await fetch(`${baseUrl}/turnstile-leak`);
+    assert.equal(unsafe.status, 503);
+    assert.equal((await unsafe.json()).message, "Internal server error");
+  });
+});

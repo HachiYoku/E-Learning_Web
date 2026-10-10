@@ -2,6 +2,7 @@ const User = require('../models/userModel')
 const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
 const sendEmail = require('../services/sendEmail')
+const { verifyRegistrationTurnstile } = require('../services/turnstileVerification')
 const { getTrustedUrls, buildTrustedUrl, buildVerificationUrl, buildPasswordResetUrl } = require('../config/trustedUrls')
 const {
   REFRESH_COOKIE_NAME,
@@ -114,7 +115,7 @@ const buildAuthEmail = ({ name, actionUrl, type }) => {
 
 const register = async (req, res) => {
   try {
-    const { name, username, email, password, ageGroup, ageConfirmed, guardianPermission } = req.body;
+    const { name, username, email, password, ageGroup, ageConfirmed, guardianPermission, turnstileToken } = req.body;
     const displayName = name || username;
     const normalizedEmail = normalizeEmail(email);
 
@@ -132,6 +133,13 @@ const register = async (req, res) => {
     }
     if (ageGroup === "13_17" && guardianPermission !== true) {
       return res.status(400).json({ message: "Learners aged 13–17 need permission from a parent or legal guardian." });
+    }
+
+    const verification = await verifyRegistrationTurnstile(turnstileToken);
+    if (!verification.ok) {
+      return verification.reason === "unavailable"
+        ? res.status(503).json({ message: "Security verification is temporarily unavailable. Please try again shortly.", code: "TURNSTILE_UNAVAILABLE" })
+        : res.status(400).json({ message: "Security verification failed or expired. Please try again.", code: "TURNSTILE_INVALID" });
     }
 
     const existUser = await User.findOne({ email: normalizedEmail });
