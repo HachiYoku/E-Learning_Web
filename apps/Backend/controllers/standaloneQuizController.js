@@ -1,5 +1,8 @@
 const Quiz = require("../models/quizModel");
 const mongoose = require("mongoose");
+const { startOrResumeStandaloneQuizSession } = require("../services/standaloneQuizSessionService");
+const { submitStandaloneQuiz, getStandaloneAttemptResult, getStandaloneAttemptHistoryPage } =
+  require("../services/standaloneQuizSubmissionService");
 const {
   StandaloneQuizError, createDraft, saveDraft, publishDraft, changeAvailability,
   deleteDraftOrQuiz, loadStandalone, publicSummary, retryMediaReconciliation,
@@ -91,4 +94,44 @@ const getPublished = async (req, res) => {
   } catch (error) { return respondError(res, error); }
 };
 
-module.exports = { create, getAdmin, listAdmin, editDraft, publish, retryMedia, lifecycle, remove, listPublished, getPublished };
+function runtimeError(res, error) {
+  if ([400, 404, 409, 503].includes(error?.status) && typeof error.code === "string") {
+    return res.status(error.status).json({ message: error.message, code: error.code });
+  }
+  console.error("Standalone runtime request failed", { name: error?.name });
+  return res.status(503).json({ message: "General Practice is temporarily unavailable.",
+    code: "standalone_runtime_unavailable" });
+}
+
+const startSession = async (req, res) => {
+  try {
+    const result = await startOrResumeStandaloneQuizSession({ quizId: req.params.quizId, user: req.user });
+    return res.status(result.created ? 201 : 200).json(result);
+  } catch (error) { return runtimeError(res, error); }
+};
+
+const submit = async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || !mongoose.isValidObjectId(body.sessionId)) {
+    return res.status(400).json({ message: "Invalid Quiz submission.", code: "invalid_quiz_submission" });
+  }
+  try {
+    return res.json(await submitStandaloneQuiz({ quizId: req.params.quizId, user: req.user,
+      sessionId: body.sessionId, submittedRevision: body.revision, answers: body.answers }));
+  } catch (error) { return runtimeError(res, error); }
+};
+
+const getResult = async (req, res) => {
+  try { return res.json(await getStandaloneAttemptResult({ attemptId: req.params.attemptId, user: req.user })); }
+  catch (error) { return runtimeError(res, error); }
+};
+
+const getHistory = async (req, res) => {
+  try { return res.json(await getStandaloneAttemptHistoryPage({ quizId: req.params.quizId, user: req.user,
+    limit: req.query.limit, before: req.query.before })); }
+  catch (error) { return runtimeError(res, error); }
+};
+
+module.exports = { create, getAdmin, listAdmin, editDraft, publish, retryMedia, lifecycle, remove,
+  listPublished, getPublished, startSession, submit, getResult, getHistory };

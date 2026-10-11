@@ -24,7 +24,7 @@ const invalidHistory = () => new StandaloneSubmissionError(409,
 
 function trustedUserId(user) {
   const userId = user?.id || user?._id;
-  if (!mongoose.isValidObjectId(userId) || user?.role === "admin") throw unavailableQuizError();
+  if (!mongoose.isValidObjectId(userId) || !["user", "admin"].includes(user?.role)) throw unavailableQuizError();
   return userId;
 }
 
@@ -112,6 +112,12 @@ async function submitStandaloneQuiz({ quizId, sessionId, user, submittedRevision
   const replay = await completedForSession(sessionId, userId, quizId);
   if (replay) return projectStandaloneAttempt(replay);
 
+  // The durable replay above intentionally precedes payload validation: a
+  // completed session returns its saved result even if retry answers differ.
+  if (!Number.isSafeInteger(submittedRevision) || submittedRevision < 1 || !Array.isArray(answers)) {
+    throw invalidAnswers();
+  }
+
   const committed = await runStandaloneTransaction(async (session) => {
     const quiz = await Quiz.findOne({ _id: quizId, contextType: "standalone" }).session(session);
     if (!quiz) throw unavailableQuizError();
@@ -176,9 +182,52 @@ async function getStandaloneAttemptHistory({ quizId, user }) {
   if (quizId !== undefined && !mongoose.isValidObjectId(quizId)) throw unavailableQuizError();
   const filter = { user: userId, "submissionSnapshot.contextType": "standalone",
     ...(quizId === undefined ? {} : { quiz: quizId }) };
-  const attempts = await QuizAttempt.find(filter).sort({ createdAt: -1, _id: -1 });
+  // Retained for internal callers; never perform an unbounded history read.
+  const attempts = await QuizAttempt.find(filter).sort({ createdAt: -1, _id: -1 }).limit(20);
   return attempts.map(projectStandaloneAttempt);
 }
 
+const MAX_HISTORY_PAGE_SIZE = 20;
+const DEFAULT_HISTORY_PAGE_SIZE = 10;
+
+function parsePositiveInteger(value, maximum) {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const text = String(value);
+  if (!/^[1-9]\d*$/.test(text)) return null;
+  const parsed = Number(text);
+  return Number.isSafeInteger(parsed) && parsed <= maximum ? parsed : null;
+}
+
+async function getStandaloneAttemptHistoryPage({ quizId, user, limit, before }) {
+  const userId = trustedUserId(user);
+  if (!mongoose.isValidObjectId(quizId)) throw unavailableQuizError();
+  const pageSize = limit === undefined ? DEFAULT_HISTORY_PAGE_SIZE : parsePositiveInteger(limit, MAX_HISTORY_PAGE_SIZE);
+  const cursor = before === undefined ? null : parsePositiveInteger(before, Number.MAX_SAFE_INTEGER);
+  if (!pageSize || (before !== undefined && !cursor)) {
+    throw new StandaloneSubmissionError(400, "Invalid history pagination.", "invalid_history_pagination");
+  }
+
+  // A current published Quiz may show an empty history. Disabled/Archived Quiz
+  // IDs are visible only to a user who actually owns a saved result for them.
+  const ownership = { quiz: quizId, user: userId, "submissionSnapshot.contextType": "standalone" };
+  const owned = await QuizAttempt.exists(ownership);
+  if (!owned) {
+    const available = await Quiz.exists({ _id: quizId, contextType: "standalone", status: "published",
+      publishedRevision: { $type: "number" }, standaloneAccess: { $in: ["public", "students"] } });
+    if (!available) throw unavailableQuizError();
+  }
+
+  // The existing unique { quiz, user, attemptNumber } index supports a reverse
+  // keyset scan. New attempts have larger numbers and cannot shift later pages.
+  // The existence predicate also makes the existing partial unique index
+  // eligible for the first page (not only pages with a numeric cursor).
+  const filter = { ...ownership, attemptNumber: { $exists: true, ...(cursor ? { $lt: cursor } : {}) } };
+  const rows = await QuizAttempt.find(filter).sort({ attemptNumber: -1 }).limit(pageSize + 1);
+  const hasMore = rows.length > pageSize;
+  const page = rows.slice(0, pageSize);
+  return { attempts: page.map(projectStandaloneAttempt), pageSize,
+    nextCursor: hasMore ? String(page[page.length - 1].attemptNumber) : null };
+}
+
 module.exports = { StandaloneSubmissionError, submitStandaloneQuiz,
-  getStandaloneAttemptResult, getStandaloneAttemptHistory };
+  getStandaloneAttemptResult, getStandaloneAttemptHistory, getStandaloneAttemptHistoryPage };

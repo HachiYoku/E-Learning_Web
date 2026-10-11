@@ -110,7 +110,7 @@ test("transaction verification failure fails closed", async () => {
   }
 });
 
-test("the reusable gate returns a sanitized 503 when disabled and does not alter existing Quiz routes", async () => {
+test("the reusable gate returns a sanitized 503 when disabled and leaves Course Quiz routes intact", async () => {
   let status; let body; let proceeded = false;
   const res = { status(value) { status = value; return this; }, json(value) { body = value; return this; } };
   await standaloneRuntimeGate({ env: {} })({}, res, () => { proceeded = true; });
@@ -122,6 +122,12 @@ test("the reusable gate returns a sanitized 503 when disabled and does not alter
   const paths = router.stack.map((layer) => layer.route?.path).filter(Boolean);
   for (const existing of ["/standalone", "/standalone/:quizId", "/course/:courseId/lesson/:lessonId",
     "/course/:courseId", "/:quizId/sessions", "/:quizId/submit"]) assert.ok(paths.includes(existing));
-  assert.equal(paths.some((entry) => entry.startsWith("/standalone/") &&
-    (entry.endsWith("/sessions") || entry.endsWith("/submit"))), false);
+  for (const runtime of ["/standalone/:quizId/sessions", "/standalone/:quizId/submit",
+    "/standalone/attempts/:attemptId", "/standalone/:quizId/attempts"]) assert.ok(paths.includes(runtime));
+  for (const runtime of ["/standalone/:quizId/sessions", "/standalone/:quizId/submit"]) {
+    const layer = router.stack.find((entry) => entry.route?.path === runtime);
+    assert.deepEqual(layer.route.stack.map((entry) => entry.name),
+      ["validateToken", "limitStandaloneQuizRequest", "requireStandaloneRuntimeReady",
+        runtime.endsWith("/sessions") ? "startSession" : "submit"]);
+  }
 });

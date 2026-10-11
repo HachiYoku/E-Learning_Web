@@ -32,7 +32,8 @@ function studentSession(session, created) {
 
 async function startOrResumeStandaloneQuizSession({ quizId, user }) {
   const userId = user?.id || user?._id;
-  if (!mongoose.isValidObjectId(userId) || !mongoose.isValidObjectId(quizId) || user?.role === "admin") {
+  if (!mongoose.isValidObjectId(userId) || !mongoose.isValidObjectId(quizId)
+    || !["user", "admin"].includes(user?.role)) {
     throw unavailableQuizError();
   }
   const resolveAmbiguous = async (result) => {

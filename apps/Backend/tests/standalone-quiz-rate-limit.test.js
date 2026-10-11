@@ -196,8 +196,8 @@ test("middleware uses authenticated identity, rejects missing auth, and sanitize
 test("existing Course Quiz routes and global IP/body guards remain unchanged", () => {
   const router = require("../routes/quiz");
   const paths = router.stack.map((layer) => layer.route?.path).filter(Boolean);
-  assert.equal(paths.some((entry) => entry.startsWith("/standalone/") &&
-    (entry.endsWith("/sessions") || entry.endsWith("/submit"))), false);
+  assert.ok(paths.includes("/standalone/:quizId/sessions"));
+  assert.ok(paths.includes("/standalone/:quizId/submit"));
   assert.ok(paths.includes("/:quizId/sessions"));
   assert.ok(paths.includes("/:quizId/submit"));
   const serverSource = require("node:fs").readFileSync(path.join(__dirname, "../server.js"), "utf8");

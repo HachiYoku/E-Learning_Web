@@ -5,11 +5,19 @@ const { createQuizMediaUpload, validateQuizMediaContent } = require("../middlewa
 const controller = require("../controllers/quizController");
 const standalone = require("../controllers/standaloneQuizController");
 const { attachUserIfPresent } = require("../middleware/authMiddleware");
+const { standaloneQuizRateLimit } = require("../middleware/standaloneQuizRateLimit");
+const { requireStandaloneRuntimeReady } = require("../services/standaloneQuizRuntimeReadiness");
 
 const router = express.Router();
 const upload = createQuizMediaUpload({ maxFiles: 20 });
 
 router.get("/standalone", attachUserIfPresent, standalone.listPublished);
+router.get("/standalone/attempts/:attemptId", validateToken, requireStandaloneRuntimeReady, standalone.getResult);
+router.get("/standalone/:quizId/attempts", validateToken, requireStandaloneRuntimeReady, standalone.getHistory);
+router.post("/standalone/:quizId/sessions", validateToken, standaloneQuizRateLimit("start"),
+  requireStandaloneRuntimeReady, standalone.startSession);
+router.post("/standalone/:quizId/submit", validateToken, standaloneQuizRateLimit("submit"),
+  requireStandaloneRuntimeReady, standalone.submit);
 router.get("/standalone/:quizId", attachUserIfPresent, standalone.getPublished);
 router.post("/admin/standalone", validateToken, requireAdmin, standalone.create);
 router.get("/admin/standalone", validateToken, requireAdmin, standalone.listAdmin);

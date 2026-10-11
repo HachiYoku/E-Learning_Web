@@ -126,13 +126,15 @@ test("a session-release write failure rolls back the attempt and leaves the slot
   assert.equal((await submit(args)).attemptNumber, 1);
 });
 
-test("another user and Admin cannot submit or read an attempt", async () => {
+test("another user cannot submit or read an attempt, while Admin ownership remains isolated", async () => {
   const { args } = await ready(); const stranger = user();
   await assert.rejects(submit({ ...args, user: stranger }), /session|unavailable/i);
-  await assert.rejects(submit({ ...args, user: { ...args.user, role: "admin" } }), /unavailable/i);
+  const admin = { id: id(), role: "admin" };
+  await assert.rejects(submit({ ...args, user: admin }), /session|unavailable/i);
   assert.equal(await QuizAttempt.countDocuments({ quiz: args.quizId }), 0);
   const saved = await submit(args);
   await assert.rejects(result({ attemptId: saved.attemptId, user: stranger }), /unavailable/i);
+  await assert.rejects(result({ attemptId: saved.attemptId, user: admin }), /unavailable/i);
   assert.deepEqual(await history({ user: stranger }), []);
   assert.equal((await result({ attemptId: saved.attemptId, user: args.user })).attemptId, saved.attemptId);
 });
