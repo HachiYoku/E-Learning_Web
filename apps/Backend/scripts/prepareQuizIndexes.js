@@ -8,7 +8,7 @@ const index = (key, options = {}) => ({
   name: options.name || Object.entries(key).map(([field, direction]) => `${field}_${direction}`).join("_"),
 });
 
-// Mirror the ten current Quiz-related Mongoose schemas. The isolated test suite
+// Mirror the current Quiz-related Mongoose schemas. The isolated test suite
 // compares this manifest with schema.indexes() so a schema change cannot drift.
 const INDEXES = Object.freeze({
   quizzes: [
@@ -22,6 +22,7 @@ const INDEXES = Object.freeze({
   quizattempts: [
     index({ quiz: 1 }), index({ user: 1 }), index({ quiz: 1, user: 1, createdAt: -1 }),
     index({ quiz: 1, user: 1, attemptNumber: 1 }, { unique: true, partialFilterExpression: { attemptNumber: { $exists: true } } }),
+    index({ session: 1 }, { name: "one_standalone_attempt_per_session", unique: true, partialFilterExpression: { session: { $type: "objectId" } } }),
   ],
   homeworksets: [
     index({ status: 1 }), index({ createdBy: 1 }), index({ status: 1, updatedAt: -1 }),
@@ -49,6 +50,11 @@ const INDEXES = Object.freeze({
     index({ user: 1 }), index({ quiz: 1 }),
     index({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     index({ quiz: 1, expiresAt: 1, invalidatedAt: 1 }),
+    index({ quiz: 1, user: 1 }, { name: "one_active_standalone_session", unique: true, partialFilterExpression: { contextType: "standalone", activeSlot: true } }),
+  ],
+  quizratewindows: [
+    index({ user: 1, operation: 1, windowStart: 1 }, { name: "one_quiz_rate_window", unique: true }),
+    index({ expiresAt: 1 }, { name: "quiz_rate_window_expiry", expireAfterSeconds: 0 }),
   ],
   quizmedias: [
     index({ quiz: 1 }), index({ questionId: 1 }), index({ publicId: 1 }, { unique: true }),

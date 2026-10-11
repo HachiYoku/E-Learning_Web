@@ -49,6 +49,8 @@ const quizAttemptSchema = new mongoose.Schema(
     quiz: { type: mongoose.Schema.Types.ObjectId, ref: "Quiz", required: true, index: true, immutable: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true, immutable: true },
     attemptNumber: { type: Number, required: true, min: 1, immutable: true },
+    // Optional for legacy and Video Course attempts; standalone submissions use it later.
+    session: { type: mongoose.Schema.Types.ObjectId, ref: "QuizSession", immutable: true, default: undefined },
     // Legacy answer indexes remain readable during the evolutionary rollout.
     answers: { type: [Number], default: [], immutable: true },
     score: { type: Number, required: true, min: 0, immutable: true },
@@ -67,6 +69,11 @@ quizAttemptSchema.index(
   { quiz: 1, user: 1, attemptNumber: 1 },
   { unique: true, partialFilterExpression: { attemptNumber: { $exists: true } } }
 );
+quizAttemptSchema.index(
+  { session: 1 },
+  { name: "one_standalone_attempt_per_session", unique: true,
+    partialFilterExpression: { session: { $type: "objectId" } } }
+);
 
 // A Mongoose nested subdocument can otherwise be changed even when its parent
 // path is marked immutable. Preserve the persisted snapshot on document saves;
@@ -80,7 +87,7 @@ quizAttemptSchema.pre("save", async function preserveCompletedSnapshot() {
 });
 
 const IMMUTABLE_SUBMISSION_PATHS = new Set([
-  "quiz", "user", "attemptNumber", "answers", "score", "total", "correctAnswersRevealed", "submissionSnapshot",
+  "quiz", "user", "attemptNumber", "session", "answers", "score", "total", "correctAnswersRevealed", "submissionSnapshot",
 ]);
 
 function touchesImmutableSubmissionPath(update) {

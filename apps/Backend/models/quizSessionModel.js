@@ -12,9 +12,16 @@ const quizSessionSchema = new mongoose.Schema({
   expiresAt: { type: Date, required: true, immutable: true },
   invalidatedAt: { type: Date, default: null },
   invalidationReason: { type: String, trim: true, default: "" },
+  // Only standalone sessions opt into the one-unfinished-session index.
+  activeSlot: { type: Boolean, default: undefined },
 }, { timestamps: true });
 
 quizSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 quizSessionSchema.index({ quiz: 1, expiresAt: 1, invalidatedAt: 1 });
+quizSessionSchema.index(
+  { quiz: 1, user: 1 },
+  { name: "one_active_standalone_session", unique: true,
+    partialFilterExpression: { contextType: "standalone", activeSlot: true } }
+);
 
 module.exports = mongoose.model("QuizSession", quizSessionSchema);

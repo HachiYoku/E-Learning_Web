@@ -72,6 +72,8 @@ const quizSchema = new mongoose.Schema(
     difficulty: { type: String, enum: STANDALONE_DIFFICULTIES, default: null },
     description: { type: String, trim: true, maxlength: 1000, default: "" },
     publishedRevision: { type: Number, min: 1, default: null },
+    // Standalone runtime transactions will use this independently of content revisions.
+    runtimeFence: { type: Number, min: 0, default: undefined },
     // Set in the same write as a standalone draft/publication. A failed media
     // pass can be retried without repeating that write.
     mediaReconciliationToken: { type: String, default: undefined },
