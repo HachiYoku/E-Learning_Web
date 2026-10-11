@@ -19,6 +19,7 @@ const questionSnapshotSchema = new mongoose.Schema({
   selectedAnswer: { type: Number, min: 0, required: true },
   correctAnswer: { type: Number, min: 0, required: true },
   isCorrect: { type: Boolean, required: true },
+  explanation: { type: String, trim: true, maxlength: 2000 },
 }, { _id: false });
 
 const submissionSnapshotSchema = new mongoose.Schema({

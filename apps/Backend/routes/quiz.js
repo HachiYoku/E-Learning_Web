@@ -3,9 +3,24 @@ const validateToken = require("../middleware/authMiddleware");
 const requireAdmin = require("../middleware/adminMiddleware");
 const { createQuizMediaUpload, validateQuizMediaContent } = require("../middleware/uploadValidation");
 const controller = require("../controllers/quizController");
+const standalone = require("../controllers/standaloneQuizController");
+const { attachUserIfPresent } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 const upload = createQuizMediaUpload({ maxFiles: 20 });
+
+router.get("/standalone", attachUserIfPresent, standalone.listPublished);
+router.get("/standalone/:quizId", attachUserIfPresent, standalone.getPublished);
+router.post("/admin/standalone", validateToken, requireAdmin, standalone.create);
+router.get("/admin/standalone", validateToken, requireAdmin, standalone.listAdmin);
+router.get("/admin/standalone/:quizId", validateToken, requireAdmin, standalone.getAdmin);
+router.put("/admin/standalone/:quizId/draft", validateToken, requireAdmin, standalone.editDraft);
+router.post("/admin/standalone/:quizId/publish", validateToken, requireAdmin, standalone.publish);
+router.post("/admin/standalone/:quizId/media/retry", validateToken, requireAdmin, standalone.retryMedia);
+router.post("/admin/standalone/:quizId/disable", validateToken, requireAdmin, standalone.lifecycle("disable"));
+router.post("/admin/standalone/:quizId/enable", validateToken, requireAdmin, standalone.lifecycle("enable"));
+router.post("/admin/standalone/:quizId/archive", validateToken, requireAdmin, standalone.lifecycle("archive"));
+router.delete("/admin/standalone/:quizId", validateToken, requireAdmin, standalone.remove);
 
 function validateQuizImageFields(req, res, next) {
   const invalidFile = (req.files || []).find(

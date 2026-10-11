@@ -102,6 +102,7 @@ function submissionReview(attempt, { revealCorrectAnswers = true } = {}) {
       questionId: question.questionId,
       selectedAnswer: question.selectedAnswer,
       ...(revealCorrectAnswers ? { correctAnswer: question.correctAnswer } : {}),
+      ...(attempt.submissionSnapshot?.contextType === "standalone" ? { explanation: question.explanation || "" } : {}),
       isCorrect: question.isCorrect,
     })),
   };
@@ -246,6 +247,7 @@ async function studentQuizHistory({ quizId, user }) {
           imageDecorative: Boolean(question.imageDecorative),
           audio: question.audio?.url || "",
           audioLabel: question.audioLabel || "",
+          ...(attempt.submissionSnapshot.contextType === "standalone" ? { explanation: question.explanation || "" } : {}),
         })),
       } : null,
     })),

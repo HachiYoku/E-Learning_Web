@@ -2,7 +2,7 @@ function mediaSnapshot({ url = "", publicId = "", resourceType = "", format = ""
   return { url, publicId, resourceType, format };
 }
 
-function quizQuestionSnapshot(question, selectedAnswer) {
+function quizQuestionSnapshot(question, selectedAnswer, { includeExplanation = false } = {}) {
   const correctAnswer = Number(question.correctAnswer);
   return {
     questionId: question._id || null,
@@ -26,6 +26,7 @@ function quizQuestionSnapshot(question, selectedAnswer) {
     selectedAnswer: Number(selectedAnswer),
     correctAnswer,
     isCorrect: Number(selectedAnswer) === correctAnswer,
+    ...(includeExplanation ? { explanation: String(question.explanation || "") } : {}),
   };
 }
 
@@ -45,7 +46,9 @@ function buildQuizSubmissionSnapshot({ quiz, answers, course, lesson, homeworkSe
     course: entitySnapshot(course || quiz.course),
     lesson: entitySnapshot(lesson || quiz.lesson),
     homeworkSet: entitySnapshot(homeworkSet || quiz.homeworkSet),
-    questions: (quiz.questions || []).map((question, index) => quizQuestionSnapshot(question, answers[index])),
+    questions: (quiz.questions || []).map((question, index) => quizQuestionSnapshot(
+      question, answers[index], { includeExplanation: quiz.contextType === "standalone" }
+    )),
   };
 }
 

@@ -26,6 +26,7 @@ function sessionSnapshot(quiz) {
       audioLabel: question.audioLabel || "",
       options: (question.options || []).map(String),
       correctAnswer: Number(question.correctAnswer),
+      ...(quiz.contextType === "standalone" ? { explanation: String(question.explanation || "") } : {}),
     })),
   };
 }
