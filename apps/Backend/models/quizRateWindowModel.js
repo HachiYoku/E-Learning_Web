@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-// Declared for the later shared limiter checkpoint; no route uses this model yet.
+// Shared by the standalone rate limiter; no public runtime route uses it yet.
 const quizRateWindowSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, immutable: true },
   operation: { type: String, enum: ["start", "submit"], required: true, immutable: true },
