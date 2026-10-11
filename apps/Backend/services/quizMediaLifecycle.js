@@ -11,9 +11,21 @@ function mediaValues(question) {
   ].filter(Boolean);
 }
 
-async function registerQuizMedia(quiz) {
+async function registerQuizMedia(quiz, { existingOnly = false } = {}) {
   for (const question of [...(quiz.questions || []), ...(quiz.draft?.questions || [])]) {
     for (const media of mediaValues(question)) {
+      if (existingOnly) {
+        // Standalone draft media was ownership-checked before persistence. A
+        // stale reconciliation must never re-activate an asset that deletion
+        // has already marked for cleanup (or already deleted).
+        const result = await QuizMedia.updateOne(
+          { quiz: quiz._id, questionId: question._id, publicId: media.publicId,
+            mediaType: media.mediaType, cleanupState: { $ne: "deleted" } },
+          { $set: { quiz: quiz._id } }
+        );
+        if (!result.matchedCount) throw new Error("Standalone quiz media ownership requires recovery");
+        continue;
+      }
       await QuizMedia.updateOne(
         { publicId: media.publicId },
         { $setOnInsert: { quiz: quiz._id, questionId: question._id, ...media }, $set: { cleanupState: "active", cleanupError: "" } },
@@ -65,7 +77,7 @@ async function reconcileReplacedQuizMedia(previousQuiz, nextQuiz) {
 // An unreferenced asset is cleaned only by cleanupQuizMedia's live, session and
 // historical reference checks. Failed/deferred cleanup stays retryable.
 async function reconcileStandaloneQuizMedia(quiz) {
-  await registerQuizMedia(quiz);
+  await registerQuizMedia(quiz, { existingOnly: true });
   const records = await QuizMedia.find({ quiz: quiz._id, cleanupState: { $ne: "deleted" } });
   let pending = false;
   for (const record of records) {

@@ -2,9 +2,11 @@ const mongoose = require("mongoose");
 const Quiz = require("../models/quizModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const QuizMedia = require("../models/quizMediaModel");
-const { invalidateQuizSessions } = require("./quizSessionService");
 const { cleanupQuizMedia } = require("./quizMediaLifecycle");
 const quizMediaLifecycle = require("./quizMediaLifecycle");
+const QuizSession = require("../models/quizSessionModel");
+const { runStandaloneTransaction, writeQuizFence, StandaloneTransactionConflict,
+  StandaloneTransactionOutcomeUnknown } = require("./standaloneQuizTransactions");
 
 class StandaloneQuizError extends Error {
   constructor(status, message, code) {
@@ -72,9 +74,9 @@ async function validateDraft(quiz, data, previousQuestions = []) {
   return normalized;
 }
 
-async function loadStandalone(quizId) {
+async function loadStandalone(quizId, session) {
   if (!mongoose.isValidObjectId(quizId)) throw unavailable();
-  const quiz = await Quiz.findOne({ _id: quizId, contextType: "standalone" });
+  const quiz = await Quiz.findOne({ _id: quizId, contextType: "standalone" }).session(session || null);
   if (!quiz) throw unavailable();
   if (["published", "disabled"].includes(quiz.status) && quiz.publishedRevision === null && !quiz.draft) {
     throw new StandaloneQuizError(409, "This legacy standalone quiz requires review before revision management.", "legacy_standalone_quiz");
@@ -173,29 +175,81 @@ async function publishDraft(quizId, expectedVersion) {
 }
 
 async function changeAvailability(quizId, action) {
-  const quiz = await loadStandalone(quizId);
   const transitions = { disable: ["published", "disabled"], enable: ["disabled", "published"], archive: [["draft", "published", "disabled"], "archived"] };
   const [from, to] = transitions[action] || [];
   if (!from) throw new StandaloneQuizError(400, "Invalid action.", "invalid_quiz_action");
-  if (action === "enable" && quiz.publishedRevision === null) throw new StandaloneQuizError(409, "Publish the quiz first.", "quiz_unpublished");
-  const updated = await Quiz.findOneAndUpdate(
-    { _id: quiz._id, contextType: "standalone", status: Array.isArray(from) ? { $in: from } : from },
-    { $set: { status: to } }, { returnDocument: "after", runValidators: true }
+  try {
+    return await runStandaloneTransaction(async (session) => {
+      const quiz = await loadStandalone(quizId, session);
+      if (![].concat(from).includes(quiz.status)) {
+        throw new StandaloneQuizError(409, "This quiz cannot make that status change.", "invalid_quiz_state");
+      }
+      if (action === "enable" && quiz.publishedRevision === null) {
+        throw new StandaloneQuizError(409, "Publish the quiz first.", "quiz_unpublished");
+      }
+      const updated = await writeQuizFence(quiz, session, { status: to });
+      if (!updated) throw new StandaloneTransactionConflict();
+      if (action !== "enable") await invalidateStandaloneSessions(quiz._id, to, session);
+      return updated;
+    }, { resolveAmbiguous: async (result) => {
+      if (!result) return undefined;
+      const current = await Quiz.findOne({ _id: quizId, contextType: "standalone", status: to });
+      return current && current.runtimeFence >= result.runtimeFence ? current : undefined;
+    } });
+  } catch (error) {
+    if (error instanceof StandaloneTransactionConflict || error instanceof StandaloneTransactionOutcomeUnknown) {
+      throw new StandaloneQuizError(error.status, error.message, error.code);
+    }
+    throw error;
+  }
+}
+
+async function invalidateStandaloneSessions(quizId, reason, session) {
+  const now = new Date();
+  await QuizSession.updateMany(
+    { quiz: quizId, contextType: "standalone", invalidatedAt: null, expiresAt: { $gt: now } },
+    { $set: { invalidatedAt: now, invalidationReason: reason, activeSlot: false } }, { session }
   );
-  if (!updated) throw new StandaloneQuizError(409, "This quiz cannot make that status change.", "invalid_quiz_state");
-  if (action !== "enable") await invalidateQuizSessions({ quizId: quiz._id, reason: to });
-  return updated;
+  await QuizSession.updateMany(
+    { quiz: quizId, contextType: "standalone", activeSlot: true },
+    { $set: { activeSlot: false } }, { session }
+  );
 }
 
 async function deleteDraftOrQuiz(quizId) {
-  const quiz = await loadStandalone(quizId);
-  if (await QuizAttempt.exists({ quiz: quiz._id })) throw new StandaloneQuizError(409, "This quiz has student results and cannot be permanently deleted. Archive it instead to preserve student history.", "quiz_has_history");
-  await invalidateQuizSessions({ quizId: quiz._id, reason: "deleted" });
-  const deleted = await Quiz.deleteOne({ _id: quiz._id, contextType: "standalone" });
-  if (!deleted.deletedCount) throw conflict();
-  const media = await QuizMedia.find({ quiz: quiz._id, cleanupState: { $ne: "deleted" } });
-  await Promise.all(media.map(cleanupQuizMedia));
-  return { deleted: true };
+  try {
+    await runStandaloneTransaction(async (session) => {
+      const quiz = await loadStandalone(quizId, session);
+      const fenced = await writeQuizFence(quiz, session);
+      if (!fenced) throw new StandaloneTransactionConflict();
+      if (await QuizAttempt.exists({ quiz: quiz._id }).session(session)) {
+        throw new StandaloneQuizError(409, "This quiz has student results and cannot be permanently deleted. Archive it instead to preserve student history.", "quiz_has_history");
+      }
+      await invalidateStandaloneSessions(quiz._id, "deleted", session);
+      // Durable recovery state precedes physical cleanup, which must run only
+      // after the Quiz deletion is committed.
+      await QuizMedia.updateMany({ quiz: quiz._id, cleanupState: { $ne: "deleted" } },
+        { $set: { cleanupState: "pending_cleanup" } }, { session });
+      const deleted = await Quiz.deleteOne({ _id: quiz._id, contextType: "standalone",
+        runtimeFence: fenced.runtimeFence }, { session });
+      if (!deleted.deletedCount) throw new StandaloneTransactionConflict();
+      return { deleted: true };
+    }, { resolveAmbiguous: async () => !(await Quiz.exists({ _id: quizId, contextType: "standalone" }))
+      ? { deleted: true } : undefined });
+  } catch (error) {
+    if (error instanceof StandaloneTransactionConflict || error instanceof StandaloneTransactionOutcomeUnknown) {
+      throw new StandaloneQuizError(error.status, error.message, error.code);
+    }
+    throw error;
+  }
+  try {
+    const media = await QuizMedia.find({ quiz: quizId, cleanupState: { $ne: "deleted" } });
+    const results = await Promise.all(media.map(cleanupQuizMedia));
+    return results.every(Boolean) ? { deleted: true } : { deleted: true, mediaProcessing: "retry_required" };
+  } catch (error) {
+    console.error("Standalone quiz media cleanup requires retry", { quizId: String(quizId), name: error?.name || "Error" });
+    return { deleted: true, mediaProcessing: "retry_required" };
+  }
 }
 
 function publicSummary(quiz) {
