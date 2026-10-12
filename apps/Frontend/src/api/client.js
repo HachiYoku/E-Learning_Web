@@ -87,6 +87,7 @@ async function request(path, options = {}) {
     error.status = response.status;
     error.data = data;
     error.code = data?.code;
+    error.retryAfter = response.headers.get("Retry-After");
     throw error;
   }
 

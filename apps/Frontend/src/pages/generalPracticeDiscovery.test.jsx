@@ -17,6 +17,9 @@ vi.mock("../contexts/NotificationContext", () => ({
 vi.mock("../services/generalPracticeService", () => ({
   fetchGeneralPracticeQuizzes: vi.fn(),
   fetchGeneralPracticeQuiz: vi.fn(),
+  startGeneralPracticeSession: vi.fn(),
+  submitGeneralPracticeQuiz: vi.fn(),
+  fetchGeneralPracticeResult: vi.fn(),
 }))
 
 import { fetchGeneralPracticeQuizzes, fetchGeneralPracticeQuiz } from "../services/generalPracticeService"
@@ -64,8 +67,8 @@ describe("General Practice discovery", () => {
     expect(await screen.findByRole("heading", { name: "Thai greetings" })).toBeTruthy()
     expect(screen.getByText("Students Only")).toBeTruthy()
     const start = screen.getByRole("button", { name: "Start / Resume Quiz" })
-    expect(start.disabled).toBe(true)
-    expect(screen.getByText(/Quiz taking is coming in the next update/i)).toBeTruthy()
+    expect(start.disabled).toBe(false)
+    expect(screen.getByText(/unsubmitted selections will not be restored/i)).toBeTruthy()
     expect(fetchGeneralPracticeQuiz).toHaveBeenCalledWith(quiz.id)
   })
 

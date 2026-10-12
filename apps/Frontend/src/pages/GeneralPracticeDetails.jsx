@@ -1,15 +1,20 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ArrowLeft, RefreshCw } from "lucide-react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import LoadingSpinner from "../components/LoadingSpinner"
-import { fetchGeneralPracticeQuiz } from "../services/generalPracticeService"
+import { fetchGeneralPracticeQuiz, startGeneralPracticeSession } from "../services/generalPracticeService"
+import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
 
 function GeneralPracticeDetails() {
   const { quizId } = useParams()
+  const navigate = useNavigate()
+  const startInFlight = useRef(false)
   const [quiz, setQuiz] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [retryKey, setRetryKey] = useState(0)
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState("")
 
   useEffect(() => {
     let active = true
@@ -29,6 +34,22 @@ function GeneralPracticeDetails() {
     setError("")
     setLoading(true)
     setRetryKey((current) => current + 1)
+  }
+
+  const start = async () => {
+    if (startInFlight.current || !quiz) return
+    startInFlight.current = true
+    setStarting(true)
+    setStartError("")
+    try {
+      const session = await startGeneralPracticeSession(quizId)
+      navigate(`/app/practice/general/${encodeURIComponent(quizId)}/take`, { state: { quizId, session } })
+    } catch (requestError) {
+      setStartError(generalPracticeErrorMessage(requestError))
+    } finally {
+      startInFlight.current = false
+      setStarting(false)
+    }
   }
 
   return (
@@ -52,8 +73,9 @@ function GeneralPracticeDetails() {
               <div><dt className="text-xs font-bold uppercase tracking-wider text-[#765F55]">Access</dt><dd className="mt-1 text-sm font-semibold">{quiz.standaloneAccess === "students" ? "Students Only" : "Public quiz"}</dd></div>
             </dl>
             <div className="mt-8 rounded-2xl bg-[#FFF9EA] p-5">
-              <button type="button" disabled aria-describedby="general-practice-coming-soon" className="min-h-11 rounded-xl bg-[#2D2E30]/50 px-5 py-2.5 text-sm font-bold text-white cursor-not-allowed">Start / Resume Quiz</button>
-              <p id="general-practice-coming-soon" className="mt-3 text-sm text-[#765F55]">Quiz taking is coming in the next update. You can explore the details now.</p>
+              <button type="button" onClick={start} disabled={starting} className="min-h-11 rounded-xl bg-[#2D2E30] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#A94F00] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] disabled:cursor-wait disabled:opacity-60">{starting ? "Starting quiz..." : "Start / Resume Quiz"}</button>
+              <p className="mt-3 text-sm text-[#765F55]">If you resume an unfinished quiz, your previous unsubmitted selections will not be restored.</p>
+              {startError ? <p role="alert" className="mt-3 text-sm font-semibold text-[#A84646]">{startError}</p> : null}
             </div>
           </article>
         ) : <p role="status" className="rounded-2xl bg-white p-6 text-sm text-[#765F55]">Quiz details are unavailable.</p>}
