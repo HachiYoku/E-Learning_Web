@@ -76,6 +76,7 @@ function GeneralPracticeDetails() {
               <button type="button" onClick={start} disabled={starting} className="min-h-11 rounded-xl bg-[#2D2E30] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#A94F00] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] disabled:cursor-wait disabled:opacity-60">{starting ? "Starting quiz..." : "Start / Resume Quiz"}</button>
               <p className="mt-3 text-sm text-[#765F55]">If you resume an unfinished quiz, your previous unsubmitted selections will not be restored.</p>
               {startError ? <p role="alert" className="mt-3 text-sm font-semibold text-[#A84646]">{startError}</p> : null}
+              <Link to={`/app/practice/general/${encodeURIComponent(quizId)}/history`} className="mt-4 inline-flex min-h-11 items-center text-sm font-bold text-[#A94F00] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]">View your attempt history</Link>
             </div>
           </article>
         ) : <p role="status" className="rounded-2xl bg-white p-6 text-sm text-[#765F55]">Quiz details are unavailable.</p>}

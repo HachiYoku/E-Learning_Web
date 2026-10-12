@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("../api/client", () => ({ apiClient: { get: vi.fn(), post: vi.fn() } }))
 
 import { apiClient } from "../api/client"
-import { fetchGeneralPracticeQuizzes, fetchGeneralPracticeQuiz, startGeneralPracticeSession, submitGeneralPracticeQuiz, fetchGeneralPracticeResult } from "./generalPracticeService"
+import { fetchGeneralPracticeQuizzes, fetchGeneralPracticeQuiz, startGeneralPracticeSession, submitGeneralPracticeQuiz, fetchGeneralPracticeResult, fetchGeneralPracticeHistory } from "./generalPracticeService"
 
 beforeEach(() => vi.resetAllMocks())
 
@@ -33,5 +33,13 @@ describe("General Practice metadata API", () => {
     apiClient.get.mockResolvedValue({ attemptId: "attempt-1" })
     await fetchGeneralPracticeResult("attempt-1")
     expect(apiClient.get).toHaveBeenCalledWith("/quizzes/standalone/attempts/attempt-1")
+  })
+
+  it("loads owner-scoped history with an encoded cursor", async () => {
+    apiClient.get.mockResolvedValue({ attempts: [], pageSize: 10, nextCursor: null })
+    await fetchGeneralPracticeHistory("quiz/1")
+    await fetchGeneralPracticeHistory("quiz/1", "12/3")
+    expect(apiClient.get).toHaveBeenNthCalledWith(1, "/quizzes/standalone/quiz%2F1/attempts")
+    expect(apiClient.get).toHaveBeenNthCalledWith(2, "/quizzes/standalone/quiz%2F1/attempts?before=12%2F3")
   })
 })

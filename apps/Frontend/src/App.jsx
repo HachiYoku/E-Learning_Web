@@ -37,6 +37,7 @@ import GeneralPracticeList from "./pages/GeneralPracticeList"
 import GeneralPracticeDetails from "./pages/GeneralPracticeDetails"
 import GeneralPracticeTake from "./pages/GeneralPracticeTake"
 import GeneralPracticeComplete from "./pages/GeneralPracticeComplete"
+import GeneralPracticeHistory from "./pages/GeneralPracticeHistory"
 import StudentExplore from "./pages/StudentExplore"
 import StudentSupport from "./pages/StudentSupport"
 import StudentFeedback from "./pages/StudentFeedback"
@@ -117,6 +118,7 @@ function App() {
             <Route path="practice/general" element={<GeneralPracticeList />} />
             <Route path="practice/general/:quizId/take" element={<GeneralPracticeTake />} />
             <Route path="practice/general/:quizId/complete/:attemptId" element={<GeneralPracticeComplete />} />
+            <Route path="practice/general/:quizId/history" element={<GeneralPracticeHistory />} />
             <Route path="practice/general/:quizId" element={<GeneralPracticeDetails />} />
             <Route path="practice/flashcards" element={<StudentFlashcardsHub />} />
             <Route path="practice/flashcards/public" element={<Flashcards />} />

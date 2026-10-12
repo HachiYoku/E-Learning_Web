@@ -20,3 +20,8 @@ export function submitGeneralPracticeQuiz(quizId, submission) {
 export function fetchGeneralPracticeResult(attemptId) {
   return apiClient.get(`/quizzes/standalone/attempts/${encodeURIComponent(attemptId)}`)
 }
+
+export function fetchGeneralPracticeHistory(quizId, before) {
+  const cursor = before ? `?before=${encodeURIComponent(before)}` : ""
+  return apiClient.get(`/quizzes/standalone/${encodeURIComponent(quizId)}/attempts${cursor}`)
+}
