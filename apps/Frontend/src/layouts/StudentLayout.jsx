@@ -34,6 +34,7 @@ const practiceNavigation = [
   { label: "Consonants", to: "/app/practice/thai-consonants" },
   { label: "Vowels", to: "/app/practice/thai-vowels" },
   { label: "Flashcards", to: "/app/practice/flashcards" },
+  { label: "General Practice", to: "/app/practice/general" },
 ]
 
 function StudentLayout() {
@@ -101,7 +102,7 @@ function StudentLayout() {
       </aside>
 
       <main className="min-w-0 flex-1 pb-16 lg:pb-0">
-        {isPracticeArea ? <div className="border-b border-[#2D2E30]/10 bg-[#FFFDF8] px-3 py-3 sm:px-6 lg:px-8"><nav className="mx-auto grid max-w-4xl grid-cols-4 gap-1 rounded-2xl border border-[#E58C1A]/15 bg-[#FFF9EA] p-1.5 shadow-[0_10px_25px_-22px_rgba(80,48,19,0.4)]" aria-label="Practice activities">{practiceNavigation.map(({ label, to, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `min-w-0 rounded-xl px-1.5 py-2.5 text-center text-[11px] font-bold transition sm:px-3 sm:text-sm ${isActive ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/15" : "text-[#765F55] hover:bg-white hover:text-[#C97112]"}`}><span className="block truncate">{label}</span></NavLink>)}</nav></div> : null}
+        {isPracticeArea ? <div className="border-b border-[#2D2E30]/10 bg-[#FFFDF8] px-3 py-3 sm:px-6 lg:px-8"><nav className="mx-auto grid max-w-4xl grid-cols-3 gap-1 rounded-2xl border border-[#E58C1A]/15 bg-[#FFF9EA] p-1.5 shadow-[0_10px_25px_-22px_rgba(80,48,19,0.4)] sm:grid-cols-5" aria-label="Practice activities">{practiceNavigation.map(({ label, to, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `flex min-h-11 min-w-0 items-center justify-center rounded-xl px-1.5 py-2 text-center text-[11px] font-bold leading-tight transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:px-2 sm:text-sm ${isActive ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/15" : "text-[#765F55] hover:bg-white hover:text-[#C97112]"}`}><span className="block break-words">{label}</span></NavLink>)}</nav></div> : null}
         <Outlet />
       </main>
 

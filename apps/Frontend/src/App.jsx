@@ -33,6 +33,8 @@ import StudentLayout from "./layouts/StudentLayout"
 import StudentDashboard from "./pages/StudentDashboard"
 import StudentMore from "./pages/StudentMore"
 import StudentPractice from "./pages/StudentPractice"
+import GeneralPracticeList from "./pages/GeneralPracticeList"
+import GeneralPracticeDetails from "./pages/GeneralPracticeDetails"
 import StudentExplore from "./pages/StudentExplore"
 import StudentSupport from "./pages/StudentSupport"
 import StudentFeedback from "./pages/StudentFeedback"
@@ -110,6 +112,8 @@ function App() {
             <Route path="learn/:courseId/quiz/:lessonId" element={<Quiz />} />
             <Route path="course-quiz/:courseId/:quizId" element={<Quiz />} />
             <Route path="practice" element={<StudentPractice />} />
+            <Route path="practice/general" element={<GeneralPracticeList />} />
+            <Route path="practice/general/:quizId" element={<GeneralPracticeDetails />} />
             <Route path="practice/flashcards" element={<StudentFlashcardsHub />} />
             <Route path="practice/flashcards/public" element={<Flashcards />} />
             <Route path="practice/flashcards/mine" element={<MyFlashcards />} />
