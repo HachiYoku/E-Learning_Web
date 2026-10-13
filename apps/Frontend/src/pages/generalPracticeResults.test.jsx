@@ -8,10 +8,11 @@ import GeneralPracticeHistory from "./GeneralPracticeHistory"
 vi.mock("../services/generalPracticeService", () => ({
   fetchGeneralPracticeResult: vi.fn(),
   fetchGeneralPracticeHistory: vi.fn(),
+  fetchGeneralPracticeQuiz: vi.fn(),
   startGeneralPracticeSession: vi.fn(),
 }))
 
-import { fetchGeneralPracticeResult, fetchGeneralPracticeHistory, startGeneralPracticeSession } from "../services/generalPracticeService"
+import { fetchGeneralPracticeResult, fetchGeneralPracticeHistory, fetchGeneralPracticeQuiz, startGeneralPracticeSession } from "../services/generalPracticeService"
 
 const quizId = "6acc46dbad4ace5e3d908d2c"
 const attemptId = "6acc46dbad4ace5e3d908d2d"
@@ -43,24 +44,30 @@ beforeEach(() => {
   vi.resetAllMocks()
   fetchGeneralPracticeResult.mockResolvedValue(result)
   fetchGeneralPracticeHistory.mockResolvedValue({ attempts: [], pageSize: 10, nextCursor: null })
+  fetchGeneralPracticeQuiz.mockResolvedValue({ title: "Thai greetings" })
   startGeneralPracticeSession.mockResolvedValue({ sessionId: "new-session", created: true })
 })
 
 describe("General Practice saved results", () => {
   it("renders the Backend score and ordered saved answer snapshot with accessible statuses and media", async () => {
     renderRoutes(`/app/practice/general/${quizId}/complete/${attemptId}`)
-    expect(await screen.findByRole("heading", { name: "Submission saved" })).toBeTruthy()
+    expect(await screen.findByRole("heading", { name: "Thai greetings" })).toBeTruthy()
     expect(screen.getByRole("heading", { name: "Thai greetings" })).toBeTruthy()
     expect(screen.getByRole("status", { name: "Score: 1 out of 3" })).toBeTruthy()
     expect(screen.getByText("33% correct")).toBeTruthy()
     expect(screen.getByAltText("A greeting")).toBeTruthy()
     expect(screen.getByLabelText("Listen to thanks")).toBeTruthy()
     const review = screen.getByRole("region", { name: "Review your answers" })
-    expect(within(review).getAllByRole("listitem")).toHaveLength(3)
+    expect(within(review).getAllByRole("list", { name: /Saved answer options/ })).toHaveLength(3)
     expect(within(review).getByLabelText("Question 1: Correct")).toBeTruthy()
     expect(within(review).getByLabelText("Question 2: Incorrect")).toBeTruthy()
     expect(within(review).getByLabelText("Question 3: Unanswered")).toBeTruthy()
-    expect(within(review).getByText("No answer submitted")).toBeTruthy()
+    expect(within(review).getByText("No answer submitted.")).toBeTruthy()
+    expect(within(review).getAllByText("Your answer · Incorrect")).toHaveLength(1)
+    expect(within(review).getAllByText("Correct answer")).toHaveLength(2)
+    expect(within(review).getAllByText("สวัสดี")).toHaveLength(3)
+    expect(screen.queryByRole("link", { name: "Review answers" })).toBeNull()
+    expect(screen.queryByText(/Attempt reference:/)).toBeNull()
     expect(within(review).getByText("A greeting.")).toBeTruthy()
     expect(fetchGeneralPracticeResult).toHaveBeenCalledWith(attemptId)
   })
@@ -78,7 +85,7 @@ describe("General Practice saved results", () => {
     let resolveStart
     startGeneralPracticeSession.mockImplementation(() => new Promise((resolve) => { resolveStart = resolve }))
     renderRoutes(`/app/practice/general/${quizId}/complete/${attemptId}`)
-    await screen.findByRole("heading", { name: "Submission saved" })
+    await screen.findByRole("heading", { name: "Thai greetings" })
     expect(startGeneralPracticeSession).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole("button", { name: "Try Again" }))
     fireEvent.click(screen.getByRole("button", { name: "Opening quiz..." }))
@@ -92,7 +99,7 @@ describe("General Practice saved results", () => {
       .mockRejectedValueOnce(Object.assign(new Error("Limited"), { status: 429, retryAfter: "15" }))
     const user = userEvent.setup()
     renderRoutes(`/app/practice/general/${quizId}/complete/${attemptId}`)
-    await screen.findByRole("heading", { name: "Submission saved" })
+    await screen.findByRole("heading", { name: "Thai greetings" })
     await user.click(screen.getByRole("button", { name: "Try Again" }))
     expect((await screen.findByRole("alert")).textContent).toContain("no longer available")
     expect(screen.getByText("33% correct")).toBeTruthy()
@@ -113,19 +120,34 @@ describe("General Practice personal history", () => {
     const user = userEvent.setup()
     renderRoutes(`/app/practice/general/${quizId}/history`)
     expect(await screen.findByText("Attempt 3")).toBeTruthy()
+    expect(screen.getByRole("heading", { name: "Thai greetings" })).toBeTruthy()
+    expect(screen.getAllByText("Thai greetings")).toHaveLength(1)
     expect(screen.getAllByRole("listitem")).toHaveLength(2)
+    expect(screen.getByRole("list").className).toContain("space-y-3")
+    expect(screen.getByRole("list").className).not.toContain("grid-cols-2")
     await user.click(screen.getByRole("button", { name: "Load More" }))
     expect(await screen.findByText("Attempt 1")).toBeTruthy()
     expect(screen.getAllByRole("listitem")).toHaveLength(3)
     expect(fetchGeneralPracticeHistory).toHaveBeenNthCalledWith(2, quizId, "2")
     expect(screen.queryByRole("button", { name: "Load More" })).toBeNull()
-    expect(screen.getByRole("link", { name: "Review attempt 1" }).getAttribute("href")).toContain("/complete/a1")
+    expect(screen.getByRole("link", { name: "Review result for attempt 1" }).getAttribute("href")).toContain("/complete/a1")
   })
 
   it("shows an empty history without a Load More action", async () => {
     renderRoutes(`/app/practice/general/${quizId}/history`)
     expect(await screen.findByText("No saved attempts yet.")).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Load More" })).toBeNull()
+  })
+
+  it("falls back to the quiz listing when archived quiz details are unavailable", async () => {
+    fetchGeneralPracticeQuiz.mockRejectedValueOnce(Object.assign(new Error("Not found"), { status: 404 }))
+    fetchGeneralPracticeHistory.mockResolvedValueOnce({ attempts: [
+      { attemptId: "a1", quizId, attemptNumber: 1, title: "Thai greetings", score: 2, total: 2, percentage: 100 },
+    ], pageSize: 10, nextCursor: null })
+    renderRoutes(`/app/practice/general/${quizId}/history`)
+    expect(await screen.findByRole("heading", { name: "Thai greetings" })).toBeTruthy()
+    expect(await screen.findByRole("link", { name: "Back to General Practice" })).toBeTruthy()
+    expect(screen.getByRole("link", { name: "Back to General Practice" }).getAttribute("href")).toBe("/app/practice/general")
   })
 
   it("offers retry after a history error", async () => {

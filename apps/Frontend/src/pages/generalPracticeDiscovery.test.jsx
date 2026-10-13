@@ -62,14 +62,25 @@ describe("General Practice discovery", () => {
     renderRoutes("/app/practice/general")
     expect(screen.getByRole("status").textContent).toContain("Loading")
     expect(await screen.findByText("Thai greetings")).toBeTruthy()
+    expect(screen.getByRole("link", { name: "Back to Practice Overview" }).getAttribute("href")).toBe("/app/practice")
     expect(screen.getByText("Vocabulary")).toBeTruthy()
+    expect(screen.queryByText("Practice Thai")).toBeNull()
     await userEvent.setup().click(screen.getByRole("link", { name: "View details for Thai greetings" }))
     expect(await screen.findByRole("heading", { name: "Thai greetings" })).toBeTruthy()
+    expect(screen.getByRole("link", { name: "Back to General Practice" }).getAttribute("href")).toBe("/app/practice/general")
     expect(screen.getByText("Students Only")).toBeTruthy()
+    expect(screen.getByText("Access").querySelector(".lucide-lock-keyhole")).toBeTruthy()
     const start = screen.getByRole("button", { name: "Start / Resume Quiz" })
     expect(start.disabled).toBe(false)
     expect(screen.getByText(/unsubmitted selections will not be restored/i)).toBeTruthy()
     expect(fetchGeneralPracticeQuiz).toHaveBeenCalledWith(quiz.id)
+  })
+
+  it("uses an open-lock icon for Public quiz access", async () => {
+    fetchGeneralPracticeQuiz.mockResolvedValue({ ...quiz, standaloneAccess: "public" })
+    renderRoutes(`/app/practice/general/${quiz.id}`)
+    expect(await screen.findByText("Public quiz")).toBeTruthy()
+    expect(screen.getByText("Access").querySelector(".lucide-lock-open")).toBeTruthy()
   })
 
   it("shows an empty state", async () => {
@@ -119,19 +130,46 @@ describe("General Practice discovery", () => {
     "/app/practice/general",
     "/app/practice/general/quiz-1",
     "/app/practice/general/quiz-1/take",
-  ])("keeps General Practice active in the subnavigation at %s", (path) => {
+  ])("keeps General Practice active in the desktop sidebar at %s", (path) => {
     render(<MemoryRouter initialEntries={[path]}><Routes>
       <Route path="/app" element={<StudentLayout />}>
         <Route path="practice/general/*" element={<p>General Practice page</p>} />
       </Route>
     </Routes></MemoryRouter>)
-    const navigation = screen.getByRole("navigation", { name: "Practice activities" })
+    const navigation = screen.getByLabelText("Practice activities")
     expect(within(navigation).getAllByRole("link")).toHaveLength(5)
     expect(within(navigation).getByRole("link", { name: "General Practice" }).getAttribute("aria-current")).toBe("page")
     for (const name of ["Overview", "Consonants", "Vowels", "Flashcards"]) {
       expect(within(navigation).getByRole("link", { name })).toBeTruthy()
     }
-    expect(navigation.className).toContain("grid-cols-3")
-    expect(navigation.className).toContain("sm:grid-cols-5")
+    expect(screen.getByRole("button", { name: "Toggle Practice submenu" }).getAttribute("aria-expanded")).toBe("true")
+    expect(screen.getAllByRole("navigation", { name: "Student navigation" })).toHaveLength(2)
+    expect(screen.queryByRole("navigation", { name: "Practice activities" })).toBeNull()
+  })
+
+  it("keeps the mobile Practice destination pointed at the activity hub", () => {
+    render(<MemoryRouter initialEntries={["/app/practice/general"]}><Routes>
+      <Route path="/app" element={<StudentLayout />}>
+        <Route path="practice/general" element={<p>General Practice page</p>} />
+      </Route>
+    </Routes></MemoryRouter>)
+    const mobileNavigation = screen.getAllByRole("navigation", { name: "Student navigation" })[1]
+    expect(within(mobileNavigation).getByRole("link", { name: "Practice" }).getAttribute("href")).toBe("/app/practice")
+  })
+
+  it.each([
+    ["/app/practice", "Overview"],
+    ["/app/practice/thai-consonants", "Consonants"],
+    ["/app/practice/thai-vowels", "Vowels"],
+    ["/app/practice/flashcards", "Flashcards"],
+    ["/app/practice/general/quiz-1/history", "General Practice"],
+  ])("highlights %s in the Practice sidebar", (path, activeLabel) => {
+    render(<MemoryRouter initialEntries={[path]}><Routes>
+      <Route path="/app" element={<StudentLayout />}>
+        <Route path="practice/*" element={<p>Practice page</p>} />
+      </Route>
+    </Routes></MemoryRouter>)
+    const submenu = screen.getByLabelText("Practice activities")
+    expect(within(submenu).getByRole("link", { name: activeLabel }).getAttribute("aria-current")).toBe("page")
   })
 })

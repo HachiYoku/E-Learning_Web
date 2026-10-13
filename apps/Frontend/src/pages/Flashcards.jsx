@@ -26,14 +26,15 @@ function Flashcards() {
   const studentPractice = location.pathname === "/app/practice/flashcards/public";
   const backTo = studentPractice ? "/app/practice/flashcards" : "/practice";
   const backLabel = studentPractice ? "Back to Flashcards" : "Back to Practice";
+  const ContentTag = studentPractice ? "div" : "main";
 
-  return <div className="flex min-h-screen flex-col bg-[#FFF9EA] text-[#2D2E30]">
-    <Navbar />
-    <main className="relative isolate flex-1 overflow-hidden px-4 py-12 sm:px-6 md:px-10 md:py-20 lg:px-16">
+  return <div className={studentPractice ? "min-w-0 bg-[#FFF9EA] text-[#2D2E30]" : "flex min-h-screen flex-col bg-[#FFF9EA] text-[#2D2E30]"}>
+    {!studentPractice ? <Navbar /> : null}
+    <ContentTag className={studentPractice ? "relative isolate min-w-0 overflow-hidden px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12" : "relative isolate flex-1 overflow-hidden px-4 py-12 sm:px-6 md:px-10 md:py-20 lg:px-16"}>
       <div className="absolute -left-28 top-0 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/25 blur-3xl" />
       <div className="absolute -right-28 bottom-0 -z-10 h-80 w-80 rounded-full bg-[#E9A9A0]/25 blur-3xl" />
-      <div className="mx-auto w-full max-w-6xl">
-        <Link to={backTo} className="mb-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] hover:bg-[#FFF1CE] hover:text-[#C97112]"><ArrowLeft size={16} />{backLabel}</Link>
+      <div className="mx-auto w-full max-w-[1200px]">
+        {selectedCategory ? <button type="button" onClick={leaveDeck} className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft size={16} aria-hidden="true" />Back to flashcard sets</button> : <Link to={backTo} className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft size={16} aria-hidden="true" />{backLabel}</Link>}
         <section className="rounded-[2rem] border border-[#E58C1A]/15 bg-white/80 p-5 shadow-[0_24px_60px_-38px_rgba(80,48,19,.38)] backdrop-blur-sm sm:p-8 md:rounded-[2.5rem] md:p-10">
           <header className="border-b border-[#2D2E30]/10 pb-7">
           <p className="text-xs font-bold uppercase tracking-[.22em] text-[#C97112]">Thai foundations</p>
@@ -43,8 +44,8 @@ function Flashcards() {
           {loading ? <Notice message="Loading flashcards..." /> : error ? <Notice message={error} error /> : !selectedCategory ? <CategoryPicker categories={categories} start={start} /> : deck.length ? <FlashcardPracticeSession cards={deck} onExit={leaveDeck} /> : <Notice message="This category has no published cards." />}
         </section>
       </div>
-    </main>
-    <Footer />
+    </ContentTag>
+    {!studentPractice ? <Footer /> : null}
   </div>;
 }
 

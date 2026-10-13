@@ -38,6 +38,7 @@ import GeneralPracticeDetails from "./pages/GeneralPracticeDetails"
 import GeneralPracticeTake from "./pages/GeneralPracticeTake"
 import GeneralPracticeComplete from "./pages/GeneralPracticeComplete"
 import GeneralPracticeHistory from "./pages/GeneralPracticeHistory"
+import PublicGeneralPracticeLayout from "./pages/PublicGeneralPracticeLayout"
 import StudentExplore from "./pages/StudentExplore"
 import StudentSupport from "./pages/StudentSupport"
 import StudentFeedback from "./pages/StudentFeedback"
@@ -67,6 +68,7 @@ export function RouteMetadata() {
     "/courses": ["Thai Language Courses", "Explore self-paced Thai courses for speaking, grammar, and everyday communication."],
     "/blog": ["Thai Learning Blog", "Practical Thai learning tips, useful vocabulary, and encouragement from the Arun Thai Journal."],
     "/practice": ["Thai Language Practice", "Practice Thai consonants and vowels with free interactive learning resources."],
+    "/practice/general": ["General Practice Quizzes", "Explore public Thai language practice quizzes from Arun Thai."],
     "/about": ["About Arun Thai", "Learn about Arun Thai Language Center and our supportive approach to learning Thai."],
     "/flashcards": ["Thai Flashcards", "Practice Thai vocabulary with free interactive flashcards from Arun Thai Language Center."],
     "/privacy-policy": ["Privacy Policy", "Privacy information for Arun Thai Language Center."],
@@ -76,6 +78,7 @@ export function RouteMetadata() {
   const page = publicPages[pathname]
   if (["/privacy-policy", "/cookie-policy", "/terms-and-conditions"].includes(pathname)) return <Seo title={page[0]} description={page[1]} path={pathname} robots="noindex, follow" />
   if (page) return <Seo title={page[0]} description={page[1]} path={pathname} />
+  if (pathname.startsWith("/practice/general/")) return <Seo title="General Practice Quiz" description="Explore a public Thai language practice quiz from Arun Thai." path={pathname} />
   if (pathname.startsWith("/practice/")) return <Seo title="Thai Language Practice" description="Practice Thai consonants and vowels with free interactive learning resources." path={pathname} />
   if (pathname.startsWith("/courses/")) return <Seo title="Thai Course" description="Learn practical Thai online with Arun Thai Language Center." path={pathname} />
   return <Seo title="Page not found" path={pathname} noIndex />
@@ -98,6 +101,10 @@ function App() {
         <Route path="/practice" element={<Practice />} />
         <Route path="/practice/foundations" element={<Navigate to="/practice/thai-consonants" replace />} />
         <Route path="/practice/tone-combinations" element={<Navigate to="/practice/thai-vowels" replace />} />
+        <Route path="/practice/general" element={<PublicGeneralPracticeLayout />}>
+          <Route index element={<GeneralPracticeList publicView />} />
+          <Route path=":quizId" element={<GeneralPracticeDetails publicView />} />
+        </Route>
         <Route path="/practice/:section" element={<Practice />} />
         <Route path="/flashcards" element={<Flashcards />} />
         <Route path="/blog" element={<Blog />} />

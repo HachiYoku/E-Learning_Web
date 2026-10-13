@@ -1,23 +1,31 @@
 import { useRef, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { CheckCircle2, RotateCcw, XCircle } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 import { startGeneralPracticeSession } from "../services/generalPracticeService"
 import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
 
 function ReviewQuestion({ question, index }) {
-  const selected = Number.isInteger(question.selectedAnswer) ? question.options?.[question.selectedAnswer] : null
-  const correct = Number.isInteger(question.correctAnswer) ? question.options?.[question.correctAnswer] : null
-  const status = selected == null ? "Unanswered" : question.isCorrect ? "Correct" : "Incorrect"
+  const selectedIndex = Number.isInteger(question.selectedAnswer) ? question.selectedAnswer : null
+  const status = selectedIndex == null ? "Unanswered" : question.isCorrect ? "Correct" : "Incorrect"
 
-  return <li className="rounded-2xl border border-[#E58C1A]/20 bg-[#FFFDF8] p-5 sm:p-6">
-    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#A94F00]">Question {index + 1}</p>
+  return <li className="rounded-2xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-5 sm:p-6">
+    <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-accent">Question {index + 1}</p>
     <h3 className="mt-2 break-words text-lg font-bold">{question.prompt || "Look or listen, then review the answer."}</h3>
     {question.image ? <img src={question.image} alt={question.imageDecorative ? "" : question.imageAlt || "Question illustration"} className="mt-4 max-h-72 w-full rounded-xl object-contain" /> : null}
     {question.audio ? <div className="mt-4"><p className="mb-2 text-sm font-semibold text-[#765F55]">{question.audioLabel || "Question audio"}</p><audio controls preload="none" src={question.audio} aria-label={question.audioLabel || "Question audio"} className="w-full">Your browser does not support audio.</audio></div> : null}
     <p className="mt-4 font-bold" aria-label={`Question ${index + 1}: ${status}`}>Status: {status}</p>
-    <dl className="mt-3 space-y-2 text-sm leading-relaxed">
-      <div><dt className="font-semibold text-[#765F55]">Your answer</dt><dd className="break-words">{selected ?? "No answer submitted"}</dd></div>
-      <div><dt className="font-semibold text-[#765F55]">Correct answer</dt><dd className="break-words">{correct ?? "Unavailable"}</dd></div>
-    </dl>
+    {selectedIndex == null ? <p className="mt-2 text-sm text-[#765F55]">No answer submitted.</p> : null}
+    <ol className="mt-4 grid gap-3 sm:grid-cols-2" aria-label={`Saved answer options for question ${index + 1}`}>
+      {(question.options || []).map((option, optionIndex) => {
+        const isSelected = selectedIndex === optionIndex
+        const isCorrect = question.correctAnswer === optionIndex
+        const label = isSelected && isCorrect ? "Your answer · Correct" : isSelected ? "Your answer · Incorrect" : isCorrect ? "Correct answer" : ""
+        return <li key={optionIndex} className={`flex min-h-14 items-start gap-3 rounded-xl border-2 px-4 py-4 text-sm font-semibold leading-relaxed shadow-sm ${isSelected && !isCorrect ? "border-[#B5443C] bg-[#FFF0EE]" : isCorrect ? "border-[#2F7A49] bg-[#E9F4EA]" : "border-[#2D2E30]/10 bg-white"}`}>
+          <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${isSelected ? "bg-[#E58C1A] text-white" : "bg-[#F0E7DC] text-[#765F55]"}`}>{String.fromCharCode(65 + optionIndex)}</span>
+          <span className="min-w-0 flex-1 break-words">{option}{label ? <span className="mt-1 flex items-center gap-1.5 text-xs font-bold">{isSelected && !isCorrect ? <XCircle className="h-4 w-4" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}{label}</span> : null}</span>
+        </li>
+      })}
+    </ol>
     {question.explanation ? <p className="mt-4 rounded-xl bg-[#FFF9EA] p-4 text-sm leading-relaxed"><span className="font-bold">Explanation: </span>{question.explanation}</p> : null}
   </li>
 }
@@ -46,19 +54,15 @@ function GeneralPracticeResult({ result, quizId }) {
   }
 
   return <>
-    <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#A94F00]">General Practice result</p>
-    <h1 className="mt-3 text-3xl font-bold">Submission saved</h1>
-    <h2 className="mt-3 break-words text-xl font-semibold">{result.title || "Practice quiz"}</h2>
+    <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-accent">Result</p>
+    <h1 className="mt-3 break-words text-3xl font-bold">{result.title || "Practice quiz"}</h1>
     {result.attemptNumber ? <p className="mt-2 text-sm text-[#765F55]">Attempt {result.attemptNumber}</p> : null}
     <p role="status" className="mt-5 text-3xl font-bold text-[#A94F00]" aria-label={`Score: ${result.score} out of ${result.total}`}>{result.score} / {result.total}</p>
     {Number.isFinite(result.percentage) ? <p className="mt-1 text-sm text-[#765F55]">{Math.round(result.percentage)}% correct</p> : null}
     {Number.isInteger(result.correctCount) ? <p className="mt-2 text-sm text-[#765F55]">{result.correctCount} correct out of {result.total} questions</p> : null}
     {result.completedAt && !Number.isNaN(Date.parse(result.completedAt)) ? <p className="mt-2 text-sm text-[#765F55]">Completed {new Date(result.completedAt).toLocaleString()}</p> : null}
-    <p className="mt-3 break-all text-xs text-[#765F55]">Attempt reference: {result.attemptId}</p>
-    <div className="mt-6 flex flex-wrap gap-3">
-      {review.length > 0 ? <a href="#answer-review" className="inline-flex min-h-11 items-center rounded-xl bg-[#2D2E30] px-5 py-2.5 text-sm font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]">Review answers</a> : null}
-      <button type="button" onClick={tryAgain} disabled={starting} className="min-h-11 rounded-xl border border-[#E58C1A] bg-[#FFF9EA] px-5 py-2.5 text-sm font-bold disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]">{starting ? "Opening quiz..." : "Try Again"}</button>
-      <Link to={`/app/practice/general/${encodeURIComponent(quizId)}/history`} className="inline-flex min-h-11 items-center rounded-xl border border-[#2D2E30]/20 px-5 py-2.5 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]">Attempt history</Link>
+    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+      <button type="button" onClick={tryAgain} disabled={starting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><RotateCcw className="h-4 w-4" aria-hidden="true" />{starting ? "Opening quiz..." : "Try Again"}</button>
     </div>
     {startError ? <p role="alert" className="mt-4 text-sm font-semibold text-[#A84646]">{startError}</p> : null}
     {review.length > 0 ? <section id="answer-review" className="mt-8 scroll-mt-6 border-t border-[#2D2E30]/10 pt-7" aria-labelledby="answer-review-title">

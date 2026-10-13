@@ -1,5 +1,5 @@
 import { createElement, useState } from "react"
-import { Bell, BookOpen, ChevronLeft, ChevronRight, CircleUserRound, ClipboardCheck, GraduationCap, Headphones, LayoutDashboard, LogOut, MessageCircleHeart, MoreHorizontal, ReceiptText } from "lucide-react"
+import { Bell, BookOpen, BookOpenText, ChevronDown, ChevronLeft, ChevronRight, CircleUserRound, ClipboardCheck, GalleryVerticalEnd, GraduationCap, Headphones, House, Languages, LayoutDashboard, ListChecks, LogOut, MessageCircleHeart, MoreHorizontal, ReceiptText } from "lucide-react"
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import { useNotification } from "../contexts/NotificationContext"
@@ -30,11 +30,11 @@ const mobileNavigation = [
 ]
 
 const practiceNavigation = [
-  { label: "Overview", to: "/app/practice", end: true },
-  { label: "Consonants", to: "/app/practice/thai-consonants" },
-  { label: "Vowels", to: "/app/practice/thai-vowels" },
-  { label: "Flashcards", to: "/app/practice/flashcards" },
-  { label: "General Practice", to: "/app/practice/general" },
+  { label: "Overview", to: "/app/practice", icon: House, end: true },
+  { label: "Consonants", to: "/app/practice/thai-consonants", icon: Languages },
+  { label: "Vowels", to: "/app/practice/thai-vowels", icon: BookOpenText },
+  { label: "Flashcards", to: "/app/practice/flashcards", icon: GalleryVerticalEnd },
+  { label: "General Practice", to: "/app/practice/general", icon: ListChecks },
 ]
 
 function StudentLayout() {
@@ -43,10 +43,12 @@ function StudentLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
+  const [practiceMenu, setPracticeMenu] = useState(null)
   const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false)
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
   const profileImage = user?.avatar || ""
   const isPracticeArea = location.pathname === "/app/practice" || location.pathname.startsWith("/app/practice/")
+  const isPracticeMenuOpen = practiceMenu?.path === location.pathname ? practiceMenu.open : isPracticeArea
 
   const confirmLogout = () => {
     setIsMobileProfileOpen(false)
@@ -82,7 +84,15 @@ function StudentLayout() {
 
         <nav className="hidden flex-1 lg:mt-6 lg:block" aria-label="Student navigation">
           <div className="space-y-1">
-            {navigation.map(({ label, to, icon, end }) => (
+            {navigation.map(({ label, to, icon, end }) => label === "Practice" ? (
+              <div key={to}>
+                <div className={`flex items-center rounded-xl ${isPracticeArea ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#765F55] hover:bg-[#FFF1D0]"}`}>
+                  <NavLink to={to} title={!isSidebarExpanded ? label : ""} className={`flex min-h-10 flex-1 items-center rounded-xl py-2.5 text-[13px] font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] ${isSidebarExpanded ? "gap-2.5 px-3" : "justify-center px-0"}`}><ClipboardCheck className="h-4 w-4" aria-hidden="true" />{isSidebarExpanded ? <span>Practice</span> : null}</NavLink>
+                  {isSidebarExpanded ? <button type="button" onClick={() => setPracticeMenu({ path: location.pathname, open: !isPracticeMenuOpen })} aria-label="Toggle Practice submenu" aria-controls="practice-sidebar-submenu" aria-expanded={isPracticeMenuOpen} className="mr-1 flex h-9 w-9 items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ChevronDown className={`h-4 w-4 transition-transform ${isPracticeMenuOpen ? "rotate-180" : ""}`} aria-hidden="true" /></button> : null}
+                </div>
+                {isSidebarExpanded && isPracticeMenuOpen ? <div id="practice-sidebar-submenu" className="ml-4 mt-1 space-y-1 border-l border-[#E58C1A]/25 pl-3" aria-label="Practice activities">{practiceNavigation.map(({ label: itemLabel, to: itemTo, end: itemEnd, icon: itemIcon }) => <NavLink key={itemTo} to={itemTo} end={itemEnd} className={({ isActive }) => `flex min-h-10 items-center gap-2 rounded-lg px-2 py-2 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] ${isActive ? "bg-[#FFF1D0] text-[#8C4500]" : "text-[#765F55] hover:bg-[#FFF9EA] hover:text-[#A94F00]"}`}>{createElement(itemIcon, { className: "h-4 w-4 shrink-0", "aria-hidden": true })}<span>{itemLabel}</span></NavLink>)}</div> : null}
+              </div>
+            ) : (
               <NavLink key={to} to={to} end={end} title={!isSidebarExpanded ? label : ""} className={({ isActive }) => `relative flex items-center rounded-xl py-2.5 text-[13px] font-bold transition ${isSidebarExpanded ? "gap-2.5 px-3" : "justify-center px-0"} ${isActive ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/10" : "text-[#765F55] hover:bg-[#FFF1D0] hover:text-[#9A5816]"}`}>
                 {createElement(icon, { className: "h-4 w-4", "aria-hidden": true })}
                 {isSidebarExpanded ? <span className="truncate">{label}</span> : null}
@@ -102,7 +112,6 @@ function StudentLayout() {
       </aside>
 
       <main className="min-w-0 flex-1 pb-16 lg:pb-0">
-        {isPracticeArea ? <div className="border-b border-[#2D2E30]/10 bg-[#FFFDF8] px-3 py-3 sm:px-6 lg:px-8"><nav className="mx-auto grid max-w-4xl grid-cols-3 gap-1 rounded-2xl border border-[#E58C1A]/15 bg-[#FFF9EA] p-1.5 shadow-[0_10px_25px_-22px_rgba(80,48,19,0.4)] sm:grid-cols-5" aria-label="Practice activities">{practiceNavigation.map(({ label, to, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `flex min-h-11 min-w-0 items-center justify-center rounded-xl px-1.5 py-2 text-center text-[11px] font-bold leading-tight transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:px-2 sm:text-sm ${isActive ? "bg-[#2D2E30] text-white shadow-md shadow-[#2D2E30]/15" : "text-[#765F55] hover:bg-white hover:text-[#C97112]"}`}><span className="block break-words">{label}</span></NavLink>)}</nav></div> : null}
         <Outlet />
       </main>
 

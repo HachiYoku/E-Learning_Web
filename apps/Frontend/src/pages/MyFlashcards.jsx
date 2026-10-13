@@ -50,7 +50,7 @@ function MyFlashcards() {
     catch (requestError) { setDeleteTarget((state) => ({ ...state, error: setMessage(requestError.message) })); } finally { setPending(false); }
   };
 
-  return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
+  return <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
     <Link to="/app/practice/flashcards" className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1CE] hover:text-[#C97112]"><ArrowLeft size={16} />Back to Flashcards</Link>
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-[#C97112]">Practice</p><h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">My Flashcards</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#765F55] sm:text-base">Create and practice your own flashcards.</p></div><button type="button" onClick={() => setDeckModal({ deck: null, error: "" })} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A]"><Plus size={18} />Create a Set</button></header>
     <ReviewStatus status={reviewStatus} retry={loadReviewStatus} />

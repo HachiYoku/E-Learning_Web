@@ -32,5 +32,7 @@ describe("public Flashcards", () => {
     fetchFlashcards.mockResolvedValue([]);
     render(<MemoryRouter initialEntries={["/app/practice/flashcards/public"]}><Flashcards /></MemoryRouter>);
     expect(screen.getByRole("link", { name: /back to flashcards/i }).getAttribute("href")).toBe("/app/practice/flashcards");
+    expect(screen.queryByText("Public navigation")).toBeNull();
+    expect(screen.queryByText("Public footer")).toBeNull();
   });
 });

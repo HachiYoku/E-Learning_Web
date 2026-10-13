@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { BookOpenCheck, ChevronRight, Layers3 } from "lucide-react";
+import { ArrowLeft, BookOpenCheck, ChevronRight, Layers3 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const choices = [
@@ -8,8 +8,9 @@ const choices = [
 ];
 
 function StudentFlashcardsHub() {
-  return <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
-    <p className="text-xs font-bold uppercase tracking-[.22em] text-[#C97112]">Practice</p>
+  return <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
+    <Link to="/app/practice" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to Practice Overview</Link>
+    <p className="mt-3 text-xs font-bold uppercase tracking-[.22em] text-[#C97112]">Practice</p>
     <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Flashcards</h1>
     <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#765F55] sm:text-base">Choose a ready-made vocabulary set or organize your own private flashcard sets.</p>
     <div className="mt-8 grid gap-4 md:grid-cols-2 md:gap-5">

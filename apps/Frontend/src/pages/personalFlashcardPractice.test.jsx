@@ -98,7 +98,7 @@ describe("personal flashcard practice", () => {
     expect(await screen.findByText("Flashcard set not found.")).toBeTruthy();
   });
 
-  it("retries a private API failure and returns to My Flashcards", async () => {
+  it("retries a private API failure and returns to its deck details", async () => {
     const user = userEvent.setup();
     personalService.fetchPersonalFlashcards.mockRejectedValueOnce(new Error("Private cards unavailable"));
     renderPractice();
@@ -107,6 +107,6 @@ describe("personal flashcard practice", () => {
     await user.click(screen.getByRole("button", { name: /try again/i }));
     expect(await screen.findByText("Card 1 of 2")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /back to flashcards/i }));
-    expect(await screen.findByText("My Flashcards")).toBeTruthy();
+    expect(await screen.findByText("Deck manager")).toBeTruthy();
   });
 });
