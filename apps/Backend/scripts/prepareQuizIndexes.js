@@ -18,6 +18,8 @@ const INDEXES = Object.freeze({
     index({ course: 1, contextType: 1 }, { unique: true, partialFilterExpression: { contextType: "course_final", course: { $type: "objectId" } } }),
     index({ homeworkSet: 1, contextType: 1 }, { unique: true, partialFilterExpression: { contextType: "homework_final", homeworkSet: { $type: "objectId" } } }),
     index({ homeworkSet: 1, sortOrder: 1 }, { unique: true, partialFilterExpression: { contextType: "homework_lesson", sortOrder: { $type: "number" } } }),
+    index({ quizSet: 1, sortOrder: 1, _id: 1 }, { name: "standalone_quiz_set_order",
+      partialFilterExpression: { contextType: "standalone", quizSet: { $type: "objectId" } } }),
   ],
   quizattempts: [
     index({ quiz: 1 }), index({ user: 1 }), index({ quiz: 1, user: 1, createdAt: -1 }),

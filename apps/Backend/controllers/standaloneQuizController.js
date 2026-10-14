@@ -1,10 +1,11 @@
 const Quiz = require("../models/quizModel");
 const mongoose = require("mongoose");
+const QuizSet = require("../models/quizSetModel");
 const { startOrResumeStandaloneQuizSession } = require("../services/standaloneQuizSessionService");
 const { submitStandaloneQuiz, getStandaloneAttemptResult, getStandaloneAttemptHistoryPage } =
   require("../services/standaloneQuizSubmissionService");
 const {
-  StandaloneQuizError, createDraft, saveDraft, publishDraft, changeAvailability,
+  StandaloneQuizError, saveDraft, publishDraft, changeAvailability,
   deleteDraftOrQuiz, loadStandalone, publicSummary, retryMediaReconciliation,
 } = require("../services/standaloneQuizRevisions");
 
@@ -31,7 +32,11 @@ function adminProjection(quiz) {
 }
 
 const create = async (req, res) => {
-  try { return res.status(201).json(adminProjection(await createDraft(req.body?.draft))); }
+  try {
+    // New drafts must use the Set-scoped endpoint. Retain the underlying
+    // revision service for pre-existing standalone records and isolated tests.
+    return res.status(400).json({ message: "Create a Quiz Set draft through its Set endpoint.", code: "quiz_set_required" });
+  }
   catch (error) { return respondError(res, error); }
 };
 
@@ -75,7 +80,9 @@ const remove = async (req, res) => {
 const listPublished = async (req, res) => {
   try {
     const access = req.user ? { $in: ["public", "students"] } : "public";
-    const quizzes = await Quiz.find({ contextType: "standalone", status: "published", publishedRevision: { $type: "number" }, standaloneAccess: access })
+    const activeSetIds = await QuizSet.distinct("_id", { status: "active" });
+    const quizzes = await Quiz.find({ contextType: "standalone", status: "published", publishedRevision: { $type: "number" },
+      standaloneAccess: access, $or: [{ quizSet: null }, { quizSet: { $in: activeSetIds } }] })
       .select("title description category difficulty standaloneAccess publishedRevision")
       .sort({ createdAt: -1 }).limit(100).lean();
     return res.json({ quizzes: quizzes.map(publicSummary) });
@@ -88,8 +95,11 @@ const getPublished = async (req, res) => {
     const access = req.user ? { $in: ["public", "students"] } : "public";
     const quiz = await Quiz.findOne({ _id: req.params.quizId, contextType: "standalone", status: "published",
       publishedRevision: { $type: "number" }, standaloneAccess: access })
-      .select("title description category difficulty standaloneAccess publishedRevision").lean();
+      .select("title description category difficulty standaloneAccess publishedRevision quizSet").lean();
     if (!quiz) return res.status(404).json({ message: "Quiz is unavailable." });
+    if (quiz.quizSet && !await QuizSet.exists({ _id: quiz.quizSet, status: "active" })) {
+      return res.status(404).json({ message: "Quiz is unavailable." });
+    }
     return res.json(publicSummary(quiz));
   } catch (error) { return respondError(res, error); }
 };

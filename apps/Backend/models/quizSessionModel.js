@@ -7,6 +7,7 @@ const quizSessionSchema = new mongoose.Schema({
   quiz: { type: mongoose.Schema.Types.ObjectId, ref: "Quiz", required: true, index: true, immutable: true },
   revision: { type: Number, required: true, min: 1, immutable: true },
   contextType: { type: String, required: true, immutable: true },
+  setEpoch: { type: Number, min: 0, default: undefined, immutable: true },
   snapshot: { type: mongoose.Schema.Types.Mixed, required: true, immutable: true },
   startedAt: { type: Date, required: true, default: Date.now, immutable: true },
   expiresAt: { type: Date, required: true, immutable: true },

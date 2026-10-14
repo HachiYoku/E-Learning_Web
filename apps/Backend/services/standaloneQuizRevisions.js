@@ -84,14 +84,10 @@ async function loadStandalone(quizId, session) {
   return quiz;
 }
 
-async function createDraft(input) {
-  const fields = draftFields(input);
-  const quizId = new mongoose.Types.ObjectId();
-  const shell = { _id: quizId, title: String(fields.title || ""), status: "draft", publishedRevision: null, revision: 1 };
-  const normalized = await validateDraft(shell, { ...fields, version: 1, basePublishedRevision: null });
-  const quiz = await Quiz.create({ ...shell, contextType: "standalone", questions: [], draft: normalized });
-  await quizMediaLifecycle.registerQuizMedia(quiz);
-  return quiz;
+// All ordinary standalone creation passes through the Set transaction and its
+// membership/lifecycle fence. Existing unassigned records remain readable.
+async function createDraft(input, { quizSet } = {}) {
+  return require("./standaloneQuizSets").createSetDraft(quizSet, input);
 }
 
 // A Quiz write is already committed when this runs. Keep the operation token
@@ -257,5 +253,6 @@ function publicSummary(quiz) {
     difficulty: quiz.difficulty, standaloneAccess: quiz.standaloneAccess, revision: quiz.publishedRevision };
 }
 
-module.exports = { StandaloneQuizError, createDraft, saveDraft, publishDraft, changeAvailability,
+module.exports = { StandaloneQuizError, draftFields, validateDraft, createDraft,
+  saveDraft, publishDraft, changeAvailability,
   deleteDraftOrQuiz, loadStandalone, publicSummary, retryMediaReconciliation };

@@ -365,7 +365,7 @@ test("isolated Apply creates exact indexes, removes only confirmed legacy indexe
   await db.collection("unrelated").insertOne({ marker: "preserve" });
   const result = await apply(db, db.databaseName);
   assert.equal(result.status, "APPLY COMPLETE");
-  assert.equal(result.collections.quizzes.indexes.length, 11);
+  assert.equal(result.collections.quizzes.indexes.length, INDEXES.quizzes.length + 1); // includes _id_
   assert.ok(result.operations.some(({ action, index: name }) => action === "dropConfirmedLegacyIndex" && name === "lesson_1_title_1"));
   for (const [name, expectedIndexes] of Object.entries(INDEXES)) {
     const actual = await db.collection(name).listIndexes().toArray();

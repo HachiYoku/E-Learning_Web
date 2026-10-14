@@ -49,7 +49,8 @@ before(async () => {
   QuizMedia = require("../models/quizMediaModel");
   QuizAttempt = require("../models/quizAttemptModel");
   QuizSession = require("../models/quizSessionModel");
-  revisions = require("../services/standaloneQuizRevisions");
+  revisions = { ...require("../services/standaloneQuizRevisions"),
+    createDraft: require("./helpers/legacyStandaloneDraft") };
   controller = require("../controllers/standaloneQuizController");
   oldController = require("../controllers/quizController");
   ({ buildQuizSubmissionSnapshot } = require("../services/quizSubmissionSnapshot"));

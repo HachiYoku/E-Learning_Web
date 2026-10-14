@@ -71,7 +71,8 @@ before(async () => {
   QuizSession = require("../models/quizSessionModel");
   QuizAttempt = require("../models/quizAttemptModel");
   QuizMedia = require("../models/quizMediaModel");
-  revisions = require("../services/standaloneQuizRevisions");
+  revisions = { ...require("../services/standaloneQuizRevisions"),
+    createDraft: require("./helpers/legacyStandaloneDraft") };
   ({ startOrResumeStandaloneQuizSession: start } = require("../services/standaloneQuizSessionService"));
   ({ submitStandaloneQuiz: submit, getStandaloneAttemptResult: result,
     getStandaloneAttemptHistory: history } = require("../services/standaloneQuizSubmissionService"));

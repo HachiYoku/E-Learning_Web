@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const Quiz = require("../models/quizModel");
 const QuizSession = require("../models/quizSessionModel");
 const QuizAttempt = require("../models/quizAttemptModel");
+const QuizSet = require("../models/quizSetModel");
+const { fenceActiveSetForQuiz } = require("./standaloneQuizSets");
 const { unavailableQuizError } = require("./quizAccessPolicy");
 const { buildQuizSubmissionSnapshot } = require("./quizSubmissionSnapshot");
 const { runStandaloneTransaction, writeQuizFence, StandaloneTransactionConflict } = require("./standaloneQuizTransactions");
@@ -126,6 +128,7 @@ async function submitStandaloneQuiz({ quizId, sessionId, user, submittedRevision
 
     const existing = await completedForSession(sessionId, userId, quizId, session);
     if (existing) return existing;
+    const set = await fenceActiveSetForQuiz(fenced, session);
     if (fenced.status !== "published" || !Number.isSafeInteger(fenced.publishedRevision)
       || fenced.publishedRevision < 1 || fenced.revision !== fenced.publishedRevision) throw unavailableQuizError();
 
@@ -133,6 +136,7 @@ async function submitStandaloneQuiz({ quizId, sessionId, user, submittedRevision
     const quizSession = await QuizSession.findOne({ _id: sessionId, quiz: fenced._id, user: userId,
       contextType: "standalone", activeSlot: true, invalidatedAt: null, expiresAt: { $gt: now } }).session(session);
     if (!quizSession) throw invalidSession();
+    if (set && quizSession.setEpoch !== set.runtimeEpoch) throw invalidSession();
     if (!validSnapshot(quizSession) || !Number.isSafeInteger(submittedRevision)
       || submittedRevision !== quizSession.revision) throw invalidSession();
 
@@ -212,9 +216,12 @@ async function getStandaloneAttemptHistoryPage({ quizId, user, limit, before }) 
   const ownership = { quiz: quizId, user: userId, "submissionSnapshot.contextType": "standalone" };
   const owned = await QuizAttempt.exists(ownership);
   if (!owned) {
-    const available = await Quiz.exists({ _id: quizId, contextType: "standalone", status: "published",
-      publishedRevision: { $type: "number" }, standaloneAccess: { $in: ["public", "students"] } });
-    if (!available) throw unavailableQuizError();
+    const available = await Quiz.findOne({ _id: quizId, contextType: "standalone", status: "published",
+      publishedRevision: { $type: "number" }, standaloneAccess: { $in: ["public", "students"] } })
+      .select("quizSet").lean();
+    if (!available || (available.quizSet && !await QuizSet.exists({ _id: available.quizSet, status: "active" }))) {
+      throw unavailableQuizError();
+    }
   }
 
   // The existing unique { quiz, user, attemptNumber } index supports a reverse

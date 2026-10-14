@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const Quiz = require("../models/quizModel");
 const QuizSession = require("../models/quizSessionModel");
+const QuizSet = require("../models/quizSetModel");
+const { fenceActiveSetForQuiz } = require("./standaloneQuizSets");
 const { unavailableQuizError } = require("./quizAccessPolicy");
 const { SESSION_DURATION_MS, sessionSnapshot } = require("./quizSessionService");
 const { runStandaloneTransaction, writeQuizFence, StandaloneTransactionConflict } = require("./standaloneQuizTransactions");
@@ -40,26 +42,33 @@ async function startOrResumeStandaloneQuizSession({ quizId, user }) {
     if (!result) return undefined;
     const quiz = await Quiz.findOne({ _id: quizId, contextType: "standalone", status: "published" }).lean();
     if (!publishedQuizIsUsable(quiz)) return undefined;
+    const set = quiz.quizSet ? await QuizSet.findOne({ _id: quiz.quizSet, status: "active" }).lean() : null;
+    if (quiz.quizSet && !set) return undefined;
     const now = new Date();
     const persisted = await QuizSession.findOne({ _id: result.sessionId, quiz: quizId, user: userId,
-      contextType: "standalone", activeSlot: true, invalidatedAt: null, expiresAt: { $gt: now } });
+      contextType: "standalone", activeSlot: true, invalidatedAt: null, expiresAt: { $gt: now },
+      ...(set ? { setEpoch: set.runtimeEpoch } : {}) });
     return persisted ? studentSession(persisted, result.created) : undefined;
   };
   return runStandaloneTransaction(async (session) => {
     const quiz = await Quiz.findOne({ _id: quizId, contextType: "standalone" }).session(session);
     if (!publishedQuizIsUsable(quiz)) throw unavailableQuizError();
+    const set = await fenceActiveSetForQuiz(quiz, session);
     const fenced = await writeQuizFence(quiz, session);
     if (!fenced) throw new StandaloneTransactionConflict();
     const now = new Date();
     const ownership = { quiz: quiz._id, user: userId, contextType: "standalone", activeSlot: true };
     await QuizSession.updateMany({ ...ownership,
-      $or: [{ expiresAt: { $lte: now } }, { invalidatedAt: { $ne: null } }] },
+      $or: [{ expiresAt: { $lte: now } }, { invalidatedAt: { $ne: null } },
+        ...(set ? [{ setEpoch: { $ne: set.runtimeEpoch } }] : [])] },
     { $set: { activeSlot: false } }, { session });
-    const existing = await QuizSession.findOne({ ...ownership, invalidatedAt: null, expiresAt: { $gt: now } }).session(session);
+    const existing = await QuizSession.findOne({ ...ownership, invalidatedAt: null, expiresAt: { $gt: now },
+      ...(set ? { setEpoch: set.runtimeEpoch } : {}) }).session(session);
     if (existing) return studentSession(existing, false);
     const snapshot = sessionSnapshot(fenced);
     const [created] = await QuizSession.create([{
       user: userId, quiz: fenced._id, contextType: "standalone", activeSlot: true,
+      ...(set ? { setEpoch: set.runtimeEpoch } : {}),
       revision: fenced.publishedRevision, snapshot, startedAt: now,
       expiresAt: new Date(now.getTime() + SESSION_DURATION_MS),
     }], { session });

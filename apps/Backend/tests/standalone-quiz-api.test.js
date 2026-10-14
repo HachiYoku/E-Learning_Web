@@ -14,7 +14,8 @@ const QuizSession = require("../models/quizSessionModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const QuizRateWindow = require("../models/quizRateWindowModel");
 const User = require("../models/userModel");
-const revisions = require("../services/standaloneQuizRevisions");
+const revisions = { ...require("../services/standaloneQuizRevisions"),
+  createDraft: require("./helpers/legacyStandaloneDraft") };
 
 const dbName = "quiz_standalone_api_test";
 const secret = "isolated-standalone-api-test-secret";

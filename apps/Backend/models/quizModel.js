@@ -65,6 +65,7 @@ const quizSchema = new mongoose.Schema(
     course: { type: mongoose.Schema.Types.ObjectId, ref: "Course", default: null, index: true },
     lesson: { type: mongoose.Schema.Types.ObjectId, ref: "Lesson", default: null, index: true },
     homeworkSet: { type: mongoose.Schema.Types.ObjectId, ref: "HomeworkSet", default: null, index: true },
+    quizSet: { type: mongoose.Schema.Types.ObjectId, ref: "QuizSet", default: null, immutable: true },
     contextType: { type: String, enum: QUIZ_CONTEXTS, default: undefined, index: true },
     status: { type: String, enum: QUIZ_STATUSES, default: "draft", index: true },
     standaloneAccess: { type: String, enum: STANDALONE_ACCESS, default: null },
@@ -110,6 +111,7 @@ function validateQuizContext(quiz) {
   const hasCourse = hasValue(quiz.course);
   const hasLesson = hasValue(quiz.lesson);
   const hasHomeworkSet = hasValue(quiz.homeworkSet);
+  const hasQuizSet = hasValue(quiz.quizSet);
 
   if (context === "course_lesson") {
     if (!hasCourse) invalidateContext(quiz, "course", "A course lesson quiz requires a course.");
@@ -137,6 +139,13 @@ function validateQuizContext(quiz) {
     if (hasHomeworkSet) invalidateContext(quiz, "homeworkSet", "A standalone quiz cannot belong to a homework set.");
     if (!quiz.standaloneAccess) quiz.standaloneAccess = "students";
     quiz.quizType = "lesson";
+  }
+
+  if (context !== "standalone" && hasQuizSet) {
+    invalidateContext(quiz, "quizSet", "Only standalone quizzes can belong to a Quiz Set.");
+  }
+  if (!quiz.isNew && quiz.isModified("quizSet")) {
+    invalidateContext(quiz, "quizSet", "Quiz Set assignment cannot be changed.");
   }
 
   if (context !== "standalone" && quiz.standaloneAccess) {
@@ -225,6 +234,8 @@ quizSchema.index(
   { homeworkSet: 1, sortOrder: 1 },
   { unique: true, partialFilterExpression: { contextType: "homework_lesson", sortOrder: { $type: "number" } } }
 );
+quizSchema.index({ quizSet: 1, sortOrder: 1, _id: 1 },
+  { name: "standalone_quiz_set_order", partialFilterExpression: { contextType: "standalone", quizSet: { $type: "objectId" } } });
 
 quizSchema.statics.validateContext = validateQuizContext;
 quizSchema.statics.scoringFieldsChanged = scoringFieldsChanged;
