@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }))
+vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }))
 import { apiClient } from '../api/client'
-import { archiveGeneralPracticeQuiz, createGeneralPracticeDraft, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, fetchGeneralPracticeQuizzes, fetchGeneralPracticeSet, fetchGeneralPracticeSets, isSafeQuizSetCoverImage, publishGeneralPracticeDraft, retryGeneralPracticeMedia, updateGeneralPracticeDraft } from './generalPracticeAdminService'
+import { archiveGeneralPracticeQuiz, createGeneralPracticeDraft, createGeneralPracticeSet, deleteGeneralPracticeSet, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, fetchGeneralPracticeQuizzes, fetchGeneralPracticeSet, fetchGeneralPracticeSets, isSafeQuizSetCoverImage, publishGeneralPracticeDraft, retryGeneralPracticeMedia, transitionGeneralPracticeSet, updateGeneralPracticeDraft, updateGeneralPracticeSet } from './generalPracticeAdminService'
 
 const set = { id: 'set-1', name: 'Thai basics', status: 'active', version: 2, displayOrder: 1,
   description: '', coverImage: '', difficulty: null }
@@ -25,6 +25,23 @@ it('reads and validates Admin Quiz Set list and details responses', async () => 
     ['/quizzes/admin/standalone/sets'],
     ['/quizzes/admin/standalone/sets/set-1'],
   ])
+})
+
+it('uses the versioned Backend Set mutation contracts and verifies responses', async () => {
+  const disabled = { ...set, status: 'disabled', version: 1 }
+  apiClient.post.mockResolvedValueOnce({ set: disabled }).mockResolvedValueOnce({ set: { ...disabled, status: 'active', version: 2 } })
+  apiClient.put.mockResolvedValueOnce({ set: { ...disabled, version: 2 } })
+  apiClient.delete.mockResolvedValueOnce({ deleted: true })
+  expect(await createGeneralPracticeSet({ name: 'Thai basics' })).toEqual(disabled)
+  expect(await updateGeneralPracticeSet('set-1', 1, { name: 'Revised' })).toMatchObject({ version: 2 })
+  expect(await transitionGeneralPracticeSet('set-1', 1, 'activate')).toMatchObject({ status: 'active', version: 2 })
+  expect(await deleteGeneralPracticeSet('set-1', 2)).toEqual({ deleted: true })
+  expect(apiClient.post.mock.calls).toEqual([
+    ['/quizzes/admin/standalone/sets', { name: 'Thai basics' }],
+    ['/quizzes/admin/standalone/sets/set-1/activate', { expectedVersion: 1 }],
+  ])
+  expect(apiClient.put).toHaveBeenCalledWith('/quizzes/admin/standalone/sets/set-1', { expectedVersion: 1, set: { name: 'Revised' } })
+  expect(apiClient.delete).toHaveBeenCalledWith('/quizzes/admin/standalone/sets/set-1', { expectedVersion: 2 })
 })
 
 it('rejects malformed Set list and details instead of rendering misleading content', async () => {

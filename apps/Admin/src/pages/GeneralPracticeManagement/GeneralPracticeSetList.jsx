@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, BookOpen } from 'lucide-react'
+import { ArrowRight, BookOpen, Plus } from 'lucide-react'
 import { fetchGeneralPracticeSets, isSafeQuizSetCoverImage } from '../../services/generalPracticeAdminService'
 
 const statusStyles = {
@@ -32,7 +32,8 @@ function GeneralPracticeSetList() {
       <header className="mb-7">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Assessment library</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">General Practice Quiz Sets</h1>
-        <p className="mt-2 text-[#765F55]">View Sets and their quizzes. Set management and new quiz creation are coming in a later step.</p>
+        <p className="mt-2 text-[#765F55]">Manage Quiz Sets and view their quizzes. Set-scoped quiz creation is coming in a later step.</p>
+        <Link to="/general-practice/sets/new" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#E58C1A] focus:outline-none focus:ring-2 focus:ring-[#E58C1A] focus:ring-offset-2"><Plus size={18} aria-hidden="true" /> Create Quiz Set</Link>
       </header>
 
       {loading ? <p role="status" className="rounded-2xl border border-[#2D2E30]/10 bg-white p-8 text-[#765F55]">Loading Quiz Sets...</p>
@@ -40,7 +41,7 @@ function GeneralPracticeSetList() {
           : sets.length === 0 ? <section className="rounded-2xl border border-dashed border-[#E58C1A]/35 bg-[#FFF9EA] p-8 text-center">
             <BookOpen size={32} aria-hidden="true" className="mx-auto text-[#C97112]" />
             <h2 className="mt-3 text-xl font-bold text-[#2D2E30]">No Quiz Sets yet</h2>
-            <p className="mt-2 text-[#765F55]">Quiz Set creation is not available in Admin yet.</p>
+            <p className="mt-2 text-[#765F55]">Create a Set to organize General Practice quizzes.</p>
           </section>
             : <section aria-label="General Practice Quiz Sets" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {sets.map((set) => <article key={set.id} className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]">

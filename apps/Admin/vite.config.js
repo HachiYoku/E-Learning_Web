@@ -24,6 +24,7 @@ export default defineConfig({
       'src/pages/QuizManagement/QuizEditor.test.jsx',
       'src/pages/GeneralPracticeManagement/GeneralPractice.test.jsx',
       'src/pages/GeneralPracticeManagement/GeneralPracticeSets.test.jsx',
+      'src/pages/GeneralPracticeManagement/GeneralPracticeSetManagement.test.jsx',
       'src/pages/GeneralPracticeManagement/GeneralPracticeEditor.test.jsx',
       'src/pages/GeneralPracticeManagement/GeneralPracticeManagementPanel.test.jsx',
       'src/pages/GeneralPracticeManagement/generalPracticeDraft.test.js',

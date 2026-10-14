@@ -7,6 +7,7 @@ import GeneralPracticeSetDetails from './GeneralPracticeSetDetails'
 
 vi.mock('../../services/generalPracticeAdminService', () => ({
   fetchGeneralPracticeSets: vi.fn(), fetchGeneralPracticeSet: vi.fn(), isSafeQuizSetCoverImage: vi.fn(() => false),
+  updateGeneralPracticeSet: vi.fn(), transitionGeneralPracticeSet: vi.fn(), deleteGeneralPracticeSet: vi.fn(),
 }))
 import { fetchGeneralPracticeSets, fetchGeneralPracticeSet } from '../../services/generalPracticeAdminService'
 
@@ -37,7 +38,7 @@ describe('Admin General Practice Quiz Set read-only views', () => {
     fetchGeneralPracticeSet.mockResolvedValue({ set, quizzes: [quiz] })
   })
 
-  it('shows loading, Backend order, and all Set lifecycle statuses without management actions', async () => {
+  it('shows loading, Backend order, and all Set lifecycle statuses', async () => {
     let finish
     fetchGeneralPracticeSets.mockReturnValue(new Promise((resolve) => { finish = resolve }))
     renderPages()
@@ -49,7 +50,7 @@ describe('Admin General Practice Quiz Set read-only views', () => {
     expect(screen.getByText('Archived Set')).toBeTruthy()
     const cards = screen.getAllByRole('article')
     expect(cards.map((card) => card.querySelector('h2').textContent)).toEqual(['Thai basics', 'Disabled Set', 'Archived Set'])
-    expect(screen.queryByRole('button', { name: /activate|disable|archive|create/i })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Create Quiz Set' })).toBeTruthy()
   })
 
   it('handles an empty catalog and absent optional metadata', async () => {
@@ -68,7 +69,8 @@ describe('Admin General Practice Quiz Set read-only views', () => {
     renderPages(`/general-practice/sets/${setId}`)
     expect(await screen.findByRole('heading', { name: 'Quizzes coming soon' })).toBeTruthy()
     expect(screen.getByText('Set: active')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /create|activate|disable|archive/i })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Disable Set' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Delete empty Set' })).toBeNull()
   })
 
   it('distinguishes Set and quiz status, and retains navigation context', async () => {

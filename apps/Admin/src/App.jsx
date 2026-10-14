@@ -33,6 +33,7 @@ import GeneralPracticeDetails from './pages/GeneralPracticeManagement/GeneralPra
 import GeneralPracticeEditor from './pages/GeneralPracticeManagement/GeneralPracticeEditor'
 import GeneralPracticeSetList from './pages/GeneralPracticeManagement/GeneralPracticeSetList'
 import GeneralPracticeSetDetails from './pages/GeneralPracticeManagement/GeneralPracticeSetDetails'
+import GeneralPracticeSetCreate from './pages/GeneralPracticeManagement/GeneralPracticeSetCreate'
 import Flashcards from './pages/FlashcardManagement/Flashcards'
 import PromoCodes from './pages/PromoManagement/PromoCodes'
 import SupportTickets from './pages/SupportManagement/SupportTickets'
@@ -76,6 +77,7 @@ function App() {
             <Route path="/quizzes/:id/edit" element={<QuizEditor />} />
             <Route path="/quizzes/:id/attempts" element={<QuizAttempts />} />
             <Route path="/general-practice" element={<GeneralPracticeSetList />} />
+            <Route path="/general-practice/sets/new" element={<GeneralPracticeSetCreate />} />
             <Route path="/general-practice/sets/:setId" element={<GeneralPracticeSetDetails />} />
             <Route path="/general-practice/quizzes" element={<GeneralPracticeList />} />
             <Route path="/general-practice/new" element={<GeneralPracticeEditor />} />

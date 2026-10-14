@@ -60,6 +60,30 @@ export function fetchGeneralPracticeSet(setId) {
   })
 }
 
+function mutationSet(response) {
+  if (!validSet(response?.set)) throw new Error('The Quiz Set response could not be verified. Reload before trying again.')
+  return response.set
+}
+
+export async function createGeneralPracticeSet(fields) {
+  return mutationSet(await apiClient.post('/quizzes/admin/standalone/sets', fields))
+}
+
+export async function updateGeneralPracticeSet(setId, expectedVersion, fields) {
+  return mutationSet(await apiClient.put(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}`, { expectedVersion, set: fields }))
+}
+
+export async function transitionGeneralPracticeSet(setId, expectedVersion, action) {
+  if (!['activate', 'disable', 'archive', 'restore'].includes(action)) throw new Error('Unsupported Quiz Set action.')
+  return mutationSet(await apiClient.post(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/${action}`, { expectedVersion }))
+}
+
+export async function deleteGeneralPracticeSet(setId, expectedVersion) {
+  const response = await apiClient.delete(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}`, { expectedVersion })
+  if (response?.deleted !== true) throw new Error('The deletion response could not be verified. Check the catalog before trying again.')
+  return response
+}
+
 // Admin projections can contain draft questions and answers. Keep these calls
 // separate from the published, student-facing General Practice service.
 export async function fetchGeneralPracticeQuizzes() {
