@@ -28,6 +28,11 @@ import RequireAdmin from './routes/RequireAdmin'
 import Quizzes from './pages/QuizManagement/Quizzes'
 import QuizEditor from './pages/QuizManagement/QuizEditor'
 import QuizAttempts from './pages/QuizManagement/QuizAttempts'
+import GeneralPracticeList from './pages/GeneralPracticeManagement/GeneralPracticeList'
+import GeneralPracticeDetails from './pages/GeneralPracticeManagement/GeneralPracticeDetails'
+import GeneralPracticeEditor from './pages/GeneralPracticeManagement/GeneralPracticeEditor'
+import GeneralPracticeSetList from './pages/GeneralPracticeManagement/GeneralPracticeSetList'
+import GeneralPracticeSetDetails from './pages/GeneralPracticeManagement/GeneralPracticeSetDetails'
 import Flashcards from './pages/FlashcardManagement/Flashcards'
 import PromoCodes from './pages/PromoManagement/PromoCodes'
 import SupportTickets from './pages/SupportManagement/SupportTickets'
@@ -70,6 +75,12 @@ function App() {
             <Route path="/quizzes/new" element={<QuizEditor />} />
             <Route path="/quizzes/:id/edit" element={<QuizEditor />} />
             <Route path="/quizzes/:id/attempts" element={<QuizAttempts />} />
+            <Route path="/general-practice" element={<GeneralPracticeSetList />} />
+            <Route path="/general-practice/sets/:setId" element={<GeneralPracticeSetDetails />} />
+            <Route path="/general-practice/quizzes" element={<GeneralPracticeList />} />
+            <Route path="/general-practice/new" element={<GeneralPracticeEditor />} />
+            <Route path="/general-practice/:quizId/edit" element={<GeneralPracticeEditor />} />
+            <Route path="/general-practice/:quizId" element={<GeneralPracticeDetails />} />
             <Route path="/flashcards" element={<Flashcards />} />
             <Route path="/promo-codes" element={<PromoCodes />} />
             <Route path="/users" element={<Users />} />

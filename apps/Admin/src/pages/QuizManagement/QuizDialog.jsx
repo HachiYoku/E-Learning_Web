@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
-export default function QuizDialog({ title, message, confirmText, onConfirm, onCancel }) {
+export default function QuizDialog({ title, message, confirmText, onConfirm, onCancel, busy = false }) {
   const dialog = useRef(null);
   const cancel = useRef(onCancel);
   cancel.current = onCancel;
@@ -25,8 +25,8 @@ export default function QuizDialog({ title, message, confirmText, onConfirm, onC
       <h2 id="quiz-confirmation-title" className="bg-[#FFF9EA] p-6 text-xl font-bold text-[#2D2E30]">{title}</h2>
       <p id="quiz-confirmation-description" className="p-6 text-sm leading-6 text-[#765F55]">{message}</p>
       <div className="flex flex-wrap justify-end gap-3 border-t border-[#2D2E30]/10 p-5">
-        <button type="button" onClick={onCancel} className="rounded-xl border border-[#2D2E30]/15 px-5 py-3 font-bold text-[#765F55] focus:ring-4 focus:ring-[#E58C1A]/25">Cancel</button>
-        <button type="button" onClick={onConfirm} className="rounded-xl bg-[#2D2E30] px-5 py-3 font-bold text-white focus:ring-4 focus:ring-[#E58C1A]/25">{confirmText}</button>
+        <button type="button" onClick={onCancel} disabled={busy} className="rounded-xl border border-[#2D2E30]/15 px-5 py-3 font-bold text-[#765F55] focus:ring-4 focus:ring-[#E58C1A]/25 disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
+        <button type="button" onClick={onConfirm} disabled={busy} className="rounded-xl bg-[#2D2E30] px-5 py-3 font-bold text-white focus:ring-4 focus:ring-[#E58C1A]/25 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Processing…' : confirmText}</button>
       </div>
     </section>
   </div>, document.body);
