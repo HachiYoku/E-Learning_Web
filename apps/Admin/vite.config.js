@@ -28,6 +28,7 @@ export default defineConfig({
       'src/pages/GeneralPracticeManagement/GeneralPracticeEditor.test.jsx',
       'src/pages/GeneralPracticeManagement/GeneralPracticeManagementPanel.test.jsx',
       'src/pages/GeneralPracticeManagement/generalPracticeDraft.test.js',
+      'src/pages/GeneralPracticeManagement/generalPracticeCreationRecovery.test.js',
       'src/services/generalPracticeAdminService.test.js',
       'src/components/Sidebar.generalPractice.test.jsx',
       'src/utils/adminReturnDestination.test.js',

@@ -1,14 +1,26 @@
 const mongoose = require("mongoose");
+const { createHash } = require("node:crypto");
 const QuizSet = require("../models/quizSetModel");
 const Quiz = require("../models/quizModel");
+const QuizCreationRequest = require("../models/quizCreationRequestModel");
 const { draftFields, validateDraft } = require("./standaloneQuizRevisions");
-const { runStandaloneTransaction, StandaloneTransactionConflict } = require("./standaloneQuizTransactions");
+const { runStandaloneTransaction, StandaloneTransactionConflict,
+  StandaloneTransactionOutcomeUnknown } = require("./standaloneQuizTransactions");
+const { requireCreationIndex, QuizCreationUnavailable } = require("./standaloneQuizCreationReadiness");
 
 class QuizSetError extends Error {
   constructor(status, message, code) {
     super(message);
     this.status = status;
     this.code = code;
+  }
+}
+
+class QuizCreationOutcomeUnknown extends Error {
+  constructor() {
+    super("Quiz creation may have completed. Check the Quiz Set before retrying.");
+    this.status = 503;
+    this.code = "quiz_creation_outcome_unknown";
   }
 }
 
@@ -133,27 +145,140 @@ async function orderQuiz(setId, quizId, expectedVersion, sortOrder) {
   });
 }
 
-async function createSetDraft(setId, input) {
-  if (!validId(setId)) throw missing();
+function checkedDraftFields(input) {
   const fields = draftFields(input);
   if (!Array.isArray(fields.questions) || fields.questions.length < 1 || fields.questions.length > 10) {
     throw new QuizSetError(400, "Add between 1 and 10 questions.", "invalid_quiz_draft");
   }
   // Phase 1 supports text-only Set drafts; the later media phase owns uploads.
   if (fields.questions.some((q) => q?.image || q?.audio || q?.imagePublicId || q?.audioPublicId)) throw invalid("Set draft media is not available yet.");
-  return runStandaloneTransaction(async (session) => {
-    const set = await QuizSet.findById(setId).session(session);
-    if (!set || set.status === "archived") throw missing();
-    if (!await writeSetFence(set, session)) throw new StandaloneTransactionConflict();
-    const last = await Quiz.findOne({ quizSet: setId, contextType: "standalone" }).sort({ sortOrder: -1, _id: -1 }).session(session);
-    const quizId = new mongoose.Types.ObjectId();
-    const shell = { _id: quizId, title: String(fields.title || ""), status: "draft", publishedRevision: null, revision: 1 };
-    const normalized = await validateDraft(shell, { ...fields, version: 1, basePublishedRevision: null });
-    const [quiz] = await Quiz.create([{ ...shell, contextType: "standalone", quizSet: set._id,
-      sortOrder: (last?.sortOrder || 0) + 1, questions: [], draft: normalized }], { session });
-    return quiz;
-  }, { resolveAmbiguous: async (result) => result && await Quiz.findOne({ _id: result._id,
-    quizSet: setId, contextType: "standalone", status: "draft" }) || undefined });
+  return fields;
+}
+
+async function createSetDraftInSession(setId, fields, session) {
+  const set = await QuizSet.findById(setId).session(session);
+  if (!set || set.status === "archived") throw missing();
+  if (!await writeSetFence(set, session)) throw new StandaloneTransactionConflict();
+  const last = await Quiz.findOne({ quizSet: setId, contextType: "standalone" }).sort({ sortOrder: -1, _id: -1 }).session(session);
+  const quizId = new mongoose.Types.ObjectId();
+  const shell = { _id: quizId, title: String(fields.title || ""), status: "draft", publishedRevision: null, revision: 1 };
+  const normalized = await validateDraft(shell, { ...fields, version: 1, basePublishedRevision: null });
+  const [quiz] = await Quiz.create([{ ...shell, contextType: "standalone", quizSet: set._id,
+    sortOrder: (last?.sortOrder || 0) + 1, questions: [], draft: normalized }], { session });
+  return quiz;
+}
+
+async function createSetDraft(setId, input) {
+  if (!validId(setId)) throw missing();
+  const fields = checkedDraftFields(input);
+  return runStandaloneTransaction(async (session) => createSetDraftInSession(setId, fields, session), {
+    resolveAmbiguous: async (result) => result && await Quiz.findOne({ _id: result._id,
+      quizSet: setId, contextType: "standalone", status: "draft" }) || undefined });
+}
+
+// RFC 4122 version-4 UUID in its canonical lowercase representation.
+const validCreationRequestId = (value) => typeof value === "string"
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+  }
+  return value;
+}
+
+function creationPayloadHash(input) {
+  // Valid drafts retain the original hash format. An omitted draft has no JSON
+  // serialization, but still needs a stable value for a conflicting replay.
+  let serialized;
+  let unhashable = false;
+  try { serialized = JSON.stringify(canonical(input)); }
+  catch (_error) {
+    // A pathological JSON shape or an invalid direct service value cannot
+    // turn a committed key into a 500 or proceed to a new creation.
+    serialized = "\u0000unhashable-draft";
+    unhashable = true;
+  }
+  return { hash: createHash("sha256").update(serialized === undefined ? "undefined" : serialized).digest("hex"),
+    unhashable };
+}
+
+async function readCommittedCreation(key) {
+  try {
+    return await mongoose.connection.db.collection("quizcreationrequests").findOne(key,
+      { readConcern: { level: "majority" }, readPreference: "primary" });
+  } catch (_error) {
+    throw new QuizCreationUnavailable();
+  }
+}
+
+async function replayCreation(record, payloadHash, session) {
+  if (!record) return undefined;
+  if (record.payloadHash !== payloadHash) {
+    throw new QuizSetError(409, "This creation request ID was used with different quiz content.", "quiz_creation_request_reused");
+  }
+  if (!record.responseSnapshot || String(record.responseSnapshot.id) !== String(record.quizId)
+    || String(record.responseSnapshot.quizSetId) !== String(record.quizSetId)) {
+    throw new QuizCreationOutcomeUnknown();
+  }
+  // An inconsistent pre-existing ledger must never produce a successful replay.
+  // Normal deletion paths preserve this Quiz; the read also fails closed if an
+  // out-of-band change has removed it.
+  try {
+    const query = Quiz.exists({ _id: record.quizId, quizSet: record.quizSetId,
+      contextType: "standalone" });
+    const existing = session ? await query.session(session)
+      : await query.readConcern("majority").read("primary");
+    if (!existing) throw new QuizCreationOutcomeUnknown();
+  } catch (_error) { throw new QuizCreationOutcomeUnknown(); }
+  return record.responseSnapshot;
+}
+
+async function createIdempotentSetDraft(setId, adminId, creationRequestId, input) {
+  if (!validId(setId)) throw missing();
+  if (!validId(adminId)) throw new QuizSetError(400, "Invalid Admin identity.", "invalid_quiz_creation_request");
+  if (!validCreationRequestId(creationRequestId)) {
+    throw new QuizSetError(400, "A canonical version-4 creationRequestId is required.", "invalid_quiz_creation_request");
+  }
+  await requireCreationIndex();
+  const { hash: payloadHash, unhashable } = creationPayloadHash(input);
+  const key = { adminId: new mongoose.Types.ObjectId(String(adminId)),
+    quizSetId: new mongoose.Types.ObjectId(String(setId)), creationRequestId };
+  const previous = await replayCreation(await readCommittedCreation(key), payloadHash);
+  if (previous) return previous;
+  if (unhashable) throw new QuizSetError(400, "Invalid draft.", "invalid_quiz_draft");
+  const fields = checkedDraftFields(input);
+
+  try {
+    return await runStandaloneTransaction(async (session) => {
+      const existing = await QuizCreationRequest.findOne(key).session(session);
+      const replayed = await replayCreation(existing, payloadHash, session);
+      if (replayed) return replayed;
+      const quiz = await createSetDraftInSession(setId, fields, session);
+      const response = { id: String(quiz._id), quizSetId: String(quiz.quizSet), status: quiz.status,
+        sortOrder: quiz.sortOrder, draft: quiz.draft.toObject() };
+      await QuizCreationRequest.create([{ ...key, payloadHash, quizId: quiz._id,
+        responseSnapshot: response }], { session });
+      return response;
+    }, { resolveAmbiguous: async () => replayCreation(await readCommittedCreation(key), payloadHash) });
+  } catch (error) {
+    if (error instanceof StandaloneTransactionConflict || error?.code === 11000) {
+      // A concurrent winner may have committed. A bounded majority read can
+      // confirm it; absence cannot prove the winner aborted.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const resolved = await replayCreation(await readCommittedCreation(key), payloadHash);
+          if (resolved) return resolved;
+        } catch (lookupError) {
+          if (lookupError?.code === "quiz_creation_request_reused") throw lookupError;
+        }
+      }
+      throw new QuizCreationOutcomeUnknown();
+    }
+    if (error instanceof StandaloneTransactionOutcomeUnknown) throw new QuizCreationOutcomeUnknown();
+    throw error;
+  }
 }
 
 async function deleteEmptySet(setId, expectedVersion) {
@@ -165,9 +290,17 @@ async function deleteEmptySet(setId, expectedVersion) {
     if (!set) throw missing();
     if (set.version !== expectedVersion) throw stale();
     if (set.status === "active") throw conflict("Disable the Set before deletion.");
+    // Creation writes this same Set fence before inserting the Quiz and ledger.
+    // Whichever transaction loses the write conflict retries against the
+    // committed state, so a snapshot-only ledger lookup cannot race creation.
+    const fenced = await writeSetFence(set, session);
+    if (!fenced) throw new StandaloneTransactionConflict();
     if (await Quiz.exists({ quizSet: setId }).session(session)) throw conflict("A Set with quizzes cannot be deleted safely.", "quiz_set_has_members");
+    if (await QuizCreationRequest.exists({ quizSetId: set._id }).session(session)) {
+      throw conflict("A Set with quiz creation requests cannot be permanently deleted.", "quiz_set_has_creation_requests");
+    }
     // No attempt can be associated with an empty Set in the current schema.
-    const deleted = await QuizSet.deleteOne({ _id: setId, version: expectedVersion, runtimeFence: set.runtimeFence }, { session });
+    const deleted = await QuizSet.deleteOne({ _id: setId, version: expectedVersion, runtimeFence: fenced.runtimeFence }, { session });
     if (deleted.deletedCount !== 1) throw new StandaloneTransactionConflict();
     return { deleted: true };
   }, { resolveAmbiguous: async () => !await QuizSet.exists({ _id: setId }) ? { deleted: true } : undefined });
@@ -179,4 +312,4 @@ function publicSet(set) {
 }
 
 module.exports = { QuizSetError, metadata, writeSetFence, fenceActiveSetForQuiz, createSet, updateSet,
-  transitionSet, orderQuiz, createSetDraft, deleteEmptySet, publicSet };
+  transitionSet, orderQuiz, createSetDraft, createIdempotentSetDraft, deleteEmptySet, publicSet };

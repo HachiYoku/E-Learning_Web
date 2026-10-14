@@ -2,6 +2,7 @@
 const { MongoClient } = require("mongoose").mongo;
 const QuizSet = require("../models/quizSetModel");
 const Quiz = require("../models/quizModel");
+const QuizCreationRequest = require("../models/quizCreationRequestModel");
 const { sameDefinition, resolveDatabase } = require("./prepareQuizIndexes");
 
 function namedIndex([key, options]) {
@@ -11,6 +12,7 @@ function namedIndex([key, options]) {
 const REQUIRED = Object.freeze({
   quizsets: QuizSet.schema.indexes().map(namedIndex),
   quizzes: Quiz.schema.indexes().filter(([key]) => Object.hasOwn(key, "quizSet")).map(namedIndex),
+  quizcreationrequests: QuizCreationRequest.schema.indexes().map(namedIndex),
 });
 
 async function inspect(db) {

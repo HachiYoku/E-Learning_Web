@@ -46,11 +46,8 @@ const orderQuiz = handle(async (req) => {
   return { id: String(quiz._id), quizSetId: String(quiz.quizSet), sortOrder: quiz.sortOrder,
     setVersion };
 });
-const createDraft = handle(async (req) => {
-  const quiz = await service.createSetDraft(req.params.setId, req.body?.draft);
-  return { id: String(quiz._id), quizSetId: String(quiz.quizSet), status: quiz.status,
-    sortOrder: quiz.sortOrder, draft: quiz.draft };
-}, true);
+const createDraft = handle(async (req) => service.createIdempotentSetDraft(req.params.setId,
+  req.user.id, req.body?.creationRequestId, req.body?.draft), true);
 const remove = handle(async (req) => service.deleteEmptySet(req.params.setId, req.body?.expectedVersion));
 
 function catalogParams(query) {

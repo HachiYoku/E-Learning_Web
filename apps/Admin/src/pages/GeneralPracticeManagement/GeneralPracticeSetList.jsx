@@ -32,7 +32,7 @@ function GeneralPracticeSetList() {
       <header className="mb-7">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C97112]">Assessment library</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#2D2E30] sm:text-4xl">General Practice Quiz Sets</h1>
-        <p className="mt-2 text-[#765F55]">Manage Quiz Sets and view their quizzes. Set-scoped quiz creation is coming in a later step.</p>
+        <p className="mt-2 text-[#765F55]">Manage Quiz Sets and create draft quizzes within each Set.</p>
         <Link to="/general-practice/sets/new" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#E58C1A] focus:outline-none focus:ring-2 focus:ring-[#E58C1A] focus:ring-offset-2"><Plus size={18} aria-hidden="true" /> Create Quiz Set</Link>
       </header>
 

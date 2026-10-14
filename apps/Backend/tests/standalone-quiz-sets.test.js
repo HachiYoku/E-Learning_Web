@@ -14,6 +14,7 @@ const Quiz = require("../models/quizModel");
 const QuizSession = require("../models/quizSessionModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const QuizMedia = require("../models/quizMediaModel");
+const QuizCreationRequest = require("../models/quizCreationRequestModel");
 const User = require("../models/userModel");
 const sets = require("../services/standaloneQuizSets");
 const revisions = require("../services/standaloneQuizRevisions");
@@ -22,6 +23,7 @@ const { submitStandaloneQuiz: submit } = require("../services/standaloneQuizSubm
 const { REQUIRED, inspect } = require("../scripts/preflightQuizSetIndexes");
 
 const id = () => new mongoose.Types.ObjectId();
+const creationId = () => require("node:crypto").randomUUID();
 const learner = () => ({ id: id(), role: "user" });
 const draft = () => ({ title: "Thai greetings", category: "Vocabulary", difficulty: "Beginner",
   standaloneAccess: "public", questions: [{ prompt: "Hello?", options: ["Sawasdee", "Bye"], correctAnswer: 0,
@@ -90,7 +92,7 @@ before(async () => {
 });
 beforeEach(async () => {
   await mongoose.connection.db.dropDatabase();
-  for (const model of [QuizSet, Quiz, QuizSession, QuizAttempt, QuizMedia, User]) {
+  for (const model of [QuizSet, Quiz, QuizSession, QuizAttempt, QuizMedia, QuizCreationRequest, User]) {
     await model.createCollection(); await model.syncIndexes();
   }
 });
@@ -154,9 +156,400 @@ test("Admin-only APIs require authentication and new drafts require Set assignme
   const setId = created.body.set.id;
   assert.equal(created.body.set.status, "disabled");
   const quiz = await request(`/admin/standalone/sets/${setId}/quizzes`, { method: "POST", token: adminToken,
-    body: { draft: draft() } });
+    body: { creationRequestId: creationId(), draft: draft() } });
   assert.equal(quiz.status, 201);
   assert.equal(quiz.body.quizSetId, setId);
+});
+
+test("Set creation requires a canonical v4 request ID and never consumes invalid drafts", async () => {
+  const set = await sets.createSet({ name: "Idempotency validation" });
+  const admin = await User.create({ name: "Admin", email: "id-validation@example.test", password: "local-only",
+    role: "admin", isVerified: true, isActive: true });
+  const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+  const route = `/admin/standalone/sets/${set._id}/quizzes`;
+  for (const invalid of [undefined, null, "not-a-uuid", creationId().toUpperCase()]) {
+    const result = await request(route, { method: "POST", token,
+      body: { ...(invalid === undefined ? {} : { creationRequestId: invalid }), draft: draft() } });
+    assert.equal(result.status, 400);
+    assert.equal(result.body.code, "invalid_quiz_creation_request");
+  }
+  const key = creationId();
+  const bad = await request(route, { method: "POST", token,
+    body: { creationRequestId: key, draft: { ...draft(), questions: [] } } });
+  assert.equal(bad.status, 400);
+  assert.equal(await QuizCreationRequest.countDocuments(), 0);
+  for (const malformed of [undefined, null, "not-a-draft", { ...draft(), questions: "bad" }]) {
+    const response = await request(route, { method: "POST", token,
+      body: { creationRequestId: creationId(), ...(malformed === undefined ? {} : { draft: malformed }) } });
+    assert.equal(response.status, 400);
+  }
+  const good = await request(route, { method: "POST", token,
+    body: { creationRequestId: key, draft: draft() } });
+  assert.equal(good.status, 201);
+  assert.equal(await QuizCreationRequest.countDocuments(), 1);
+});
+
+test("committed creation replays its original result and rejects changed content", async () => {
+  const set = await sets.createSet({ name: "Replay" });
+  const admin = await User.create({ name: "Admin", email: "id-replay@example.test", password: "local-only",
+    role: "admin", isVerified: true, isActive: true });
+  const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+  const route = `/admin/standalone/sets/${set._id}/quizzes`;
+  const key = creationId();
+  const payload = { creationRequestId: key, draft: draft() };
+  const first = await request(route, { method: "POST", token, body: payload });
+  assert.equal(first.status, 201);
+  assert.equal(first.body.status, "draft");
+  assert.equal(first.body.draft.version, 1);
+  assert.equal(first.body.quizSetId, String(set._id));
+  const replay = await request(route, { method: "POST", token, body: payload });
+  assert.equal(replay.status, 201);
+  assert.deepEqual(replay.body, first.body);
+  const reordered = { ...payload.draft,
+    questions: payload.draft.questions.map((question) => Object.fromEntries(Object.entries(question).reverse())) };
+  const equivalent = await request(route, { method: "POST", token,
+    body: { creationRequestId: key, draft: Object.fromEntries(Object.entries(reordered).reverse()) } });
+  assert.equal(equivalent.status, 201);
+  assert.deepEqual(equivalent.body, first.body);
+  const changed = await request(route, { method: "POST", token,
+    body: { creationRequestId: key, draft: { ...draft(), title: "Changed" } } });
+  assert.equal(changed.status, 409);
+  assert.equal(changed.body.code, "quiz_creation_request_reused");
+  for (const malformed of [undefined, null, "not-a-draft", { ...draft(), questions: "bad" },
+    { ...draft(), questions: [{}] }, { ...draft(), unsupported: true }]) {
+    const response = await request(route, { method: "POST", token,
+      body: { creationRequestId: key, ...(malformed === undefined ? {} : { draft: malformed }) } });
+    assert.equal(response.status, 409);
+    assert.equal(response.body.code, "quiz_creation_request_reused");
+  }
+  const circular = { ...draft() }; circular.self = circular;
+  await assert.rejects(sets.createIdempotentSetDraft(set._id, admin._id, key, circular),
+    (error) => error.status === 409 && error.code === "quiz_creation_request_reused");
+  await assert.rejects(sets.createIdempotentSetDraft(set._id, admin._id, creationId(), circular),
+    (error) => error.status === 400 && error.code === "invalid_quiz_draft");
+  assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 1);
+  assert.equal(await QuizCreationRequest.countDocuments(), 1);
+  const distinct = await request(route, { method: "POST", token,
+    body: { creationRequestId: creationId(), draft: draft() } });
+  assert.equal(distinct.status, 201);
+  assert.notEqual(distinct.body.id, first.body.id);
+  assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 2);
+});
+
+test("concurrent same-key requests create at most one quiz across independent HTTP calls", async () => {
+  const set = await sets.createSet({ name: "Concurrent replay" });
+  const admin = await User.create({ name: "Admin", email: "id-concurrent@example.test", password: "local-only",
+    role: "admin", isVerified: true, isActive: true });
+  const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+  const route = `/admin/standalone/sets/${set._id}/quizzes`;
+  const payload = { creationRequestId: creationId(), draft: draft() };
+  const responses = await Promise.all(Array.from({ length: 3 }, () => request(route, { method: "POST", token, body: payload })));
+  assert.ok(responses.every((response) => [201, 503].includes(response.status)));
+  assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 1);
+  assert.equal(await QuizCreationRequest.countDocuments(), 1);
+  const replay = await request(route, { method: "POST", token, body: payload });
+  assert.equal(replay.status, 201);
+  assert.ok(responses.filter((response) => response.status === 201).every((response) => response.body.id === replay.body.id));
+});
+
+test("lost response and an ambiguous committed creation replay from the durable ledger", async () => {
+  const set = await sets.createSet({ name: "Ambiguous idempotency" });
+  const admin = await User.create({ name: "Admin", email: "id-ambiguous@example.test", password: "local-only",
+    role: "admin", isVerified: true, isActive: true });
+  const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+  const route = `/admin/standalone/sets/${set._id}/quizzes`;
+  const payload = { creationRequestId: creationId(), draft: draft() };
+  const original = mongoose.startSession;
+  let commits = 0;
+  mongoose.startSession = async (...args) => {
+    const session = await original.apply(mongoose, args);
+    const commit = session.commitTransaction.bind(session);
+    session.commitTransaction = async () => {
+      await commit(); commits += 1;
+      const error = new Error("simulated lost commit acknowledgment");
+      error.hasErrorLabel = (label) => label === "UnknownTransactionCommitResult";
+      throw error;
+    };
+    return session;
+  };
+  let first;
+  try { first = await request(route, { method: "POST", token, body: payload }); }
+  finally { mongoose.startSession = original; }
+  assert.equal(first.status, 201);
+  assert.equal(commits, 1);
+  // Simulate the client losing the first HTTP response: a fresh request path
+  // must reconstruct the result solely from the committed database record.
+  const replay = await request(route, { method: "POST", token, body: payload });
+  assert.deepEqual(replay.body, first.body);
+  assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 1);
+});
+
+test("unresolved commit acknowledgment fails closed without a blind second creation", async () => {
+  const set = await sets.createSet({ name: "Unresolved creation" });
+  const admin = await User.create({ name: "Admin", email: "id-unresolved@example.test", password: "local-only",
+    role: "admin", isVerified: true, isActive: true });
+  const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+  const original = mongoose.startSession;
+  let attempts = 0;
+  mongoose.startSession = async (...args) => {
+    const session = await original.apply(mongoose, args);
+    session.commitTransaction = async () => {
+      attempts += 1;
+      const error = new Error("simulated unresolved commit");
+      error.hasErrorLabel = (label) => label === "UnknownTransactionCommitResult";
+      throw error;
+    };
+    return session;
+  };
+  try {
+    const result = await request(`/admin/standalone/sets/${set._id}/quizzes`, {
+      method: "POST", token, body: { creationRequestId: creationId(), draft: draft() },
+    });
+    assert.equal(result.status, 503);
+    assert.equal(result.body.code, "quiz_creation_outcome_unknown");
+  } finally { mongoose.startSession = original; }
+  assert.equal(attempts, 1);
+  assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 0);
+  assert.equal(await QuizCreationRequest.countDocuments(), 0);
+});
+
+test("creation keys are scoped independently to Admin and Quiz Set", async () => {
+  const firstSet = await sets.createSet({ name: "First scope" });
+  const secondSet = await sets.createSet({ name: "Second scope" });
+  const admins = await User.create([
+    { name: "First Admin", email: "id-admin-1@example.test", password: "local-only", role: "admin", isVerified: true, isActive: true },
+    { name: "Second Admin", email: "id-admin-2@example.test", password: "local-only", role: "admin", isVerified: true, isActive: true },
+  ]);
+  const key = creationId();
+  const send = (set, admin) => request(`/admin/standalone/sets/${set._id}/quizzes`, {
+    method: "POST", token: jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET),
+    body: { creationRequestId: key, draft: draft() },
+  });
+  const first = await send(firstSet, admins[0]);
+  const otherSet = await send(secondSet, admins[0]);
+  const otherAdmin = await send(firstSet, admins[1]);
+  assert.ok([first, otherSet, otherAdmin].every((result) => result.status === 201));
+  assert.equal(new Set([first.body.id, otherSet.body.id, otherAdmin.body.id]).size, 3);
+  assert.equal(await QuizCreationRequest.countDocuments(), 3);
+});
+
+test("replay survives Set lifecycle and later Quiz changes without creating another Quiz", async () => {
+  const set = await sets.createSet({ name: "Lifecycle replay" });
+  const admin = await User.create({ name: "Admin", email: "id-lifecycle@example.test", password: "local-only",
+    role: "admin", isVerified: true, isActive: true });
+  const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+  const route = `/admin/standalone/sets/${set._id}/quizzes`;
+  const payload = { creationRequestId: creationId(), draft: draft() };
+  const first = await request(route, { method: "POST", token, body: payload });
+  assert.equal(first.status, 201);
+  await Quiz.updateOne({ _id: first.body.id }, { $set: { title: "Later edit" } });
+  await sets.transitionSet(set._id, 1, "activate");
+  await sets.transitionSet(set._id, 2, "disable");
+  assert.deepEqual((await request(route, { method: "POST", token, body: payload })).body, first.body);
+  await sets.transitionSet(set._id, 3, "archive");
+  const archivedReplay = await request(route, { method: "POST", token, body: payload });
+  assert.equal(archivedReplay.status, 201);
+  assert.deepEqual(archivedReplay.body, first.body);
+  const newKey = await request(route, { method: "POST", token,
+    body: { creationRequestId: creationId(), draft: draft() } });
+  assert.equal(newKey.status, 404);
+  assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 1);
+});
+
+test("durable creation rejects permanent Quiz deletion and preserves replay through Archive", async () => {
+  const set = await sets.createSet({ name: "Protected Quiz" });
+  const admin = await User.create({ name: "Admin", email: "protected-quiz@example.test", password: "local-only",
+    role: "admin", isVerified: true, isActive: true });
+  const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+  const route = `/admin/standalone/sets/${set._id}/quizzes`;
+  const payload = { creationRequestId: creationId(), draft: draft() };
+  const created = await request(route, { method: "POST", token, body: payload });
+  assert.equal(created.status, 201);
+  const ledgerBefore = await QuizCreationRequest.findOne({ quizId: created.body.id }).lean();
+  const removed = await request(`/admin/standalone/${created.body.id}`, { method: "DELETE", token });
+  assert.equal(removed.status, 409);
+  assert.equal(removed.body.code, "quiz_has_creation_request");
+  assert.ok(await Quiz.exists({ _id: created.body.id }));
+  assert.deepEqual(await QuizCreationRequest.findOne({ quizId: created.body.id }).lean(), ledgerBefore);
+  const rejectedSetDeletion = await request(`/admin/standalone/sets/${set._id}`, {
+    method: "DELETE", token, body: { expectedVersion: set.version },
+  });
+  assert.equal(rejectedSetDeletion.status, 409);
+  assert.equal(rejectedSetDeletion.body.code, "quiz_set_has_members");
+  assert.deepEqual(await QuizCreationRequest.findOne({ quizId: created.body.id }).lean(), ledgerBefore);
+  assert.deepEqual((await request(route, { method: "POST", token, body: payload })).body, created.body);
+  await revisions.changeAvailability(created.body.id, "archive");
+  const replay = await request(route, { method: "POST", token, body: payload });
+  assert.equal(replay.status, 201);
+  assert.deepEqual(replay.body, created.body);
+});
+
+test("durable creation rejects Set deletion even when its Quiz is unexpectedly absent", async () => {
+  const set = await sets.createSet({ name: "Protected Set" });
+  const admin = id(); const key = creationId();
+  const created = await sets.createIdempotentSetDraft(set._id, admin, key, draft());
+  const ledgerBefore = await QuizCreationRequest.findOne({ quizId: created.id }).lean();
+  // Simulate a pre-existing externally removed Quiz. The application must not
+  // delete its Set or mutate the durable ledger to conceal the inconsistency.
+  await Quiz.deleteOne({ _id: created.id });
+  await assert.rejects(sets.deleteEmptySet(set._id, set.version),
+    (error) => error.status === 409 && error.code === "quiz_set_has_creation_requests");
+  assert.ok(await QuizSet.exists({ _id: set._id }));
+  assert.deepEqual(await QuizCreationRequest.findOne({ quizId: created.id }).lean(), ledgerBefore);
+  await assert.rejects(sets.createIdempotentSetDraft(set._id, admin, key, draft()),
+    (error) => error.status === 503 && error.code === "quiz_creation_outcome_unknown");
+});
+
+test("non-ledger standalone Quiz and empty Set retain their permanent-deletion rules", async () => {
+  const set = await sets.createSet({ name: "Legacy deletion" });
+  const quiz = await sets.createSetDraft(set._id, draft());
+  assert.equal(await QuizCreationRequest.countDocuments({ quizId: quiz._id }), 0);
+  assert.deepEqual(await revisions.deleteDraftOrQuiz(quiz._id), { deleted: true });
+  assert.deepEqual(await sets.deleteEmptySet(set._id, set.version), { deleted: true });
+  const unassigned = await Quiz.create({ title: "Unassigned legacy", contextType: "standalone",
+    status: "draft", publishedRevision: null, revision: 1, questions: [] });
+  assert.deepEqual(await revisions.deleteDraftOrQuiz(unassigned._id), { deleted: true });
+});
+
+test("committed creation wins a race with Set deletion without losing its ledger", async () => {
+  const set = await sets.createSet({ name: "Creation wins deletion race" });
+  const admin = id(); const key = creationId();
+  await pauseNextSetFence(async ({ entered, release }) => {
+    const creating = sets.createIdempotentSetDraft(set._id, admin, key, draft());
+    await entered;
+    const deleting = sets.deleteEmptySet(set._id, set.version);
+    release();
+    const created = await creating;
+    await assert.rejects(deleting, (error) => error.status === 409);
+    assert.ok(await Quiz.exists({ _id: created.id }));
+    assert.ok(await QuizCreationRequest.exists({ quizId: created.id }));
+    assert.deepEqual(await sets.createIdempotentSetDraft(set._id, admin, key, draft()), created);
+  });
+});
+
+test("Set deletion wins a race with creation without leaving a Quiz or ledger", async () => {
+  const set = await sets.createSet({ name: "Deletion wins creation race" });
+  const admin = id();
+  await pauseNextSetFence(async ({ entered, release }) => {
+    const deleting = sets.deleteEmptySet(set._id, set.version);
+    await entered;
+    const creating = sets.createIdempotentSetDraft(set._id, admin, creationId(), draft());
+    release();
+    assert.deepEqual(await deleting, { deleted: true });
+    await assert.rejects(creating, (error) => [404, 503].includes(error.status));
+  });
+  assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 0);
+  assert.equal(await QuizCreationRequest.countDocuments({ quizSetId: set._id }), 0);
+});
+
+test("creation and Quiz deletion overlap without deleting a committed ledger-backed Quiz", async () => {
+  const set = await sets.createSet({ name: "Quiz deletion race" });
+  const admin = id(); const key = creationId();
+  const entered = deferred(); const release = deferred();
+  const original = QuizCreationRequest.create;
+  let newQuizId;
+  QuizCreationRequest.create = async function pauseLedger(documents, options) {
+    const result = await original.call(this, documents, options);
+    newQuizId = documents[0].quizId;
+    entered.resolve();
+    await release.promise;
+    return result;
+  };
+  try {
+    const creating = sets.createIdempotentSetDraft(set._id, admin, key, draft());
+    await entered.promise;
+    await assert.rejects(revisions.deleteDraftOrQuiz(newQuizId),
+      (error) => error.status === 404 && error.code === "quiz_unavailable");
+    release.resolve();
+    const created = await creating;
+    await assert.rejects(revisions.deleteDraftOrQuiz(created.id),
+      (error) => error.status === 409 && error.code === "quiz_has_creation_request");
+    assert.deepEqual(await sets.createIdempotentSetDraft(set._id, admin, key, draft()), created);
+  } finally { release.resolve(); QuizCreationRequest.create = original; }
+});
+
+test("transient deletion write conflict retries and still preserves creation replay", async () => {
+  const set = await sets.createSet({ name: "Deletion retry" });
+  const admin = id(); const key = creationId();
+  const created = await sets.createIdempotentSetDraft(set._id, admin, key, draft());
+  const original = QuizCreationRequest.exists;
+  let checks = 0;
+  QuizCreationRequest.exists = function retryOnce(...args) {
+    checks += 1;
+    if (checks === 1) {
+      const error = new Error("simulated write conflict"); error.code = 112;
+      throw error;
+    }
+    return original.apply(this, args);
+  };
+  try {
+    await assert.rejects(revisions.deleteDraftOrQuiz(created.id),
+      (error) => error.status === 409 && error.code === "quiz_has_creation_request");
+  } finally { QuizCreationRequest.exists = original; }
+  assert.equal(checks, 2);
+  assert.deepEqual(await sets.createIdempotentSetDraft(set._id, admin, key, draft()), created);
+});
+
+test("exhausted Set deletion write conflicts leave the Set intact", async () => {
+  const set = await sets.createSet({ name: "Deletion retry exhaustion" });
+  const original = QuizSet.findOneAndUpdate;
+  let attempts = 0;
+  QuizSet.findOneAndUpdate = function failDeletionFence(...args) {
+    if (args[1]?.$inc?.runtimeFence === 1) {
+      attempts += 1;
+      const error = new Error("simulated write conflict"); error.code = 112;
+      throw error;
+    }
+    return original.apply(this, args);
+  };
+  try {
+    await assert.rejects(sets.deleteEmptySet(set._id, set.version),
+      (error) => error.status === 409 && error.code === "standalone_transaction_conflict");
+  } finally { QuizSet.findOneAndUpdate = original; }
+  assert.equal(attempts, 4);
+  assert.ok(await QuizSet.exists({ _id: set._id }));
+});
+
+test("missing or nonunique ledger index blocks creation without modifying data", async () => {
+  const set = await sets.createSet({ name: "Index readiness" });
+  const admin = await User.create({ name: "Admin", email: "id-index@example.test", password: "local-only",
+    role: "admin", isVerified: true, isActive: true });
+  const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+  const route = `/admin/standalone/sets/${set._id}/quizzes`;
+  const payload = { creationRequestId: creationId(), draft: draft() };
+  await mongoose.connection.db.collection("quizcreationrequests").dropIndex("one_set_quiz_creation_request");
+  let result = await request(route, { method: "POST", token, body: payload });
+  assert.equal(result.status, 503);
+  assert.equal(result.body.code, "quiz_creation_unavailable");
+  await mongoose.connection.db.collection("quizcreationrequests").createIndex(
+    { adminId: 1, quizSetId: 1, creationRequestId: 1 }, { name: "one_set_quiz_creation_request" });
+  result = await request(route, { method: "POST", token, body: payload });
+  assert.equal(result.status, 503);
+  assert.equal(await Quiz.countDocuments(), 0);
+  assert.equal(await QuizCreationRequest.countDocuments(), 0);
+});
+
+test("Admin quiz details expose persisted Set membership and legacy null without changing other fields", async () => {
+  const set = await sets.createSet({ name: "Admin membership" });
+  const quiz = await sets.createSetDraft(set._id, draft());
+  const admin = await User.create({ name: "Admin", email: "id-detail@example.test", password: "local-only",
+    role: "admin", isVerified: true, isActive: true });
+  const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+  const route = `/admin/standalone/${quiz._id}`;
+  const original = await request(route, { token });
+  assert.equal(original.status, 200);
+  assert.equal(original.body.quizSetId, String(set._id));
+  assert.equal(original.body.contextType, "standalone");
+  assert.equal(original.body.status, "draft");
+  assert.ok(original.body.draft);
+  await sets.transitionSet(set._id, 1, "activate");
+  await sets.transitionSet(set._id, 2, "disable");
+  assert.equal((await request(route, { token })).body.quizSetId, String(set._id));
+  await sets.transitionSet(set._id, 3, "archive");
+  assert.equal((await request(route, { token })).body.quizSetId, String(set._id));
+  const legacy = await Quiz.create({ title: "Legacy", contextType: "standalone", status: "draft",
+    publishedRevision: null, revision: 1, questions: [] });
+  assert.equal((await request(`/admin/standalone/${legacy._id}`, { token })).body.quizSetId, null);
 });
 
 test("direct draft creation requires an existing Set and cannot bypass membership", async () => {
@@ -185,7 +578,7 @@ test("malformed Set draft questions return structured HTTP 400", async () => {
     const payload = draft();
     if (questions === undefined) delete payload.questions; else payload.questions = questions;
     const result = await request(`/admin/standalone/sets/${set._id}/quizzes`, { method: "POST", token,
-      body: { draft: payload } });
+      body: { creationRequestId: creationId(), draft: payload } });
     assert.equal(result.status, 400);
     assert.equal(result.body.code, "invalid_quiz_draft");
   }

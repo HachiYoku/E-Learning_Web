@@ -102,7 +102,15 @@ export async function fetchGeneralPracticeQuiz(quizId) {
 
 export async function createGeneralPracticeDraft(draft) {
   void draft
-  throw new Error('Quiz creation requires a Quiz Set. Set-scoped creation is not available in Admin yet.')
+  throw new Error('Quiz creation requires a Quiz Set. Open a Set and select Create Quiz.')
+}
+
+export async function createGeneralPracticeSetDraft(setId, creationRequestId, draft) {
+  if (typeof setId !== 'string' || !/^[0-9a-f]{24}$/i.test(setId)) throw new Error('Select a valid Quiz Set before creating a quiz.')
+  if (typeof creationRequestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(creationRequestId)) {
+    throw new Error('A secure creation request ID is required.')
+  }
+  return apiClient.post(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/quizzes`, { creationRequestId, draft })
 }
 
 export async function updateGeneralPracticeDraft(quizId, expectedVersion, draft) {

@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 
 vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }))
 import { apiClient } from '../api/client'
-import { archiveGeneralPracticeQuiz, createGeneralPracticeDraft, createGeneralPracticeSet, deleteGeneralPracticeSet, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, fetchGeneralPracticeQuizzes, fetchGeneralPracticeSet, fetchGeneralPracticeSets, isSafeQuizSetCoverImage, publishGeneralPracticeDraft, retryGeneralPracticeMedia, transitionGeneralPracticeSet, updateGeneralPracticeDraft, updateGeneralPracticeSet } from './generalPracticeAdminService'
+import { archiveGeneralPracticeQuiz, createGeneralPracticeDraft, createGeneralPracticeSet, createGeneralPracticeSetDraft, deleteGeneralPracticeSet, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, fetchGeneralPracticeQuizzes, fetchGeneralPracticeSet, fetchGeneralPracticeSets, isSafeQuizSetCoverImage, publishGeneralPracticeDraft, retryGeneralPracticeMedia, transitionGeneralPracticeSet, updateGeneralPracticeDraft, updateGeneralPracticeSet } from './generalPracticeAdminService'
 
 const set = { id: 'set-1', name: 'Thai basics', status: 'active', version: 2, displayOrder: 1,
   description: '', coverImage: '', difficulty: null }
@@ -103,6 +103,19 @@ it('blocks the obsolete create contract while preserving versioned draft updates
   await updateGeneralPracticeDraft('quiz-1', 2, draft)
   expect(apiClient.post).not.toHaveBeenCalled()
   expect(apiClient.put).toHaveBeenCalledWith('/quizzes/admin/standalone/quiz-1/draft', { expectedVersion: 2, draft })
+})
+
+it('creates only through the selected Quiz Set endpoint with the complete draft', async () => {
+  const setId = '507f1f77bcf86cd799439011'
+  const draft = { title: 'Thai', questions: [{ prompt: 'Greeting?', options: ['Hello', 'Goodbye'], correctAnswer: 0 }] }
+  const response = { id: '507f1f77bcf86cd799439012', quizSetId: setId, status: 'draft', sortOrder: 1, draft: { ...draft, version: 1 } }
+  apiClient.post.mockResolvedValue(response)
+  const creationRequestId = '550e8400-e29b-41d4-a716-446655440000'
+  expect(await createGeneralPracticeSetDraft(setId, creationRequestId, draft)).toEqual(response)
+  expect(apiClient.post).toHaveBeenCalledWith(`/quizzes/admin/standalone/sets/${setId}/quizzes`, { creationRequestId, draft })
+  await expect(createGeneralPracticeSetDraft('bad-id', creationRequestId, draft)).rejects.toThrow(/valid Quiz Set/)
+  await expect(createGeneralPracticeSetDraft(setId, 'bad-id', draft)).rejects.toThrow(/secure creation request ID/)
+  expect(apiClient.post).toHaveBeenCalledTimes(1)
 })
 
 it('uses the dedicated publish, lifecycle and media-retry endpoints', async () => {

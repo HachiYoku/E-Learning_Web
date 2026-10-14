@@ -78,6 +78,7 @@ function App() {
             <Route path="/quizzes/:id/attempts" element={<QuizAttempts />} />
             <Route path="/general-practice" element={<GeneralPracticeSetList />} />
             <Route path="/general-practice/sets/new" element={<GeneralPracticeSetCreate />} />
+            <Route path="/general-practice/sets/:setId/quizzes/new" element={<GeneralPracticeEditor />} />
             <Route path="/general-practice/sets/:setId" element={<GeneralPracticeSetDetails />} />
             <Route path="/general-practice/quizzes" element={<GeneralPracticeList />} />
             <Route path="/general-practice/new" element={<GeneralPracticeEditor />} />

@@ -15,7 +15,7 @@ const quiz = {
 }
 
 function renderPages(path = '/general-practice/quizzes') {
-  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/general-practice/quizzes" element={<GeneralPracticeList />} /><Route path="/general-practice/:quizId" element={<GeneralPracticeDetails />} /></Routes></MemoryRouter>)
+  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/general-practice/quizzes" element={<GeneralPracticeList />} /><Route path="/general-practice/sets/:setId" element={<p>Persisted Quiz Set destination</p>} /><Route path="/general-practice/:quizId" element={<GeneralPracticeDetails />} /></Routes></MemoryRouter>)
 }
 
 describe('Admin General Practice read-only views', () => {
@@ -67,5 +67,27 @@ describe('Admin General Practice read-only views', () => {
     renderPages('/general-practice/missing')
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/not found/i))
     expect(screen.queryByText('Private answer')).toBeNull()
+  })
+
+  it('uses persisted Set membership on direct and refreshed quiz details', async () => {
+    const setId = '507f1f77bcf86cd799439011'
+    fetchGeneralPracticeQuiz.mockResolvedValue({ ...quiz, quizSetId: setId })
+    const page = renderPages('/general-practice/quiz-1')
+    const back = await screen.findByRole('link', { name: 'Back to Quiz Set' })
+    expect(back.getAttribute('href')).toBe(`/general-practice/sets/${setId}`)
+    page.unmount()
+    renderPages('/general-practice/quiz-1')
+    expect((await screen.findByRole('link', { name: 'Back to Quiz Set' })).getAttribute('href')).toBe(`/general-practice/sets/${setId}`)
+  })
+
+  it('prefers persisted membership over conflicting router state and retains legacy fallback', async () => {
+    const setId = '507f1f77bcf86cd799439011'
+    fetchGeneralPracticeQuiz.mockResolvedValue({ ...quiz, quizSetId: setId })
+    const first = render(<MemoryRouter initialEntries={[{ pathname: '/general-practice/quiz-1', state: { fromSet: { id: '507f1f77bcf86cd799439099' } } }]}><Routes><Route path="/general-practice/:quizId" element={<GeneralPracticeDetails />} /></Routes></MemoryRouter>)
+    expect((await screen.findByRole('link', { name: 'Back to Quiz Set' })).getAttribute('href')).toBe(`/general-practice/sets/${setId}`)
+    first.unmount()
+    fetchGeneralPracticeQuiz.mockResolvedValue({ ...quiz, quizSetId: null })
+    renderPages('/general-practice/quiz-1')
+    expect((await screen.findByRole('link', { name: 'Back to quizzes' })).getAttribute('href')).toBe('/general-practice/quizzes')
   })
 })

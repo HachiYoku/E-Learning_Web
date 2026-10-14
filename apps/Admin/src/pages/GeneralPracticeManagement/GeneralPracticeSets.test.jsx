@@ -70,7 +70,15 @@ describe('Admin General Practice Quiz Set read-only views', () => {
     expect(await screen.findByRole('heading', { name: 'Quizzes coming soon' })).toBeTruthy()
     expect(screen.getByText('Set: active')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Disable Set' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Create Quiz' }).getAttribute('href')).toBe(`/general-practice/sets/${setId}/quizzes/new`)
     expect(screen.queryByRole('button', { name: 'Delete empty Set' })).toBeNull()
+  })
+
+  it('does not offer quiz creation from an archived Set', async () => {
+    fetchGeneralPracticeSet.mockResolvedValue({ set: { ...set, status: 'archived' }, quizzes: [] })
+    renderPages(`/general-practice/sets/${setId}`)
+    expect(await screen.findByText('Set: archived')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Create Quiz' })).toBeNull()
   })
 
   it('distinguishes Set and quiz status, and retains navigation context', async () => {

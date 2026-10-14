@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Quiz = require("../models/quizModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const QuizMedia = require("../models/quizMediaModel");
+const QuizCreationRequest = require("../models/quizCreationRequestModel");
 const { cleanupQuizMedia } = require("./quizMediaLifecycle");
 const quizMediaLifecycle = require("./quizMediaLifecycle");
 const QuizSession = require("../models/quizSessionModel");
@@ -218,6 +219,14 @@ async function deleteDraftOrQuiz(quizId) {
       const quiz = await loadStandalone(quizId, session);
       const fenced = await writeQuizFence(quiz, session);
       if (!fenced) throw new StandaloneTransactionConflict();
+      // Creation inserts the Quiz and its durable request in one transaction.
+      // Once this Quiz is visible, its ledger entry is visible in the same
+      // snapshot; the Quiz fence also excludes concurrent destructive writes.
+      if (await QuizCreationRequest.exists({ quizId: quiz._id }).session(session)) {
+        throw new StandaloneQuizError(409,
+          "This quiz has a creation request and cannot be permanently deleted. Archive it instead.",
+          "quiz_has_creation_request");
+      }
       if (await QuizAttempt.exists({ quiz: quiz._id }).session(session)) {
         throw new StandaloneQuizError(409, "This quiz has student results and cannot be permanently deleted. Archive it instead to preserve student history.", "quiz_has_history");
       }

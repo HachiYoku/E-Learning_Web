@@ -21,6 +21,7 @@ function adminProjection(quiz) {
   // After an ambiguous transport failure, reload this projection first.
   return {
     id: String(quiz._id), contextType: "standalone", status: quiz.status,
+    quizSetId: quiz.quizSet ? String(quiz.quizSet) : null,
     mediaProcessing: quiz.mediaReconciliationToken ? "retry_required" : "complete",
     published: quiz.publishedRevision === null ? null : {
       title: quiz.title, description: quiz.description || "", category: quiz.category,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { fetchGeneralPracticeQuiz } from '../../services/generalPracticeAdminService'
 import GeneralPracticePreview from './GeneralPracticePreview'
@@ -23,11 +23,6 @@ function ContentSummary({ label, content }) {
 
 function GeneralPracticeDetails() {
   const { quizId } = useParams()
-  const location = useLocation()
-  // This context comes from the Set details view; the quiz response itself does not identify its Set.
-  const fromSet = location.state?.fromSet
-  const setBackPath = typeof fromSet?.id === 'string' && /^[0-9a-f]{24}$/i.test(fromSet.id)
-    ? `/general-practice/sets/${encodeURIComponent(fromSet.id)}` : null
   const [quiz, setQuiz] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -43,6 +38,9 @@ function GeneralPracticeDetails() {
   }, [quizId])
 
   const activePreview = quiz?.draft && (previewKind === 'draft' || !quiz.published) ? 'draft' : 'published'
+  const persistedSetId = typeof quiz?.quizSetId === 'string' && /^[0-9a-f]{24}$/i.test(quiz.quizSetId) ? quiz.quizSetId : null
+  // A legacy standalone quiz without persisted membership returns to the quiz catalog.
+  const setBackPath = persistedSetId ? `/general-practice/sets/${encodeURIComponent(persistedSetId)}` : null
 
   return <main className="min-h-full bg-[#FFFDF8] px-4 pb-10 pt-6 sm:px-6 lg:px-10">
     <div className="mx-auto max-w-5xl">
