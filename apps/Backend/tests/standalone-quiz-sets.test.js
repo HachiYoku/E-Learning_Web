@@ -600,20 +600,60 @@ test("new Set quiz starts Draft, cannot move Sets, and public data excludes answ
   assert.equal(JSON.stringify(response.body).includes("explanation"), false);
 });
 
-test("Students Only quizzes are absent from guest Set detail and disabled Sets hide direct quiz discovery", async () => {
+test("guest Set discovery shows ordered safe Public and Students Only summaries without granting protected access", async () => {
   const set = await activeSet();
   const student = await User.create({ name: "Learner", email: "learner@example.test", password: "local-only",
     role: "user", isVerified: true, isActive: true });
   const token = jwt.sign({ id: String(student._id), sessionVersion: 0 }, process.env.JWT_SECRET);
-  const fields = { ...draft(), standaloneAccess: "students" };
-  const created = await sets.createSetDraft(set._id, fields);
-  const quiz = await revisions.publishDraft(created._id, 1);
-  assert.equal((await request(`/standalone/sets/${set._id}`)).body.quizzes.length, 0);
-  assert.equal((await request(`/standalone/sets/${set._id}`, { token })).body.quizzes.length, 1);
-  assert.equal((await request(`/standalone/${quiz._id}`, { token })).status, 200);
-  await sets.transitionSet(set._id, set.version, "disable");
-  assert.equal((await request(`/standalone/${quiz._id}`, { token })).status, 404);
+  const publicDraft = await sets.createSetDraft(set._id, { ...draft(), title: "Public greetings" });
+  const publicQuiz = await revisions.publishDraft(publicDraft._id, 1);
+  const studentsDraft = await sets.createSetDraft(set._id,
+    { ...draft(), title: "Student greetings", standaloneAccess: "students" });
+  const studentsQuiz = await revisions.publishDraft(studentsDraft._id, 1);
+  await sets.createSetDraft(set._id, { ...draft(), title: "Unpublished greetings" });
+  const disabledDraft = await sets.createSetDraft(set._id, { ...draft(), title: "Disabled greetings" });
+  await revisions.publishDraft(disabledDraft._id, 1);
+  await revisions.changeAvailability(disabledDraft._id, "disable");
+  const archivedDraft = await sets.createSetDraft(set._id, { ...draft(), title: "Archived greetings" });
+  await revisions.publishDraft(archivedDraft._id, 1);
+  await revisions.changeAvailability(archivedDraft._id, "archive");
+  const publicOrder = await sets.orderQuiz(set._id, publicQuiz._id, set.version, 5);
+  await sets.orderQuiz(set._id, studentsQuiz._id, publicOrder.setVersion, 2);
+
+  const guest = await request(`/standalone/sets/${set._id}`);
+  const signedIn = await request(`/standalone/sets/${set._id}`, { token });
+  for (const response of [guest, signedIn]) {
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.quizzes.map((quiz) => quiz.id),
+      [String(studentsQuiz._id), String(publicQuiz._id)]);
+    assert.deepEqual(response.body.quizzes.map((quiz) => quiz.standaloneAccess), ["students", "public"]);
+    assert.deepEqual(response.body.quizzes.map((quiz) => quiz.sortOrder), [2, 5]);
+    assert.ok(response.body.quizzes.every((quiz) =>
+      Object.keys(quiz).every((key) => ["id", "title", "description", "category", "difficulty",
+        "standaloneAccess", "revision", "sortOrder"].includes(key))));
+    const serialized = JSON.stringify(response.body);
+    for (const protectedText of ["correctAnswer", "explanation", "questions", "Hello?", "Sawasdee means hello.",
+      "Unpublished greetings", "Disabled greetings", "Archived greetings"]) {
+      assert.equal(serialized.includes(protectedText), false);
+    }
+  }
+  assert.equal((await request(`/standalone/${publicQuiz._id}`)).status, 200);
+  assert.equal((await request(`/standalone/${studentsQuiz._id}`)).status, 404);
+  assert.equal((await request(`/standalone/${studentsQuiz._id}`, { token })).status, 200);
+  assert.equal((await request(`/standalone/${studentsQuiz._id}/sessions`, { method: "POST", body: {} })).status, 401);
+  assert.equal((await request(`/standalone/${studentsQuiz._id}/sessions`, { method: "POST", token: "invalid", body: {} })).status, 401);
+  assert.equal((await request("/standalone")).body.quizzes.some((quiz) => quiz.id === String(studentsQuiz._id)), false);
+});
+
+test("disabled and archived Sets hide guest discovery and direct quiz details", async () => {
+  const set = await activeSet();
+  const quiz = await published(set._id);
+  const disabled = await sets.transitionSet(set._id, set.version, "disable");
   assert.equal((await request(`/standalone/sets/${set._id}`)).status, 404);
+  assert.equal((await request(`/standalone/${quiz._id}`)).status, 404);
+  await sets.transitionSet(set._id, disabled.version, "archive");
+  assert.equal((await request(`/standalone/sets/${set._id}`)).status, 404);
+  assert.equal((await request(`/standalone/${quiz._id}`)).status, 404);
 });
 
 test("Set lifecycle uses CAS and rejects invalid transitions", async () => {

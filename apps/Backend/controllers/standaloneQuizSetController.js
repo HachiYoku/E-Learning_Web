@@ -96,9 +96,8 @@ const getPublic = handle(async (req) => {
   if (!mongoose.isValidObjectId(req.params.setId)) throw new service.QuizSetError(404, "Quiz Set is unavailable.", "quiz_set_unavailable");
   const set = await QuizSet.findOne({ _id: req.params.setId, status: "active" }).lean();
   if (!set) throw new service.QuizSetError(404, "Quiz Set is unavailable.", "quiz_set_unavailable");
-  const access = req.user ? { $in: ["public", "students"] } : "public";
   const quizzes = await Quiz.find({ quizSet: set._id, contextType: "standalone", status: "published",
-    publishedRevision: { $type: "number" }, standaloneAccess: access })
+    publishedRevision: { $type: "number" }, standaloneAccess: { $in: ["public", "students"] } })
     .select("title description category difficulty standaloneAccess publishedRevision sortOrder")
     .sort({ sortOrder: 1, _id: 1 }).lean();
   return { set: service.publicSet(set), quizzes: quizzes.map((quiz) => ({ ...publicSummary(quiz), sortOrder: quiz.sortOrder })) };
