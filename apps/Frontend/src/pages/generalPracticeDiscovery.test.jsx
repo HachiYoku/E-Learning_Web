@@ -68,19 +68,35 @@ describe("General Practice discovery", () => {
     await userEvent.setup().click(screen.getByRole("link", { name: "View details for Thai greetings" }))
     expect(await screen.findByRole("heading", { name: "Thai greetings" })).toBeTruthy()
     expect(screen.getByRole("link", { name: "Back to General Practice" }).getAttribute("href")).toBe("/app/practice/general")
-    expect(screen.getByText("Students Only")).toBeTruthy()
-    expect(screen.getByText("Access").querySelector(".lucide-lock-keyhole")).toBeTruthy()
+    const accessHeading = screen.getByText("Access")
+    const badge = screen.getByText("Students Only")
+    expect(accessHeading.tagName).toBe("DT")
+    expect(accessHeading.querySelector(".lucide-shield-check")).toBeTruthy()
+    for (const value of ["Vocabulary", "Beginner", "Students Only"]) {
+      expect(screen.getByText(value).closest("dd").className).toContain("mt-1 flex min-h-9 items-center")
+    }
+    expect(badge.querySelector(".lucide-lock-keyhole")).toBeTruthy()
+    expect(badge.className).toContain("bg-[#F6F3EE]")
     const start = screen.getByRole("button", { name: "Start / Resume Quiz" })
     expect(start.disabled).toBe(false)
     expect(screen.getByText(/unsubmitted selections will not be restored/i)).toBeTruthy()
     expect(fetchGeneralPracticeQuiz).toHaveBeenCalledWith(quiz.id)
   })
 
-  it("uses an open-lock icon for Public quiz access", async () => {
+  it("uses a light-green globe badge for Public quiz access", async () => {
     fetchGeneralPracticeQuiz.mockResolvedValue({ ...quiz, standaloneAccess: "public" })
     renderRoutes(`/app/practice/general/${quiz.id}`)
-    expect(await screen.findByText("Public quiz")).toBeTruthy()
-    expect(screen.getByText("Access").querySelector(".lucide-lock-open")).toBeTruthy()
+    const badge = await screen.findByText("Public")
+    expect(screen.getByText("Access").tagName).toBe("DT")
+    expect(badge.querySelector(".lucide-globe")).toBeTruthy()
+    expect(badge.className).toContain("bg-[#EDF8EE]")
+  })
+
+  it("does not label unexpected access metadata as Public", async () => {
+    fetchGeneralPracticeQuiz.mockResolvedValue({ ...quiz, standaloneAccess: undefined })
+    renderRoutes(`/app/practice/general/${quiz.id}`)
+    expect(await screen.findByText("Access unavailable")).toBeTruthy()
+    expect(screen.queryByText("Public")).toBeNull()
   })
 
   it("shows an empty state", async () => {

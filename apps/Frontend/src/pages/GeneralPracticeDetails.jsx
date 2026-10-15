@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowLeft, BookOpenText, History, LockKeyhole, LockOpen, LogIn, Play, RefreshCw, Signal } from "lucide-react"
+import { ArrowLeft, BookOpenText, Globe, History, LockKeyhole, LogIn, Play, RefreshCw, ShieldCheck, Signal } from "lucide-react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import LoadingSpinner from "../components/LoadingSpinner"
 import { useAuth } from "../contexts/AuthContext"
@@ -15,6 +15,12 @@ function PublicStartAction({ quizId }) {
   if (isAuthenticated && user?.role === "user") return <Link to={destination} className={buttonClass}><Play className="h-4 w-4" aria-hidden="true" />Continue in Student portal</Link>
   if (isAuthenticated) return <p className="text-sm text-[#765F55]">Use a student account to take this quiz.</p>
   return <Link to="/login" state={{ from: { pathname: destination } }} className={buttonClass}><LogIn className="h-4 w-4" aria-hidden="true" />Log in to Start Quiz</Link>
+}
+
+function AccessBadge({ access }) {
+  if (access === "public") return <span className="inline-flex items-center gap-1.5 rounded-full border border-[#CDE8D3] bg-[#EDF8EE] px-2.5 py-1 text-sm font-semibold text-[#246B35]"><Globe className="h-3.5 w-3.5" aria-hidden="true" />Public</span>
+  if (access === "students") return <span className="inline-flex items-center gap-1.5 rounded-full border border-[#2D2E30]/15 bg-[#F6F3EE] px-2.5 py-1 text-sm font-semibold text-[#514A43]"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />Students Only</span>
+  return <span className="text-sm text-[#765F55]">Access unavailable</span>
 }
 
 function GeneralPracticeDetails({ publicView = false }) {
@@ -84,9 +90,9 @@ function GeneralPracticeDetails({ publicView = false }) {
             <h1 className="mt-3 break-words text-3xl font-bold tracking-tight sm:text-4xl">{quiz.title}</h1>
             <p className="mt-3 break-words text-sm leading-relaxed text-[#765F55] sm:text-base">{quiz.description || "A short Thai practice quiz."}</p>
             <dl className="mt-5 grid gap-3 border-t border-[#2D2E30]/10 pt-5 sm:grid-cols-3">
-              {quiz.category ? <div><dt className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#765F55]"><BookOpenText className="h-4 w-4" aria-hidden="true" />Category</dt><dd className="mt-1 text-sm font-semibold">{quiz.category}</dd></div> : null}
-              {quiz.difficulty ? <div><dt className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#765F55]"><Signal className="h-4 w-4" aria-hidden="true" />Difficulty</dt><dd className="mt-1 text-sm font-semibold">{quiz.difficulty}</dd></div> : null}
-              <div><dt className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#765F55]">{quiz.standaloneAccess === "students" ? <LockKeyhole className="h-4 w-4" aria-hidden="true" /> : <LockOpen className="h-4 w-4" aria-hidden="true" />}Access</dt><dd className="mt-1 text-sm font-semibold">{quiz.standaloneAccess === "students" ? "Students Only" : "Public quiz"}</dd></div>
+              {quiz.category ? <div><dt className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#765F55]"><BookOpenText className="h-4 w-4" aria-hidden="true" />Category</dt><dd className="mt-1 flex min-h-9 items-center text-sm font-semibold">{quiz.category}</dd></div> : null}
+              {quiz.difficulty ? <div><dt className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#765F55]"><Signal className="h-4 w-4" aria-hidden="true" />Difficulty</dt><dd className="mt-1 flex min-h-9 items-center text-sm font-semibold">{quiz.difficulty}</dd></div> : null}
+              <div><dt className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#765F55]"><ShieldCheck className="h-4 w-4" aria-hidden="true" />Access</dt><dd className="mt-1 flex min-h-9 items-center"><AccessBadge access={quiz.standaloneAccess} /></dd></div>
             </dl>
             <div className="mt-6 border-t border-[#2D2E30]/10 pt-5">
               {publicView ? <PublicStartAction quizId={quiz.id} /> : <>

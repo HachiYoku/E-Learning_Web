@@ -68,6 +68,7 @@ describe("public General Practice", () => {
     renderRoutes()
     await userEvent.setup().click(await screen.findByRole("link", { name: "View details for Thai greetings" }))
     expect(await screen.findByRole("heading", { name: "Thai greetings" })).toBeTruthy()
+    expect(screen.getByText("Public").querySelector(".lucide-globe")).toBeTruthy()
     expect(screen.getByRole("link", { name: "Back to Home" }).getAttribute("href")).toBe("/")
     expect(screen.getByRole("link", { name: "Log in to Start Quiz" })).toBeTruthy()
     expect(screen.queryByRole("link", { name: /attempt history/i })).toBeNull()
