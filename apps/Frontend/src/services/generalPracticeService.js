@@ -1,5 +1,18 @@
 import { apiClient } from "../api/client"
 
+export function fetchGeneralPracticeSets({ name = "", difficulty = "", after } = {}) {
+  const params = new URLSearchParams()
+  if (name) params.set("name", name)
+  if (difficulty) params.set("difficulty", difficulty)
+  if (after) params.set("after", after)
+  const query = params.toString()
+  return apiClient.get(`/quizzes/standalone/sets${query ? `?${query}` : ""}`)
+}
+
+export function fetchGeneralPracticeSet(setId) {
+  return apiClient.get(`/quizzes/standalone/sets/${encodeURIComponent(setId)}`)
+}
+
 export async function fetchGeneralPracticeQuizzes() {
   const response = await apiClient.get("/quizzes/standalone")
   return response.quizzes

@@ -35,6 +35,7 @@ import StudentMore from "./pages/StudentMore"
 import StudentPractice from "./pages/StudentPractice"
 import GeneralPracticeList from "./pages/GeneralPracticeList"
 import GeneralPracticeDetails from "./pages/GeneralPracticeDetails"
+import GeneralPracticeSetDetails from "./pages/GeneralPracticeSetDetails"
 import GeneralPracticeTake from "./pages/GeneralPracticeTake"
 import GeneralPracticeComplete from "./pages/GeneralPracticeComplete"
 import GeneralPracticeHistory from "./pages/GeneralPracticeHistory"
@@ -103,6 +104,7 @@ function App() {
         <Route path="/practice/tone-combinations" element={<Navigate to="/practice/thai-vowels" replace />} />
         <Route path="/practice/general" element={<PublicGeneralPracticeLayout />}>
           <Route index element={<GeneralPracticeList publicView />} />
+          <Route path="sets/:setId" element={<GeneralPracticeSetDetails publicView />} />
           <Route path=":quizId" element={<GeneralPracticeDetails publicView />} />
         </Route>
         <Route path="/practice/:section" element={<Practice />} />
@@ -123,6 +125,7 @@ function App() {
             <Route path="course-quiz/:courseId/:quizId" element={<Quiz />} />
             <Route path="practice" element={<StudentPractice />} />
             <Route path="practice/general" element={<GeneralPracticeList />} />
+            <Route path="practice/general/sets/:setId" element={<GeneralPracticeSetDetails />} />
             <Route path="practice/general/:quizId/take" element={<GeneralPracticeTake />} />
             <Route path="practice/general/:quizId/complete/:attemptId" element={<GeneralPracticeComplete />} />
             <Route path="practice/general/:quizId/history" element={<GeneralPracticeHistory />} />

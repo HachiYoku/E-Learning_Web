@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowLeft, BookOpenText, Globe, History, LockKeyhole, LogIn, Play, RefreshCw, ShieldCheck, Signal } from "lucide-react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import LoadingSpinner from "../components/LoadingSpinner"
 import { useAuth } from "../contexts/AuthContext"
-import { fetchGeneralPracticeQuiz, startGeneralPracticeSession } from "../services/generalPracticeService"
+import { fetchGeneralPracticeQuiz, fetchGeneralPracticeSet, startGeneralPracticeSession } from "../services/generalPracticeService"
 import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
 
-function PublicStartAction({ quizId }) {
+function PublicStartAction({ quizId, parentSetId }) {
   const { isAuthenticated, isBootstrapping, user } = useAuth()
-  const destination = `/app/practice/general/${encodeURIComponent(quizId)}`
+  const destination = `/app/practice/general/${encodeURIComponent(quizId)}${parentSetId ? `?setId=${encodeURIComponent(parentSetId)}` : ""}`
   const buttonClass = "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:w-auto"
 
   if (isBootstrapping) return <p role="status" className="text-sm text-[#765F55]">Checking your account...</p>
@@ -25,7 +25,10 @@ function AccessBadge({ access }) {
 
 function GeneralPracticeDetails({ publicView = false }) {
   const { quizId } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
+  const proposedSetId = new URLSearchParams(location.search).get("setId")
+  const validSetId = proposedSetId && /^[0-9a-f]{24}$/i.test(proposedSetId) ? proposedSetId : null
   const startInFlight = useRef(false)
   const [quiz, setQuiz] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -33,6 +36,20 @@ function GeneralPracticeDetails({ publicView = false }) {
   const [retryKey, setRetryKey] = useState(0)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState("")
+  const [confirmedParent, setConfirmedParent] = useState(null)
+  const parentSetId = confirmedParent?.quizId === quizId && confirmedParent?.setId === validSetId ? validSetId : null
+
+  useEffect(() => {
+    let active = true
+    if (validSetId) {
+      fetchGeneralPracticeSet(validSetId)
+        .then((response) => {
+          if (active && response?.set?.id === validSetId && response?.quizzes?.some((item) => item.id === quizId)) setConfirmedParent({ quizId, setId: validSetId })
+        })
+        .catch(() => {}) // A missing or inaccessible parent must not hide direct quiz details.
+    }
+    return () => { active = false }
+  }, [quizId, validSetId])
 
   useEffect(() => {
     let active = true
@@ -76,7 +93,7 @@ function GeneralPracticeDetails({ publicView = false }) {
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
-      <Link to={publicView ? "/" : "/app/practice/general"} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{publicView ? "Back to Home" : "Back to General Practice"}</Link>
+      <Link to={parentSetId ? `${publicView ? "/practice/general" : "/app/practice/general"}/sets/${encodeURIComponent(parentSetId)}` : publicView ? "/" : "/app/practice/general"} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{parentSetId ? "Back to Quiz Set" : publicView ? "Back to Home" : "Back to General Practice"}</Link>
       <div className="mt-3">
         {loading ? <LoadingSpinner message="Loading quiz details..." /> : error ? (
           <section role="alert" className="rounded-2xl border border-[#2D2E30]/10 bg-white p-6 sm:p-8">
@@ -95,7 +112,7 @@ function GeneralPracticeDetails({ publicView = false }) {
               <div><dt className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#765F55]"><ShieldCheck className="h-4 w-4" aria-hidden="true" />Access</dt><dd className="mt-1 flex min-h-9 items-center"><AccessBadge access={quiz.standaloneAccess} /></dd></div>
             </dl>
             <div className="mt-6 border-t border-[#2D2E30]/10 pt-5">
-              {publicView ? <PublicStartAction quizId={quiz.id} /> : <>
+              {publicView ? <PublicStartAction quizId={quiz.id} parentSetId={parentSetId} /> : <>
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap"><button type="button" onClick={start} disabled={starting} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] disabled:cursor-wait disabled:opacity-60 sm:w-auto"><Play className="h-4 w-4" aria-hidden="true" />{starting ? "Starting quiz..." : "Start / Resume Quiz"}</button><Link to={`/app/practice/general/${encodeURIComponent(quizId)}/history`} state={{ quizTitle: quiz.title }} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-white px-5 py-3 text-sm font-bold text-[#765F55] hover:bg-[#FFF9EA] hover:text-[#A94F00] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:w-auto"><History className="h-4 w-4" aria-hidden="true" />Attempt history</Link></div>
                 <p className="mt-3 text-sm text-[#765F55]">Unsubmitted selections will not be restored if you leave or resume.</p>
                 {startError ? <p role="alert" className="mt-3 text-sm font-semibold text-[#A84646]">{startError}</p> : null}

@@ -15,14 +15,15 @@ vi.mock("../contexts/NotificationContext", () => ({
 }))
 
 vi.mock("../services/generalPracticeService", () => ({
-  fetchGeneralPracticeQuizzes: vi.fn(),
+  fetchGeneralPracticeSets: vi.fn(),
+  fetchGeneralPracticeSet: vi.fn(),
   fetchGeneralPracticeQuiz: vi.fn(),
   startGeneralPracticeSession: vi.fn(),
   submitGeneralPracticeQuiz: vi.fn(),
   fetchGeneralPracticeResult: vi.fn(),
 }))
 
-import { fetchGeneralPracticeQuizzes, fetchGeneralPracticeQuiz } from "../services/generalPracticeService"
+import { fetchGeneralPracticeSets, fetchGeneralPracticeSet, fetchGeneralPracticeQuiz } from "../services/generalPracticeService"
 
 const quiz = {
   id: "6acc46dbad4ace5e3d908d2c",
@@ -33,6 +34,7 @@ const quiz = {
   standaloneAccess: "students",
   revision: 1,
 }
+const quizSet = { id: "6acc46dbad4ace5e3d908d2e", name: "Thai greetings Set", description: "Practice greetings.", difficulty: "Beginner", coverImage: "", displayOrder: 1 }
 
 function renderRoutes(path) {
   return render(<MemoryRouter initialEntries={[path]}><Routes>
@@ -44,7 +46,8 @@ function renderRoutes(path) {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  fetchGeneralPracticeQuizzes.mockResolvedValue([quiz])
+  fetchGeneralPracticeSets.mockResolvedValue({ sets: [quizSet], pageSize: 10, nextCursor: null })
+  fetchGeneralPracticeSet.mockResolvedValue({ set: quizSet, quizzes: [quiz] })
   fetchGeneralPracticeQuiz.mockResolvedValue(quiz)
 })
 
@@ -55,17 +58,17 @@ describe("General Practice discovery", () => {
     expect(screen.getByText("Thai vowels")).toBeTruthy()
     expect(screen.getByText("Flashcards")).toBeTruthy()
     await userEvent.setup().click(screen.getByRole("link", { name: /General Practice/i }))
-    expect(await screen.findByText("Thai greetings")).toBeTruthy()
+    expect(await screen.findByText("Thai greetings Set")).toBeTruthy()
   })
 
-  it("shows published metadata and opens details without starting a session", async () => {
-    renderRoutes("/app/practice/general")
+  it("preserves direct quiz details without starting a session", async () => {
+    const catalog = renderRoutes("/app/practice/general")
     expect(screen.getByRole("status").textContent).toContain("Loading")
-    expect(await screen.findByText("Thai greetings")).toBeTruthy()
+    expect(await screen.findByText("Thai greetings Set")).toBeTruthy()
     expect(screen.getByRole("link", { name: "Back to Practice Overview" }).getAttribute("href")).toBe("/app/practice")
-    expect(screen.getByText("Vocabulary")).toBeTruthy()
-    expect(screen.queryByText("Practice Thai")).toBeNull()
-    await userEvent.setup().click(screen.getByRole("link", { name: "View details for Thai greetings" }))
+    expect(screen.getByRole("link", { name: `View Quiz Set ${quizSet.name}` }).getAttribute("href")).toBe(`/app/practice/general/sets/${quizSet.id}`)
+    catalog.unmount()
+    renderRoutes(`/app/practice/general/${quiz.id}`)
     expect(await screen.findByRole("heading", { name: "Thai greetings" })).toBeTruthy()
     expect(screen.getByRole("link", { name: "Back to General Practice" }).getAttribute("href")).toBe("/app/practice/general")
     const accessHeading = screen.getByText("Access")
@@ -100,33 +103,17 @@ describe("General Practice discovery", () => {
   })
 
   it("shows an empty state", async () => {
-    fetchGeneralPracticeQuizzes.mockResolvedValue([])
+    fetchGeneralPracticeSets.mockResolvedValue({ sets: [], pageSize: 10, nextCursor: null })
     renderRoutes("/app/practice/general")
-    expect(await screen.findByText("No quizzes available yet")).toBeTruthy()
-  })
-
-  it("gives different quizzes distinct accessible link names while keeping the visible label", async () => {
-    fetchGeneralPracticeQuizzes.mockResolvedValue([quiz, { ...quiz, id: "another-quiz", title: "Thai numbers" }])
-    renderRoutes("/app/practice/general")
-    const greetings = await screen.findByRole("link", { name: "View details for Thai greetings" })
-    const numbers = screen.getByRole("link", { name: "View details for Thai numbers" })
-    expect(greetings.textContent).toContain("View quiz details")
-    expect(numbers.textContent).toContain("View quiz details")
-  })
-
-  it("distinguishes accessible link names when quiz titles are repeated", async () => {
-    fetchGeneralPracticeQuizzes.mockResolvedValue([quiz, { ...quiz, id: "another-quiz" }])
-    renderRoutes("/app/practice/general")
-    expect(await screen.findByRole("link", { name: "View details for Thai greetings, quiz 1" })).toBeTruthy()
-    expect(screen.getByRole("link", { name: "View details for Thai greetings, quiz 2" })).toBeTruthy()
+    expect(await screen.findByText("No Quiz Sets available yet")).toBeTruthy()
   })
 
   it("offers retry after a listing failure", async () => {
-    fetchGeneralPracticeQuizzes.mockRejectedValueOnce(new Error("Unavailable"))
+    fetchGeneralPracticeSets.mockRejectedValueOnce(new Error("Unavailable"))
     renderRoutes("/app/practice/general")
     expect((await screen.findByRole("alert")).textContent).toContain("couldn't load")
     await userEvent.setup().click(screen.getByRole("button", { name: "Try again" }))
-    expect(await screen.findByText("Thai greetings")).toBeTruthy()
+    expect(await screen.findByText("Thai greetings Set")).toBeTruthy()
   })
 
   it("handles inaccessible details without exposing quiz content", async () => {
@@ -137,7 +124,7 @@ describe("General Practice discovery", () => {
   })
 
   it("shows an authentication error when a request is rejected", async () => {
-    fetchGeneralPracticeQuizzes.mockRejectedValue(Object.assign(new Error("Unauthorized"), { status: 401 }))
+    fetchGeneralPracticeSets.mockRejectedValue(Object.assign(new Error("Unauthorized"), { status: 401 }))
     renderRoutes("/app/practice/general")
     expect((await screen.findByRole("alert")).textContent).toContain("sign in again")
   })
