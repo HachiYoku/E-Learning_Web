@@ -2,6 +2,8 @@ const express = require("express");
 const validateToken = require("../middleware/authMiddleware");
 const requireAdmin = require("../middleware/adminMiddleware");
 const { createQuizMediaUpload, validateQuizMediaContent } = require("../middleware/uploadValidation");
+const { createQuizSetCoverUpload, validateImageFileContent } = require("../middleware/uploadValidation");
+const { rateLimit } = require("express-rate-limit");
 const controller = require("../controllers/quizController");
 const standalone = require("../controllers/standaloneQuizController");
 const standaloneSets = require("../controllers/standaloneQuizSetController");
@@ -11,6 +13,12 @@ const { requireStandaloneRuntimeReady } = require("../services/standaloneQuizRun
 
 const router = express.Router();
 const upload = createQuizMediaUpload({ maxFiles: 20 });
+const coverUpload = createQuizSetCoverUpload();
+const coverUploadLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => String(req.user.id),
+  handler: (_req, res) => res.status(429).json({ message: "Too many cover uploads. Try again later." }),
+});
 
 router.get("/standalone/sets", attachUserIfPresent, standaloneSets.listPublic);
 router.get("/standalone/sets/:setId", attachUserIfPresent, standaloneSets.getPublic);
@@ -26,6 +34,9 @@ router.get("/admin/standalone/sets", validateToken, requireAdmin, standaloneSets
 router.post("/admin/standalone/sets", validateToken, requireAdmin, standaloneSets.create);
 router.get("/admin/standalone/sets/:setId", validateToken, requireAdmin, standaloneSets.getAdmin);
 router.put("/admin/standalone/sets/:setId", validateToken, requireAdmin, standaloneSets.update);
+router.post("/admin/standalone/sets/:setId/cover", validateToken, requireAdmin, coverUploadLimit,
+  coverUpload.single("cover"), validateImageFileContent, standaloneSets.uploadCover);
+router.delete("/admin/standalone/sets/:setId/cover", validateToken, requireAdmin, standaloneSets.removeCover);
 router.post("/admin/standalone/sets/:setId/activate", validateToken, requireAdmin, standaloneSets.lifecycle("activate"));
 router.post("/admin/standalone/sets/:setId/disable", validateToken, requireAdmin, standaloneSets.lifecycle("disable"));
 router.post("/admin/standalone/sets/:setId/archive", validateToken, requireAdmin, standaloneSets.lifecycle("archive"));

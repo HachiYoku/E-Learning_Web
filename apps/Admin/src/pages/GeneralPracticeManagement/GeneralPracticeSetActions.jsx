@@ -30,8 +30,8 @@ export default function GeneralPracticeSetActions({ set, quizCount, onChange, on
     setNotice('')
     try {
       if (action === 'delete') {
-        await deleteGeneralPracticeSet(set.id, set.version)
-        onDelete()
+        const result = await deleteGeneralPracticeSet(set.id, set.version)
+        onDelete(result)
       } else {
         const updated = await transitionGeneralPracticeSet(set.id, set.version, action)
         if (updated.id !== set.id || updated.version !== set.version + 1 || updated.status !== ({ activate: 'active', disable: 'disabled', archive: 'archived', restore: 'disabled' })[action]) throw new Error('The Set transition could not be confirmed.')

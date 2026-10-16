@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 
 vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }))
 import { apiClient } from '../api/client'
-import { archiveGeneralPracticeQuiz, createGeneralPracticeDraft, createGeneralPracticeSet, createGeneralPracticeSetDraft, deleteGeneralPracticeSet, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, fetchGeneralPracticeQuizzes, fetchGeneralPracticeSet, fetchGeneralPracticeSets, isSafeQuizSetCoverImage, publishGeneralPracticeDraft, retryGeneralPracticeMedia, transitionGeneralPracticeSet, updateGeneralPracticeDraft, updateGeneralPracticeSet } from './generalPracticeAdminService'
+import { archiveGeneralPracticeQuiz, createGeneralPracticeDraft, createGeneralPracticeSet, createGeneralPracticeSetDraft, deleteGeneralPracticeSet, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, fetchGeneralPracticeQuizzes, fetchGeneralPracticeSet, fetchGeneralPracticeSets, isSafeQuizSetCoverImage, publishGeneralPracticeDraft, retryGeneralPracticeMedia, transitionGeneralPracticeSet, updateGeneralPracticeDraft, updateGeneralPracticeSet, uploadGeneralPracticeSetCover, removeGeneralPracticeSetCover } from './generalPracticeAdminService'
 
 const set = { id: 'set-1', name: 'Thai basics', status: 'active', version: 2, displayOrder: 1,
   description: '', coverImage: '', difficulty: null }
@@ -15,6 +15,26 @@ it('only renders authorized Cloudinary HTTPS Set cover images', () => {
   expect(isSafeQuizSetCoverImage('https://res.cloudinary.com/arun/image/upload/v1/set.jpg')).toBe(true)
   expect(isSafeQuizSetCoverImage('https://unrelated.example/image/upload/set.jpg')).toBe(false)
   expect(isSafeQuizSetCoverImage('http://res.cloudinary.com/arun/image/upload/set.jpg')).toBe(false)
+})
+
+it('uses dedicated Admin cover endpoints and multipart upload without exposing deletion IDs', async () => {
+  const file = new File(['jpeg'], 'cover.jpg', { type: 'image/jpeg' })
+  apiClient.post.mockResolvedValueOnce({ set: { ...set, version: 3 }, mediaCleanup: 'retry_required' })
+  apiClient.delete.mockResolvedValueOnce({ set: { ...set, coverImage: '', version: 4 }, mediaCleanup: 'complete' })
+  expect(await uploadGeneralPracticeSetCover('set-1', 2, file)).toMatchObject({ set: { version: 3 }, mediaCleanup: 'retry_required' })
+  const [path, body] = apiClient.post.mock.calls[0]
+  expect(path).toBe('/quizzes/admin/standalone/sets/set-1/cover')
+  expect(body).toBeInstanceOf(FormData)
+  expect(body.get('expectedVersion')).toBe('2')
+  expect(body.get('cover').name).toBe('cover.jpg')
+  expect(await removeGeneralPracticeSetCover('set-1', 3)).toMatchObject({ set: { version: 4 }, mediaCleanup: 'complete' })
+  expect(apiClient.delete).toHaveBeenCalledWith('/quizzes/admin/standalone/sets/set-1/cover', { expectedVersion: 3 })
+})
+
+it('rejects an unverified cover cleanup status without retrying the mutation', async () => {
+  apiClient.delete.mockResolvedValueOnce({ set, mediaCleanup: 'unknown' })
+  await expect(removeGeneralPracticeSetCover('set-1', 2)).rejects.toThrow(/cover update response/)
+  expect(apiClient.delete).toHaveBeenCalledTimes(1)
 })
 
 it('reads and validates Admin Quiz Set list and details responses', async () => {
@@ -42,6 +62,12 @@ it('uses the versioned Backend Set mutation contracts and verifies responses', a
   ])
   expect(apiClient.put).toHaveBeenCalledWith('/quizzes/admin/standalone/sets/set-1', { expectedVersion: 1, set: { name: 'Revised' } })
   expect(apiClient.delete).toHaveBeenCalledWith('/quizzes/admin/standalone/sets/set-1', { expectedVersion: 2 })
+})
+
+it('preserves retryable cleanup status after a committed Set deletion', async () => {
+  apiClient.delete.mockResolvedValueOnce({ deleted: true, mediaCleanup: 'retry_required' })
+  expect(await deleteGeneralPracticeSet('set-1', 2)).toEqual({ deleted: true, mediaCleanup: 'retry_required' })
+  expect(apiClient.delete).toHaveBeenCalledTimes(1)
 })
 
 it('rejects malformed Set list and details instead of rendering misleading content', async () => {

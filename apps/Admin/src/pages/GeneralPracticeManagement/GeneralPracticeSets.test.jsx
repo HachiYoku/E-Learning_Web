@@ -1,15 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GeneralPracticeSetList from './GeneralPracticeSetList'
 import GeneralPracticeSetDetails from './GeneralPracticeSetDetails'
+import GeneralPracticeSetCover from './GeneralPracticeSetCover'
 
 vi.mock('../../services/generalPracticeAdminService', () => ({
   fetchGeneralPracticeSets: vi.fn(), fetchGeneralPracticeSet: vi.fn(), isSafeQuizSetCoverImage: vi.fn(() => false),
   updateGeneralPracticeSet: vi.fn(), transitionGeneralPracticeSet: vi.fn(), deleteGeneralPracticeSet: vi.fn(),
 }))
-import { fetchGeneralPracticeSets, fetchGeneralPracticeSet } from '../../services/generalPracticeAdminService'
+import { fetchGeneralPracticeSets, fetchGeneralPracticeSet, deleteGeneralPracticeSet } from '../../services/generalPracticeAdminService'
 
 const setId = '507f1f77bcf86cd799439011'
 const set = { id: setId, name: 'Thai basics', description: 'Learn daily expressions',
@@ -31,11 +32,48 @@ function renderPages(path = '/general-practice') {
   </Routes></MemoryRouter>)
 }
 
+describe('Quiz Set cover placeholder', () => {
+  it('renders an available cover centered and uncropped in a 16:9 container', () => {
+    const { container } = render(<GeneralPracticeSetCover src="https://res.cloudinary.com/example/image/upload/cover.jpg" alt="Set cover" className="max-w-md" />)
+    const image = screen.getByRole('img', { name: 'Set cover' })
+    expect(image.className).toContain('object-contain')
+    expect(image.className).toContain('object-center')
+    expect(container.firstChild.className).toContain('aspect-video')
+    expect(container.firstChild.className).toContain('max-w-md')
+    expect(screen.queryByText('Thai Practice')).toBeNull()
+  })
+
+  it('shows the cream book placeholder when a cover is missing or fails to load', () => {
+    const { container, rerender } = render(<GeneralPracticeSetCover src="" alt="Set cover" />)
+    expect(screen.getByText('Thai Practice')).toBeTruthy()
+    expect(container.querySelector('.lucide-book-open-text')).toBeTruthy()
+    expect(container.firstChild.className).toContain('bg-[#FFF1D0]')
+    expect(container.firstChild.className).toContain('aspect-video')
+    rerender(<GeneralPracticeSetCover src="https://res.cloudinary.com/example/image/upload/broken.jpg" alt="Set cover" />)
+    fireEvent.error(screen.getByRole('img', { name: 'Set cover' }))
+    expect(screen.queryByRole('img', { name: 'Set cover' })).toBeNull()
+    expect(screen.getByText('Thai Practice')).toBeTruthy()
+    expect(container.firstChild.className).toContain('aspect-video')
+  })
+})
+
 describe('Admin General Practice Quiz Set read-only views', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     fetchGeneralPracticeSets.mockResolvedValue([set])
     fetchGeneralPracticeSet.mockResolvedValue({ set, quizzes: [quiz] })
+  })
+
+  it('reports a completed Set deletion with a cover cleanup retry on the catalog', async () => {
+    const user = userEvent.setup()
+    fetchGeneralPracticeSet.mockResolvedValue({ set: { ...set, status: 'disabled' }, quizzes: [] })
+    deleteGeneralPracticeSet.mockResolvedValue({ deleted: true, mediaCleanup: 'retry_required' })
+    renderPages(`/general-practice/sets/${setId}`)
+    await screen.findByRole('heading', { name: 'Thai basics' })
+    await user.click(screen.getByRole('button', { name: 'Delete empty Set' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete empty Set' }))
+    expect((await screen.findByRole('status')).textContent).toMatch(/Quiz Set deleted.*operator retry/)
+    expect(deleteGeneralPracticeSet).toHaveBeenCalledWith(setId, 1)
   })
 
   it('shows loading, Backend order, and all Set lifecycle statuses', async () => {
@@ -50,7 +88,11 @@ describe('Admin General Practice Quiz Set read-only views', () => {
     expect(screen.getByText('Archived Set')).toBeTruthy()
     const cards = screen.getAllByRole('article')
     expect(cards.map((card) => card.querySelector('h2').textContent)).toEqual(['Thai basics', 'Disabled Set', 'Archived Set'])
-    expect(screen.getByRole('link', { name: 'Create Quiz Set' })).toBeTruthy()
+    const create = screen.getByRole('link', { name: 'Create Quiz Set' })
+    expect(create.getAttribute('href')).toBe('/general-practice/sets/new')
+    expect(create.closest('header').className).toContain('sm:justify-between')
+    expect(create.className).toContain('self-start')
+    expect(create.className).toContain('shrink-0')
   })
 
   it('handles an empty catalog and absent optional metadata', async () => {
@@ -62,12 +104,15 @@ describe('Admin General Practice Quiz Set read-only views', () => {
     renderPages()
     expect(await screen.findByText('All levels')).toBeTruthy()
     expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByText('Thai Practice')).toBeTruthy()
   })
 
   it('shows an active empty Set as Quizzes coming soon', async () => {
     fetchGeneralPracticeSet.mockResolvedValue({ set, quizzes: [] })
     renderPages(`/general-practice/sets/${setId}`)
     expect(await screen.findByRole('heading', { name: 'Quizzes coming soon' })).toBeTruthy()
+    expect(screen.getByText('Thai Practice')).toBeTruthy()
+    expect(screen.getByText('Thai Practice').parentElement.parentElement.className).toContain('max-w-md')
     expect(screen.getByText('Set: active')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Disable Set' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Create Quiz' }).getAttribute('href')).toBe(`/general-practice/sets/${setId}/quizzes/new`)

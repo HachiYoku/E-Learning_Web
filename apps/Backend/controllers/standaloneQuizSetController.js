@@ -3,6 +3,7 @@ const QuizSet = require("../models/quizSetModel");
 const Quiz = require("../models/quizModel");
 const { publicSummary } = require("../services/standaloneQuizRevisions");
 const service = require("../services/standaloneQuizSets");
+const covers = require("../services/quizSetCoverService");
 
 function errorResponse(res, error) {
   if ([400, 404, 409, 503].includes(error?.status) && typeof error.code === "string") {
@@ -38,6 +39,14 @@ const getAdmin = handle(async (req) => {
 const create = handle(async (req) => ({ set: adminSet(await service.createSet(req.body)) }), true);
 const update = handle(async (req) => ({ set: adminSet(await service.updateSet(req.params.setId,
   req.body?.expectedVersion, req.body?.set)) }));
+const uploadCover = handle(async (req) => {
+  const result = await covers.uploadCover(req.params.setId, req.body?.expectedVersion, req.file);
+  return { set: adminSet(result.set), mediaCleanup: result.cleanup };
+});
+const removeCover = handle(async (req) => {
+  const result = await covers.removeCover(req.params.setId, req.body?.expectedVersion);
+  return { set: adminSet(result.set), mediaCleanup: result.cleanup };
+});
 const lifecycle = (action) => handle(async (req) => ({ set: adminSet(await service.transitionSet(
   req.params.setId, req.body?.expectedVersion, action)) }));
 const orderQuiz = handle(async (req) => {
@@ -103,5 +112,5 @@ const getPublic = handle(async (req) => {
   return { set: service.publicSet(set), quizzes: quizzes.map((quiz) => ({ ...publicSummary(quiz), sortOrder: quiz.sortOrder })) };
 });
 
-module.exports = { listAdmin, getAdmin, create, update, lifecycle, orderQuiz, createDraft, remove,
+module.exports = { listAdmin, getAdmin, create, update, uploadCover, removeCover, lifecycle, orderQuiz, createDraft, remove,
   listPublic, getPublic };

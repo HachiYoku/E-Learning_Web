@@ -86,6 +86,7 @@ async function fenceActiveSetForQuiz(quiz, session) {
 async function createSet(input) {
   const fields = metadata(input);
   if (!fields.name) throw invalid("Name is required.");
+  if (fields.coverImage) throw invalid("Upload a cover after creating the Quiz Set.");
   return QuizSet.create({ ...fields, status: "disabled" });
 }
 
@@ -94,6 +95,12 @@ async function updateSet(setId, expectedVersion, input) {
   if (!validVersion(expectedVersion)) throw invalid("expectedVersion is required.");
   const fields = metadata(input);
   if (!Object.keys(fields).length) throw invalid("No changes were supplied.");
+  if (Object.hasOwn(fields, "coverImage")) {
+    const current = await QuizSet.findById(setId).select("coverImage").lean();
+    if (!current) throw missing();
+    if (fields.coverImage !== (current.coverImage || "")) throw invalid("Use the cover upload or removal control to change this image.");
+    delete fields.coverImage;
+  }
   const updated = await QuizSet.findOneAndUpdate({ _id: setId, version: expectedVersion },
     { $set: fields, $inc: { version: 1 } }, { returnDocument: "after", runValidators: true });
   if (!updated) throw (await QuizSet.exists({ _id: setId })) ? stale() : missing();
@@ -281,11 +288,14 @@ async function createIdempotentSetDraft(setId, adminId, creationRequestId, input
   }
 }
 
-async function deleteEmptySet(setId, expectedVersion) {
+async function deleteEmptySet(setId, expectedVersion, { env = process.env } = {}) {
   if (!validId(setId)) throw missing();
   if (!validVersion(expectedVersion)) throw invalid("expectedVersion is required.");
+  // Loaded here to avoid a module-initialization cycle with QuizSetError.
+  const covers = require("./quizSetCoverService");
+  const CoverAsset = require("../models/quizSetCoverAssetModel");
   // Fail closed: member deletion and historical aggregate inspection require a separate policy.
-  return runStandaloneTransaction(async (session) => {
+  const committed = await runStandaloneTransaction(async (session) => {
     const set = await QuizSet.findById(setId).session(session);
     if (!set) throw missing();
     if (set.version !== expectedVersion) throw stale();
@@ -299,11 +309,31 @@ async function deleteEmptySet(setId, expectedVersion) {
     if (await QuizCreationRequest.exists({ quizSetId: set._id }).session(session)) {
       throw conflict("A Set with quiz creation requests cannot be permanently deleted.", "quiz_set_has_creation_requests");
     }
+    // Queue the owned cover in this transaction. A failed ownership check aborts
+    // both writes; Cloudinary is never called until after commit.
+    const coverAssetId = await covers.queueSetCoverDeletion(set, session, { env });
     // No attempt can be associated with an empty Set in the current schema.
     const deleted = await QuizSet.deleteOne({ _id: setId, version: expectedVersion, runtimeFence: fenced.runtimeFence }, { session });
     if (deleted.deletedCount !== 1) throw new StandaloneTransactionConflict();
-    return { deleted: true };
-  }, { resolveAmbiguous: async () => !await QuizSet.exists({ _id: setId }) ? { deleted: true } : undefined });
+    return { deleted: true, coverAssetId };
+  }, { resolveAmbiguous: async (value) => {
+    if (await QuizSet.exists({ _id: setId })) return undefined;
+    if (value.coverAssetId) {
+      const asset = await CoverAsset.findById(value.coverAssetId).lean();
+      if (!asset || String(asset.quizSet) !== String(setId)
+        || !["cleanup_pending", "cleanup_processing", "deleted"].includes(asset.state)) return undefined;
+    }
+    return value;
+  } });
+  if (!committed.coverAssetId) return { deleted: true };
+  // A cleanup failure cannot undo the committed Set deletion. The transactional
+  // pending record remains available to the operator retry command.
+  let mediaCleanup = "retry_required";
+  try {
+    const asset = await CoverAsset.findById(committed.coverAssetId);
+    if (asset?.state === "deleted" || asset && await covers.cleanupCoverAsset(asset, { env })) mediaCleanup = "complete";
+  } catch (_error) { /* The durable handoff remains authoritative. */ }
+  return { deleted: true, mediaCleanup };
 }
 
 function publicSet(set) {

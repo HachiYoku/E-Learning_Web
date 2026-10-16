@@ -9,8 +9,9 @@ import { validateSetForm } from './quizSetFormFields'
 vi.mock('../../services/generalPracticeAdminService', () => ({
   createGeneralPracticeSet: vi.fn(), updateGeneralPracticeSet: vi.fn(), transitionGeneralPracticeSet: vi.fn(),
   deleteGeneralPracticeSet: vi.fn(), fetchGeneralPracticeSet: vi.fn(), isSafeQuizSetCoverImage: vi.fn(() => false),
+  uploadGeneralPracticeSetCover: vi.fn(), removeGeneralPracticeSetCover: vi.fn(),
 }))
-import { createGeneralPracticeSet, updateGeneralPracticeSet, transitionGeneralPracticeSet, deleteGeneralPracticeSet, fetchGeneralPracticeSet } from '../../services/generalPracticeAdminService'
+import { createGeneralPracticeSet, updateGeneralPracticeSet, transitionGeneralPracticeSet, deleteGeneralPracticeSet, fetchGeneralPracticeSet, uploadGeneralPracticeSetCover, removeGeneralPracticeSetCover } from '../../services/generalPracticeAdminService'
 
 const id = '507f1f77bcf86cd799439011'
 const disabled = { id, name: 'Thai basics', description: '', coverImage: '', difficulty: null, displayOrder: 1, status: 'disabled', version: 1 }
@@ -32,16 +33,20 @@ async function confirm(user, label) {
 describe('Quiz Set management', () => {
   beforeEach(() => { vi.resetAllMocks(); fetchGeneralPracticeSet.mockResolvedValue({ set: disabled, quizzes: [] }) })
 
-  it('validates required fields and Cloudinary cover URLs before creation', async () => {
+  it('validates required fields and rejects invalid cover files before creation', async () => {
     const user = userEvent.setup()
     pages('/general-practice/sets/new')
+    expect(screen.getByText('Thai Practice')).toBeTruthy()
+    expect(screen.getByText('Thai Practice').parentElement.parentElement.className).toContain('max-w-md')
     await user.click(screen.getByRole('button', { name: 'Create Quiz Set' }))
     expect(screen.getByText('Enter a Quiz Set name.')).toBeTruthy()
     expect(createGeneralPracticeSet).not.toHaveBeenCalled()
-    await user.type(screen.getByRole('textbox', { name: /Cover image URL/ }), 'http://example.com/image.jpg')
+    const oversized = new File(['jpeg'], 'large.jpg', { type: 'image/jpeg' })
+    Object.defineProperty(oversized, 'size', { value: 5 * 1024 * 1024 + 1 })
+    await user.upload(screen.getByLabelText(/Cover image \(optional\)/), oversized)
     await user.type(screen.getByRole('textbox', { name: /Name/ }), 'Thai basics')
     await user.click(screen.getByRole('button', { name: 'Create Quiz Set' }))
-    expect(screen.getByText('Use a Cloudinary HTTPS image URL.')).toBeTruthy()
+    expect(screen.getByText(/Choose a JPG, PNG, or WebP image no larger than 5 MiB/)).toBeTruthy()
     expect(createGeneralPracticeSet).not.toHaveBeenCalled()
     expect(validateSetForm({ name: 'Thai', description: '', difficulty: '', coverImage: '' })).toEqual({})
   })
@@ -60,6 +65,48 @@ describe('Quiz Set management', () => {
     expect(await screen.findByRole('heading', { name: 'Thai basics' })).toBeTruthy()
     expect(screen.getByText('Set: disabled')).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('creates a Set before uploading its selected cover and never creates twice after upload failure', async () => {
+    const user = userEvent.setup()
+    const file = new File(['jpeg'], 'cover.jpg', { type: 'image/jpeg' })
+    createGeneralPracticeSet.mockResolvedValue(disabled)
+    uploadGeneralPracticeSetCover.mockRejectedValue(new Error('Upload unavailable'))
+    pages('/general-practice/sets/new')
+    await user.type(screen.getByRole('textbox', { name: /Name/ }), 'Thai basics')
+    await user.upload(screen.getByLabelText(/Cover image \(optional\)/), file)
+    await user.click(screen.getByRole('button', { name: 'Create Quiz Set' }))
+    expect(await screen.findByText(/Cover upload could not be confirmed/)).toBeTruthy()
+    expect(createGeneralPracticeSet).toHaveBeenCalledTimes(1)
+    expect(uploadGeneralPracticeSetCover).toHaveBeenCalledWith(id, 1, file)
+  })
+
+  it('protects a selected image when leaving an unsaved form', async () => {
+    const user = userEvent.setup()
+    pages('/general-practice/sets/new')
+    await user.upload(screen.getByLabelText(/Cover image \(optional\)/), new File(['jpeg'], 'cover.jpg', { type: 'image/jpeg' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Continue editing' }))
+    expect(screen.queryByTestId('path')).toBeNull()
+  })
+
+  it('shows a local cover preview and revokes its object URL on unmount', async () => {
+    const previousCreate = URL.createObjectURL
+    const previousRevoke = URL.revokeObjectURL
+    URL.createObjectURL = vi.fn(() => 'blob:cover-preview')
+    URL.revokeObjectURL = vi.fn()
+    try {
+      const user = userEvent.setup()
+      const view = pages('/general-practice/sets/new')
+      await user.upload(screen.getByLabelText(/Cover image \(optional\)/), new File(['jpeg'], 'cover.jpg', { type: 'image/jpeg' }))
+      expect((await screen.findByAltText('Quiz Set cover preview')).getAttribute('src')).toBe('blob:cover-preview')
+      view.unmount()
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:cover-preview')
+    } finally {
+      URL.createObjectURL = previousCreate
+      URL.revokeObjectURL = previousRevoke
+    }
   })
 
   it.each([[400, /Invalid metadata/], [401, /Admin access/], [403, /Admin access/], [503, /couldn't confirm whether your Quiz Set was created/], [undefined, /couldn't confirm whether your Quiz Set was created/]])('handles creation failure %s without claiming success', async (status, message) => {
@@ -124,6 +171,53 @@ describe('Quiz Set management', () => {
     await waitFor(() => expect(updateGeneralPracticeSet).toHaveBeenCalledWith(id, 1, { name: 'Thai essentials', description: '', difficulty: null, coverImage: '' }))
     expect(await screen.findByRole('heading', { name: 'Thai essentials' })).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('replaces or removes a cover only after the versioned metadata save', async () => {
+    const user = userEvent.setup()
+    const file = new File(['jpeg'], 'new.jpg', { type: 'image/jpeg' })
+    const withCover = { ...disabled, coverImage: 'https://res.cloudinary.com/test/image/upload/old.jpg' }
+    fetchGeneralPracticeSet.mockResolvedValue({ set: withCover, quizzes: [] })
+    updateGeneralPracticeSet.mockResolvedValueOnce({ ...withCover, version: 2 }).mockResolvedValueOnce({ ...withCover, version: 4 })
+    uploadGeneralPracticeSetCover.mockResolvedValue({ set: { ...withCover, version: 3, coverImage: 'https://res.cloudinary.com/test/image/upload/new.jpg' }, mediaCleanup: 'complete' })
+    removeGeneralPracticeSetCover.mockResolvedValue({ set: { ...withCover, version: 5, coverImage: '' }, mediaCleanup: 'complete' })
+    pages(`/general-practice/sets/${id}`)
+    await screen.findByRole('heading', { name: 'Thai basics' })
+    await user.click(screen.getByRole('button', { name: 'Edit Set details' }))
+    await user.upload(screen.getByLabelText(/Cover image \(optional\)/), file)
+    await user.click(screen.getByRole('button', { name: 'Save Set changes' }))
+    await waitFor(() => expect(uploadGeneralPracticeSetCover).toHaveBeenCalledWith(id, 2, file))
+    await user.click(screen.getByRole('button', { name: 'Edit Set details' }))
+    await user.click(screen.getByRole('button', { name: 'Remove cover' }))
+    await user.click(screen.getByRole('button', { name: 'Save Set changes' }))
+    await waitFor(() => expect(removeGeneralPracticeSetCover).toHaveBeenCalledWith(id, 4))
+  })
+
+  it('does not upload a cover when the Set metadata save conflicts', async () => {
+    const user = userEvent.setup()
+    updateGeneralPracticeSet.mockRejectedValue(Object.assign(new Error('Stale'), { status: 409 }))
+    pages(`/general-practice/sets/${id}`)
+    await screen.findByRole('heading', { name: 'Thai basics' })
+    await user.click(screen.getByRole('button', { name: 'Edit Set details' }))
+    await user.upload(screen.getByLabelText(/Cover image \(optional\)/), new File(['jpeg'], 'cover.jpg', { type: 'image/jpeg' }))
+    await user.click(screen.getByRole('button', { name: 'Save Set changes' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/changed elsewhere/)
+    expect(uploadGeneralPracticeSetCover).not.toHaveBeenCalled()
+  })
+
+  it('keeps a successful replacement saved while warning that old-cover cleanup needs an operator retry', async () => {
+    const user = userEvent.setup()
+    updateGeneralPracticeSet.mockResolvedValue({ ...disabled, version: 2 })
+    uploadGeneralPracticeSetCover.mockResolvedValue({ set: { ...disabled, version: 3,
+      coverImage: 'https://res.cloudinary.com/test/image/upload/new.jpg' }, mediaCleanup: 'retry_required' })
+    pages(`/general-practice/sets/${id}`)
+    await screen.findByRole('heading', { name: 'Thai basics' })
+    await user.click(screen.getByRole('button', { name: 'Edit Set details' }))
+    await user.upload(screen.getByLabelText(/Cover image \(optional\)/), new File(['jpeg'], 'new.jpg', { type: 'image/jpeg' }))
+    await user.click(screen.getByRole('button', { name: 'Save Set changes' }))
+    expect((await screen.findByRole('status')).textContent).toMatch(/Quiz Set saved.*operator retry/)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(uploadGeneralPracticeSetCover).toHaveBeenCalledTimes(1)
   })
 
   it('confirms discarding dirty edit values and closes unchanged edits without warning', async () => {

@@ -7,6 +7,7 @@ const quizSetSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 140 },
   description: { type: String, trim: true, maxlength: 1000, default: "" },
   coverImage: { type: String, trim: true, maxlength: 2048, default: "" },
+  coverAsset: { type: mongoose.Schema.Types.ObjectId, ref: "QuizSetCoverAsset", default: null },
   difficulty: { type: String, enum: QUIZ_SET_DIFFICULTIES, default: null },
   status: { type: String, enum: QUIZ_SET_STATUSES, default: "disabled", required: true },
   displayOrder: { type: Number, min: 1, default: 1, required: true },

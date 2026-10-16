@@ -73,6 +73,25 @@ export async function updateGeneralPracticeSet(setId, expectedVersion, fields) {
   return mutationSet(await apiClient.put(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}`, { expectedVersion, set: fields }))
 }
 
+export async function uploadGeneralPracticeSetCover(setId, expectedVersion, file) {
+  const body = new FormData()
+  body.append('expectedVersion', String(expectedVersion))
+  body.append('cover', file)
+  return coverMutation(await apiClient.post(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/cover`, body))
+}
+
+export async function removeGeneralPracticeSetCover(setId, expectedVersion) {
+  return coverMutation(await apiClient.delete(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/cover`, { expectedVersion }))
+}
+
+function coverMutation(response) {
+  const set = mutationSet(response)
+  if (!['complete', 'retry_required'].includes(response.mediaCleanup)) {
+    throw new Error('The cover update response could not be verified. Check the Quiz Set before trying again.')
+  }
+  return { set, mediaCleanup: response.mediaCleanup }
+}
+
 export async function transitionGeneralPracticeSet(setId, expectedVersion, action) {
   if (!['activate', 'disable', 'archive', 'restore'].includes(action)) throw new Error('Unsupported Quiz Set action.')
   return mutationSet(await apiClient.post(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/${action}`, { expectedVersion }))
@@ -81,6 +100,9 @@ export async function transitionGeneralPracticeSet(setId, expectedVersion, actio
 export async function deleteGeneralPracticeSet(setId, expectedVersion) {
   const response = await apiClient.delete(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}`, { expectedVersion })
   if (response?.deleted !== true) throw new Error('The deletion response could not be verified. Check the catalog before trying again.')
+  if (response.mediaCleanup !== undefined && !['complete', 'retry_required'].includes(response.mediaCleanup)) {
+    throw new Error('The cover cleanup result could not be verified. Check the catalog before trying again.')
+  }
   return response
 }
 

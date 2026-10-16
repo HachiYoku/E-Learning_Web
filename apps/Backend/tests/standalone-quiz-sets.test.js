@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { before, beforeEach, after, test } = require("node:test");
+const { before, beforeEach, after, test, mock } = require("node:test");
 const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs/promises");
 const net = require("node:net");
@@ -15,6 +15,10 @@ const QuizSession = require("../models/quizSessionModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const QuizMedia = require("../models/quizMediaModel");
 const QuizCreationRequest = require("../models/quizCreationRequestModel");
+const CoverAsset = require("../models/quizSetCoverAssetModel");
+const cloudinary = require("../config/cloudinary");
+const covers = require("../services/quizSetCoverService");
+const { TESTING_FOLDER } = require("../services/quizSetCoverEnvironment");
 const User = require("../models/userModel");
 const sets = require("../services/standaloneQuizSets");
 const revisions = require("../services/standaloneQuizRevisions");
@@ -25,6 +29,10 @@ const { REQUIRED, inspect } = require("../scripts/preflightQuizSetIndexes");
 const id = () => new mongoose.Types.ObjectId();
 const creationId = () => require("node:crypto").randomUUID();
 const learner = () => ({ id: id(), role: "user" });
+const coverEnv = { QUIZ_SET_COVER_ENV: "testing", NODE_ENV: "test",
+  MONGO_DB: "mongodb+srv://example:example@englishkafe.xhqpzdd.mongodb.net/english_kafe",
+  STANDALONE_QUIZ_EXPECTED_DB: "english_kafe", CLOUDINARY_CLOUD_NAME: "du6lhdq8t",
+  CLOUDINARY_API_KEY: "mock-key", CLOUDINARY_API_SECRET: "mock-secret" };
 const draft = () => ({ title: "Thai greetings", category: "Vocabulary", difficulty: "Beginner",
   standaloneAccess: "public", questions: [{ prompt: "Hello?", options: ["Sawasdee", "Bye"], correctAnswer: 0,
     explanation: "Sawasdee means hello." }] });
@@ -54,7 +62,7 @@ async function pauseNextSetFence(run) {
   try { return await run({ entered: entered.promise, release: release.resolve }); }
   finally { release.resolve(); QuizSet.findOneAndUpdate = original; }
 }
-let mongo; let directory; let server; let base; let oldSecret; let mongoUri;
+let mongo; let directory; let server; let base; let oldSecret; let mongoUri; let configuredCloud;
 
 async function activeSet() {
   const set = await sets.createSet({ name: "UAT Set", difficulty: "Beginner" });
@@ -63,6 +71,15 @@ async function activeSet() {
 async function published(setId) {
   const created = await sets.createSetDraft(setId, draft());
   return revisions.publishDraft(created._id, 1);
+}
+async function attachManagedCover(set, { environment = "testing", state = "active", url } = {}) {
+  const assetId = id();
+  const coverUrl = url || `https://res.cloudinary.com/test/image/upload/${TESTING_FOLDER}/${assetId}.jpg`;
+  const asset = await CoverAsset.create({ _id: assetId, quizSet: set._id, environment,
+    publicId: `${TESTING_FOLDER}/${assetId}`, url: coverUrl, state,
+    abandonAfter: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
+  await QuizSet.updateOne({ _id: set._id }, { $set: { coverAsset: assetId, coverImage: coverUrl } });
+  return asset;
 }
 async function request(route, { method = "GET", token, body } = {}) {
   const response = await fetch(`${base}/quizzes${route}`, { method,
@@ -73,6 +90,7 @@ async function request(route, { method = "GET", token, body } = {}) {
 }
 
 before(async () => {
+  configuredCloud = mock.method(cloudinary, "config", () => ({ cloud_name: "du6lhdq8t" }));
   const mongoPort = await freePort(); const apiPort = await freePort();
   directory = await fs.mkdtemp(path.join(os.tmpdir(), "arun-thai-quiz-sets-"));
   mongo = spawn("mongod", ["--replSet", "paymentTests", "--port", String(mongoPort), "--dbpath", directory,
@@ -92,11 +110,12 @@ before(async () => {
 });
 beforeEach(async () => {
   await mongoose.connection.db.dropDatabase();
-  for (const model of [QuizSet, Quiz, QuizSession, QuizAttempt, QuizMedia, QuizCreationRequest, User]) {
+  for (const model of [QuizSet, Quiz, QuizSession, QuizAttempt, QuizMedia, QuizCreationRequest, CoverAsset, User]) {
     await model.createCollection(); await model.syncIndexes();
   }
 });
 after(async () => {
+  configuredCloud?.mock.restore();
   if (server) await new Promise((resolve) => server.close(resolve));
   if (oldSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = oldSecret;
   await mongoose.disconnect();
@@ -409,6 +428,100 @@ test("non-ledger standalone Quiz and empty Set retain their permanent-deletion r
   const unassigned = await Quiz.create({ title: "Unassigned legacy", contextType: "standalone",
     status: "draft", publishedRevision: null, revision: 1, questions: [] });
   assert.deepEqual(await revisions.deleteDraftOrQuiz(unassigned._id), { deleted: true });
+});
+
+test("managed cover deletion queues ownership atomically before provider cleanup", async () => {
+  const set = await sets.createSet({ name: "Covered empty Set" });
+  const asset = await attachManagedCover(set);
+  const destroy = mock.method(cloudinary.uploader, "destroy", async (publicId) => {
+    assert.equal(publicId, asset.publicId);
+    assert.equal(await QuizSet.exists({ _id: set._id }), null);
+    const queued = await CoverAsset.findById(asset._id).lean();
+    assert.equal(queued.state, "cleanup_processing");
+    assert.equal(queued.cleanupReason, "set_deleted");
+    return { result: "ok" };
+  });
+  try {
+    assert.deepEqual(await sets.deleteEmptySet(set._id, set.version, { env: coverEnv }),
+      { deleted: true, mediaCleanup: "complete" });
+    assert.equal((await CoverAsset.findById(asset._id).lean()).state, "deleted");
+    assert.equal(destroy.mock.calls.length, 1);
+  } finally { destroy.mock.restore(); }
+});
+
+test("failed provider deletion leaves a durable Set-deletion retry record", async () => {
+  const set = await sets.createSet({ name: "Cover retry Set" });
+  const asset = await attachManagedCover(set);
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => { throw new Error("provider unavailable"); });
+  try {
+    assert.deepEqual(await sets.deleteEmptySet(set._id, set.version, { env: coverEnv }),
+      { deleted: true, mediaCleanup: "retry_required" });
+  } finally { destroy.mock.restore(); }
+  assert.equal(await QuizSet.exists({ _id: set._id }), null);
+  const pending = await CoverAsset.findById(asset._id).lean();
+  assert.equal(pending.state, "cleanup_pending");
+  assert.equal(pending.cleanupReason, "set_deleted");
+  assert.equal(pending.cleanupAttempts, 1);
+  const retry = mock.method(cloudinary.uploader, "destroy", async () => ({ result: "ok" }));
+  try {
+    assert.equal((await covers.retryCoverCleanup({ execute: true, env: coverEnv })).deleted, 1);
+    assert.equal((await CoverAsset.findById(asset._id).lean()).state, "deleted");
+  } finally { retry.mock.restore(); }
+});
+
+test("unverified managed ownership aborts both Set deletion and cleanup handoff", async () => {
+  const missing = await sets.createSet({ name: "Missing ownership" });
+  await QuizSet.updateOne({ _id: missing._id }, { $set: { coverAsset: id(), coverImage: "https://res.cloudinary.com/test/image/upload/missing.jpg" } });
+  await assert.rejects(sets.deleteEmptySet(missing._id, missing.version, { env: coverEnv }),
+    { code: "quiz_set_cover_unverified" });
+  assert.ok(await QuizSet.exists({ _id: missing._id }));
+
+  const foreign = await sets.createSet({ name: "Foreign ownership" });
+  const asset = await attachManagedCover(foreign, { environment: "production" });
+  await assert.rejects(sets.deleteEmptySet(foreign._id, foreign.version, { env: coverEnv }),
+    { code: "quiz_set_cover_unverified" });
+  assert.ok(await QuizSet.exists({ _id: foreign._id }));
+  assert.equal((await CoverAsset.findById(asset._id).lean()).state, "active");
+});
+
+test("a transaction failure after cover handoff rolls back the Set and ownership state", async () => {
+  const set = await sets.createSet({ name: "Rollback covered Set" });
+  const asset = await attachManagedCover(set);
+  const deleteOne = mock.method(QuizSet, "deleteOne", async () => { throw new Error("forced transaction failure"); });
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => { throw new Error("precommit deletion"); });
+  try {
+    await assert.rejects(sets.deleteEmptySet(set._id, set.version, { env: coverEnv }), /forced transaction failure/);
+    assert.ok(await QuizSet.exists({ _id: set._id }));
+    assert.equal((await CoverAsset.findById(asset._id).lean()).state, "active");
+    assert.equal(destroy.mock.calls.length, 0);
+  } finally { deleteOne.mock.restore(); destroy.mock.restore(); }
+});
+
+test("legacy URL-only cover is never sent to managed Cloudinary cleanup", async () => {
+  const set = await sets.createSet({ name: "Legacy cover Set" });
+  await QuizSet.updateOne({ _id: set._id }, { $set: { coverImage: "https://res.cloudinary.com/legacy/image/upload/old.jpg" } });
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => { throw new Error("unverified asset"); });
+  try {
+    assert.deepEqual(await sets.deleteEmptySet(set._id, set.version, { env: coverEnv }), { deleted: true });
+    assert.equal(destroy.mock.calls.length, 0);
+  } finally { destroy.mock.restore(); }
+});
+
+test("Set deletion wins a concurrent cover removal without losing cleanup accounting", async () => {
+  const set = await sets.createSet({ name: "Cover race Set" });
+  const asset = await attachManagedCover(set);
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => ({ result: "ok" }));
+  try {
+    await pauseNextSetFence(async ({ entered, release }) => {
+      const deleting = sets.deleteEmptySet(set._id, set.version, { env: coverEnv });
+      await entered;
+      const removing = assert.rejects(covers.removeCover(set._id, set.version, { env: coverEnv }));
+      release();
+      assert.deepEqual(await deleting, { deleted: true, mediaCleanup: "complete" });
+      await removing;
+    });
+    assert.equal((await CoverAsset.findById(asset._id).lean()).state, "deleted");
+  } finally { destroy.mock.restore(); }
 });
 
 test("committed creation wins a race with Set deletion without losing its ledger", async () => {
