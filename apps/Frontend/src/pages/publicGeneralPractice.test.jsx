@@ -30,6 +30,7 @@ function renderRoutes(initialEntry = "/practice/general") {
     <Route path="/practice/general" element={<PublicGeneralPracticeLayout />}>
       <Route index element={<GeneralPracticeList publicView />} />
       <Route path="sets/:setId" element={<GeneralPracticeSetDetails publicView />} />
+      <Route path=":quizId/guest/take" element={<p>Guest quiz</p>} />
       <Route path=":quizId" element={<GeneralPracticeDetails publicView />} />
     </Route>
     <Route path="/login" element={<Login />} />
@@ -143,20 +144,16 @@ describe("public General Practice", () => {
     expect(startGeneralPracticeSession).not.toHaveBeenCalled()
   })
 
-  it("returns a guest to protected quiz details after login without creating a session", async () => {
+  it("starts a Public quiz through the guest route without login or an authenticated session", async () => {
     renderRoutes(`/practice/general/${publicQuiz.id}`)
     expect(await screen.findByRole("heading", { name: "Thai greetings" })).toBeTruthy()
     expect(screen.getByText("Public").querySelector(".lucide-globe")).toBeTruthy()
     expect(screen.getByRole("link", { name: "Back to Home" }).getAttribute("href")).toBe("/")
-    expect(screen.getByRole("link", { name: "Log in to Start Quiz" })).toBeTruthy()
+    expect(screen.getByRole("link", { name: "Start Quiz" }).getAttribute("href")).toBe(`/practice/general/${publicQuiz.id}/guest/take`)
     expect(screen.queryByRole("link", { name: /attempt history/i })).toBeNull()
-    await userEvent.setup().click(screen.getByRole("link", { name: "Log in to Start Quiz" }))
-    expect(screen.getByTestId("pathname").textContent).toBe("/login")
-    await userEvent.setup().type(screen.getByRole("textbox", { name: "Email address" }), "student@example.test")
-    await userEvent.setup().type(screen.getByLabelText("Password"), "example-password")
-    await userEvent.setup().click(screen.getByRole("button", { name: "Log in" }))
-    expect(await screen.findByRole("button", { name: "Start / Resume Quiz" })).toBeTruthy()
-    expect(screen.getByTestId("pathname").textContent).toBe(`/app/practice/general/${publicQuiz.id}`)
+    await userEvent.setup().click(screen.getByRole("link", { name: "Start Quiz" }))
+    expect(screen.getByTestId("pathname").textContent).toBe(`/practice/general/${publicQuiz.id}/guest/take`)
+    expect(screen.getByText("Guest quiz")).toBeTruthy()
     expect(startGeneralPracticeSession).not.toHaveBeenCalled()
   })
 
@@ -188,10 +185,10 @@ describe("public General Practice", () => {
     expect(screen.queryByText("Protected result")).toBeNull()
   })
 
-  it("keeps the selected quiz destination after a failed login attempt", async () => {
+  it("keeps the Students Only destination after a failed login attempt", async () => {
     auth.login.mockRejectedValueOnce(new Error("Invalid credentials"))
-    renderRoutes(`/practice/general/${publicQuiz.id}`)
-    await userEvent.setup().click(await screen.findByRole("link", { name: "Log in to Start Quiz" }))
+    renderRoutes(`/practice/general/sets/${quizSet.id}`)
+    await userEvent.setup().click(await screen.findByRole("link", { name: `Log in to view ${restrictedQuiz.title}` }))
     await userEvent.setup().type(screen.getByRole("textbox", { name: "Email address" }), "student@example.test")
     await userEvent.setup().type(screen.getByLabelText("Password"), "incorrect-password")
     await userEvent.setup().click(screen.getByRole("button", { name: "Log in" }))

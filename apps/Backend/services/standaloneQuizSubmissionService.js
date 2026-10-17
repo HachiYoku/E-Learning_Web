@@ -237,4 +237,5 @@ async function getStandaloneAttemptHistoryPage({ quizId, user, limit, before }) 
 }
 
 module.exports = { StandaloneSubmissionError, submitStandaloneQuiz,
-  getStandaloneAttemptResult, getStandaloneAttemptHistory, getStandaloneAttemptHistoryPage };
+  getStandaloneAttemptResult, getStandaloneAttemptHistory, getStandaloneAttemptHistoryPage,
+  validSnapshot, validateAnswers };

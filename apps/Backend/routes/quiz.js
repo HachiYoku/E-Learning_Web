@@ -10,6 +10,9 @@ const standaloneSets = require("../controllers/standaloneQuizSetController");
 const { attachUserIfPresent } = require("../middleware/authMiddleware");
 const { standaloneQuizRateLimit } = require("../middleware/standaloneQuizRateLimit");
 const { requireStandaloneRuntimeReady } = require("../services/standaloneQuizRuntimeReadiness");
+const guest = require("../controllers/guestQuizController");
+const { requireGuestQuizReady, prepareGuestStart, requireGuestOwner, guestQuizRateLimit } = require("../middleware/guestQuizRuntime");
+const { requireGuestWriteOrigin } = require("../services/guestQuizSecurity");
 
 const router = express.Router();
 const upload = createQuizMediaUpload({ maxFiles: 20 });
@@ -23,6 +26,12 @@ const coverUploadLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20,
 router.get("/standalone/sets", attachUserIfPresent, standaloneSets.listPublic);
 router.get("/standalone/sets/:setId", attachUserIfPresent, standaloneSets.getPublic);
 router.get("/standalone", attachUserIfPresent, standalone.listPublished);
+router.get("/standalone/guest/attempts/:attemptId", requireGuestQuizReady, requireGuestOwner, guest.getResult);
+router.post("/standalone/:quizId/guest/sessions", requireGuestWriteOrigin, requireGuestQuizReady,
+  prepareGuestStart, guestQuizRateLimit("start"), guest.start);
+router.get("/standalone/:quizId/guest/sessions/:sessionId", requireGuestQuizReady, requireGuestOwner, guest.getSession);
+router.post("/standalone/:quizId/guest/submit", requireGuestWriteOrigin, requireGuestQuizReady,
+  requireGuestOwner, guestQuizRateLimit("submit"), guest.submit);
 router.get("/standalone/attempts/:attemptId", validateToken, requireStandaloneRuntimeReady, standalone.getResult);
 router.get("/standalone/:quizId/attempts", validateToken, requireStandaloneRuntimeReady, standalone.getHistory);
 router.post("/standalone/:quizId/sessions", validateToken, standaloneQuizRateLimit("start"),

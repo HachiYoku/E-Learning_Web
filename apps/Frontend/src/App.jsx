@@ -105,6 +105,9 @@ function App() {
         <Route path="/practice/general" element={<PublicGeneralPracticeLayout />}>
           <Route index element={<GeneralPracticeList publicView />} />
           <Route path="sets/:setId" element={<GeneralPracticeSetDetails publicView />} />
+          <Route path=":quizId/guest/take" element={<GeneralPracticeTake guest />} />
+          <Route path=":quizId/guest/sessions/:sessionId" element={<GeneralPracticeTake guest />} />
+          <Route path=":quizId/guest/complete/:attemptId" element={<GeneralPracticeComplete guest />} />
           <Route path=":quizId" element={<GeneralPracticeDetails publicView />} />
         </Route>
         <Route path="/practice/:section" element={<Practice />} />

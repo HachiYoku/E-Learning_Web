@@ -6,7 +6,7 @@ import { useAuth } from "../contexts/AuthContext"
 import { fetchGeneralPracticeQuiz, fetchGeneralPracticeSet, startGeneralPracticeSession } from "../services/generalPracticeService"
 import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
 
-function PublicStartAction({ quizId, parentSetId }) {
+function PublicStartAction({ quizId, parentSetId, access }) {
   const { isAuthenticated, isBootstrapping, user } = useAuth()
   const destination = `/app/practice/general/${encodeURIComponent(quizId)}${parentSetId ? `?setId=${encodeURIComponent(parentSetId)}` : ""}`
   const buttonClass = "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:w-auto"
@@ -14,7 +14,8 @@ function PublicStartAction({ quizId, parentSetId }) {
   if (isBootstrapping) return <p role="status" className="text-sm text-[#765F55]">Checking your account...</p>
   if (isAuthenticated && user?.role === "user") return <Link to={destination} className={buttonClass}><Play className="h-4 w-4" aria-hidden="true" />Continue in Student portal</Link>
   if (isAuthenticated) return <p className="text-sm text-[#765F55]">Use a student account to take this quiz.</p>
-  return <Link to="/login" state={{ from: { pathname: destination } }} className={buttonClass}><LogIn className="h-4 w-4" aria-hidden="true" />Log in to Start Quiz</Link>
+  if (access !== "public") return <Link to="/login" state={{ from: { pathname: destination } }} className={buttonClass}><LogIn className="h-4 w-4" aria-hidden="true" />Log in to Start Quiz</Link>
+  return <Link to={`/practice/general/${encodeURIComponent(quizId)}/guest/take`} className={buttonClass}><Play className="h-4 w-4" aria-hidden="true" />Start Quiz</Link>
 }
 
 function AccessBadge({ access }) {
@@ -112,7 +113,7 @@ function GeneralPracticeDetails({ publicView = false }) {
               <div><dt className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#765F55]"><ShieldCheck className="h-4 w-4" aria-hidden="true" />Access</dt><dd className="mt-1 flex min-h-9 items-center"><AccessBadge access={quiz.standaloneAccess} /></dd></div>
             </dl>
             <div className="mt-6 border-t border-[#2D2E30]/10 pt-5">
-              {publicView ? <PublicStartAction quizId={quiz.id} parentSetId={parentSetId} /> : <>
+              {publicView ? <PublicStartAction quizId={quiz.id} parentSetId={parentSetId} access={quiz.standaloneAccess} /> : <>
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap"><button type="button" onClick={start} disabled={starting} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] disabled:cursor-wait disabled:opacity-60 sm:w-auto"><Play className="h-4 w-4" aria-hidden="true" />{starting ? "Starting quiz..." : "Start / Resume Quiz"}</button><Link to={`/app/practice/general/${encodeURIComponent(quizId)}/history`} state={{ quizTitle: quiz.title }} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-white px-5 py-3 text-sm font-bold text-[#765F55] hover:bg-[#FFF9EA] hover:text-[#A94F00] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:w-auto"><History className="h-4 w-4" aria-hidden="true" />Attempt history</Link></div>
                 <p className="mt-3 text-sm text-[#765F55]">Unsubmitted selections will not be restored if you leave or resume.</p>
                 {startError ? <p role="alert" className="mt-3 text-sm font-semibold text-[#A84646]">{startError}</p> : null}

@@ -76,4 +76,4 @@ async function startOrResumeStandaloneQuizSession({ quizId, user }) {
   }, { resolveAmbiguous });
 }
 
-module.exports = { startOrResumeStandaloneQuizSession };
+module.exports = { startOrResumeStandaloneQuizSession, publishedQuizIsUsable, studentSession };

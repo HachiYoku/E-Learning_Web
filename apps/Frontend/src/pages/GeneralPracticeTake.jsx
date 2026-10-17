@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react"
 import { ArrowLeft } from "lucide-react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { startGeneralPracticeSession, submitGeneralPracticeQuiz } from "../services/generalPracticeService"
-import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
+import { fetchGuestGeneralPracticeSession, startGuestGeneralPracticeSession, submitGuestGeneralPracticeQuiz } from "../services/guestGeneralPracticeService"
+import { generalPracticeErrorMessage, guestGeneralPracticeErrorMessage } from "../utils/generalPracticeErrors"
 
 function validSession(value) {
   return typeof value?.sessionId === "string" && value.sessionId.length > 0
@@ -12,11 +13,12 @@ function validSession(value) {
     && value.questions.every((question) => Array.isArray(question.options) && question.options.length >= 2)
 }
 
-function GeneralPracticeTake() {
-  const { quizId } = useParams()
+function GeneralPracticeTake({ guest = false }) {
+  const { quizId, sessionId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
   const incoming = location.state?.quizId === quizId && validSession(location.state?.session)
+    && (!guest || !sessionId || location.state.session.sessionId === sessionId)
     ? location.state.session : null
   const [session, setSession] = useState(incoming)
   const [answers, setAnswers] = useState(() => incoming?.questions.map(() => null) || [])
@@ -35,6 +37,32 @@ function GeneralPracticeTake() {
   const confirmHeading = useRef(null)
   const confirmDialog = useRef(null)
   const submitTrigger = useRef(null)
+  const messageFor = guest ? guestGeneralPracticeErrorMessage : generalPracticeErrorMessage
+
+  useEffect(() => {
+    if (!guest || !sessionId || incoming) return undefined
+    let active = true
+    setStarting(true)
+    fetchGuestGeneralPracticeSession(quizId, sessionId)
+      .then((restored) => {
+        if (!active) return
+        if (!validSession(restored) || restored.sessionId !== sessionId || Date.parse(restored.expiresAt) <= Date.now()) {
+          setInvalidated(true)
+          return
+        }
+        setSession(restored)
+        setAnswers(restored.questions.map(() => null))
+        setNow(Date.now())
+      })
+      .catch((requestError) => {
+        if (!active) return
+        setInvalidated([401, 409].includes(requestError.status))
+        setUnavailable(requestError.status === 404)
+        setError(guestGeneralPracticeErrorMessage(requestError))
+      })
+      .finally(() => { if (active) setStarting(false) })
+    return () => { active = false }
+  }, [guest, quizId, sessionId, incoming])
 
   useEffect(() => {
     if (!session) return undefined
@@ -124,7 +152,7 @@ function GeneralPracticeTake() {
     setStarting(true)
     setError("")
     try {
-      const next = await startGeneralPracticeSession(quizId)
+      const next = await (guest ? startGuestGeneralPracticeSession(quizId) : startGeneralPracticeSession(quizId))
       if (!validSession(next) || Date.parse(next.expiresAt) <= Date.now()) throw new Error("Invalid session response")
       setSession(next)
       setAnswers(next.questions.map(() => null))
@@ -135,8 +163,10 @@ function GeneralPracticeTake() {
       setInvalidated(false)
       setUnavailable(false)
       pendingSubmission.current = null
+      if (guest) navigate(`/practice/general/${encodeURIComponent(quizId)}/guest/sessions/${encodeURIComponent(next.sessionId)}`, { replace: true, state: { quizId, session: next } })
     } catch (requestError) {
-      setError(generalPracticeErrorMessage(requestError))
+      setError(messageFor(requestError))
+      if (guest && requestError?.status === 404) setUnavailable(true)
     } finally {
       startInFlight.current = false
       setStarting(false)
@@ -156,18 +186,18 @@ function GeneralPracticeTake() {
     setConfirming(false)
     setError("")
     try {
-      const result = await submitGeneralPracticeQuiz(quizId, payload)
+      const result = await (guest ? submitGuestGeneralPracticeQuiz(quizId, payload) : submitGeneralPracticeQuiz(quizId, payload))
       if (typeof result?.attemptId !== "string" || !result.attemptId) throw new Error("Invalid submission response")
-      navigate(`/app/practice/general/${encodeURIComponent(quizId)}/complete/${encodeURIComponent(result.attemptId)}`, {
+      navigate(`${guest ? "/practice/general" : "/app/practice/general"}/${encodeURIComponent(quizId)}${guest ? "/guest" : ""}/complete/${encodeURIComponent(result.attemptId)}`, {
         replace: true, state: { confirmedQuizId: quizId, confirmedAttemptId: result.attemptId },
       })
     } catch (requestError) {
-      setError(generalPracticeErrorMessage(requestError))
+      setError(messageFor(requestError))
       setUncertain((previous) => {
-        if ([400, 404, 409].includes(requestError?.status)) return false
+        if ([400, 401, 404, 409].includes(requestError?.status)) return false
         return previous || !requestError?.status || requestError.status === 503
       })
-      if (requestError?.status === 409) setInvalidated(true)
+      if (requestError?.status === 409 || (guest && requestError?.status === 401)) setInvalidated(true)
       if (requestError?.status === 404) setUnavailable(true)
     } finally {
       submitInFlight.current = false
@@ -177,7 +207,7 @@ function GeneralPracticeTake() {
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
-      <Link to={`/app/practice/general/${encodeURIComponent(quizId)}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to quiz details</Link>
+      <Link to={`${guest ? "/practice/general" : "/app/practice/general"}/${encodeURIComponent(quizId)}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to quiz details</Link>
       <p className="mt-3 text-sm text-[#765F55]">Unsubmitted selections are not saved. Leaving or reloading this page clears them, even if you resume the same session.</p>
 
       {!session || unavailable || ((expired || invalidated) && !uncertain) ? (

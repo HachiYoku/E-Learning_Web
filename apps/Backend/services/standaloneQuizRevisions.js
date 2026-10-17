@@ -6,6 +6,8 @@ const QuizCreationRequest = require("../models/quizCreationRequestModel");
 const { cleanupQuizMedia } = require("./quizMediaLifecycle");
 const quizMediaLifecycle = require("./quizMediaLifecycle");
 const QuizSession = require("../models/quizSessionModel");
+const GuestQuizSession = require("../models/guestQuizSessionModel");
+const { guestQuizHasDependencies } = require("./guestQuizDependencies");
 const { runStandaloneTransaction, writeQuizFence, StandaloneTransactionConflict,
   StandaloneTransactionOutcomeUnknown } = require("./standaloneQuizTransactions");
 
@@ -211,6 +213,15 @@ async function invalidateStandaloneSessions(quizId, reason, session) {
     { quiz: quizId, contextType: "standalone", activeSlot: true },
     { $set: { activeSlot: false } }, { session }
   );
+  // The guest collection is introduced separately from its HTTP rollout.
+  // Avoid an implicit collection-creation write in transactions before rollout.
+  if (await GuestQuizSession.exists({ quiz: quizId }).session(session)) {
+    await GuestQuizSession.updateMany(
+      { quiz: quizId, invalidatedAt: null, expiresAt: { $gt: now } },
+      { $set: { invalidatedAt: now, activeSlot: false } }, { session });
+    await GuestQuizSession.updateMany({ quiz: quizId, activeSlot: true },
+      { $set: { activeSlot: false } }, { session });
+  }
 }
 
 async function deleteDraftOrQuiz(quizId) {
@@ -229,6 +240,9 @@ async function deleteDraftOrQuiz(quizId) {
       }
       if (await QuizAttempt.exists({ quiz: quiz._id }).session(session)) {
         throw new StandaloneQuizError(409, "This quiz has student results and cannot be permanently deleted. Archive it instead to preserve student history.", "quiz_has_history");
+      }
+      if (await guestQuizHasDependencies(quiz._id, session)) {
+        throw new StandaloneQuizError(409, "This quiz has temporary guest activity and cannot be permanently deleted yet. Archive it instead.", "quiz_has_guest_activity");
       }
       await invalidateStandaloneSessions(quiz._id, "deleted", session);
       // Durable recovery state precedes physical cleanup, which must run only

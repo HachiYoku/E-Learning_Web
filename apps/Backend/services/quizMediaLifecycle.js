@@ -2,6 +2,7 @@ const QuizMedia = require("../models/quizMediaModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const QuizSession = require("../models/quizSessionModel");
 const Quiz = require("../models/quizModel");
+const { guestMediaIsProtected } = require("./guestQuizDependencies");
 const cloudinary = require("../config/cloudinary");
 
 function mediaValues(question) {
@@ -45,7 +46,8 @@ async function isHistoricallyReferenced(publicId) {
 }
 
 async function cleanupQuizMedia(record) {
-  if (!record || record.cleanupState === "deleted" || await isHistoricallyReferenced(record.publicId)) return false;
+  if (!record || record.cleanupState === "deleted" || await isHistoricallyReferenced(record.publicId)
+    || await guestMediaIsProtected(record.publicId)) return false;
   if (await Quiz.exists({ $or: [
     { "questions.imagePublicId": record.publicId }, { "questions.audioPublicId": record.publicId },
     { "draft.questions.imagePublicId": record.publicId }, { "draft.questions.audioPublicId": record.publicId },

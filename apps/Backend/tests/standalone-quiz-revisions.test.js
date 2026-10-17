@@ -213,6 +213,26 @@ test("generic live mutation is blocked and deletion preserves submitted history"
   assert.equal(await Quiz.findById(disposable._id), null);
 });
 
+test("temporary guest activity blocks permanent standalone deletion without changing the quiz", async () => {
+  const GuestQuizSession = require("../models/guestQuizSessionModel");
+  const GuestQuizAttempt = require("../models/guestQuizAttemptModel");
+  const quiz = await revisions.createDraft(draft("Guest protected"));
+  const startedAt = new Date();
+  const guestSession = await GuestQuizSession.create({ quiz: quiz._id, ownerHash: "a".repeat(64),
+    revision: 1, snapshot: { questions: [] }, startedAt,
+    expiresAt: new Date(startedAt.getTime() + 24 * 60 * 60 * 1000) });
+  await assert.rejects(revisions.deleteDraftOrQuiz(quiz._id), /temporary guest activity/);
+  assert.ok(await Quiz.findById(quiz._id));
+  await GuestQuizSession.deleteOne({ _id: guestSession._id });
+  const submittedAt = new Date();
+  await GuestQuizAttempt.create({ quiz: quiz._id, session: guestSession._id,
+    ownerHash: "a".repeat(64), answers: [0], score: 1, total: 1,
+    submissionSnapshot: { questions: [] }, submittedAt,
+    expiresAt: new Date(submittedAt.getTime() + 24 * 60 * 60 * 1000) });
+  await assert.rejects(revisions.deleteDraftOrQuiz(quiz._id), /temporary guest activity/);
+  assert.ok(await Quiz.findById(quiz._id));
+});
+
 for (const stage of ["registration", "reconciliation"]) {
   for (const operation of ["save", "publish"]) {
     test(`${stage} failure after ${operation} keeps the committed state and permits media-only retry`, async () => {
