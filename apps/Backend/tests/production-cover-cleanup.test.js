@@ -9,7 +9,7 @@ const command = require("../scripts/retryQuizSetCoverCleanup");
 
 const host = "arunthai.abcde.mongodb.net";
 const env = { NODE_ENV: "production", QUIZ_SET_COVER_ENV: "production",
-  MONGO_DB: `mongodb+srv://mock:mock@${host}/arunthai`,
+  MONGO_DB: `mongodb+srv://${host}/arunthai`,
   PRODUCTION_MONGO_EXPECTED_HOST: host, STANDALONE_QUIZ_EXPECTED_DB: "arunthai",
   CLOUDINARY_CLOUD_NAME: "du6lhdq8t", CLOUDINARY_API_KEY: "mock-key", CLOUDINARY_API_SECRET: "mock-secret" };
 const asset = () => {
@@ -34,7 +34,7 @@ test("production cleanup requires an explicit mode, independent host, database a
   assert.throws(() => command.assertProductionCleanupTarget(env.MONGO_DB,
     { ...env, CLOUDINARY_CLOUD_NAME: "other" }));
   assert.throws(() => command.assertProductionCleanupTarget(
-    "mongodb+srv://mock:mock@englishkafe.xhqpzdd.mongodb.net/english_kafe", env));
+    "mongodb+srv://englishkafe.xhqpzdd.mongodb.net/english_kafe", env));
   assert.throws(() => command.assertTestingTarget(env.MONGO_DB, env));
 });
 

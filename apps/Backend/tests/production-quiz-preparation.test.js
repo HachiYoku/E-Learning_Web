@@ -4,7 +4,7 @@ const { assertProductionTarget, assertConnectedProductionTarget } = require("../
 const preparation = require("../scripts/prepareProductionQuizIndexes");
 
 const host = "arunthai.abcde.mongodb.net";
-const uri = `mongodb+srv://mock:mock@${host}/arunthai`;
+const uri = `mongodb+srv://${host}/arunthai`;
 const env = { NODE_ENV: "production", MONGO_DB: uri, QUIZ_INDEX_EXPECTED_DB: "arunthai",
   PRODUCTION_MONGO_EXPECTED_HOST: host };
 const inspectors = {
@@ -44,9 +44,9 @@ test("production target requires independent exact Atlas host and database confi
   assert.throws(() => assertProductionTarget(uri, { ...env, PRODUCTION_MONGO_EXPECTED_HOST: undefined }));
   assert.throws(() => assertProductionTarget(uri, { ...env, PRODUCTION_MONGO_EXPECTED_HOST: "other.mongodb.net" }));
   assert.throws(() => assertProductionTarget(uri, { ...env, QUIZ_INDEX_EXPECTED_DB: "english_kafe" }));
-  assert.throws(() => assertProductionTarget("mongodb+srv://mock:mock@englishkafe.xhqpzdd.mongodb.net/english_kafe", env));
-  assert.throws(() => assertProductionTarget(`mongodb+srv://mock:mock@${host}/english_kafe`, env));
-  assert.throws(() => assertProductionTarget(`mongodb://mock:mock@${host}/arunthai`, env));
+  assert.throws(() => assertProductionTarget("mongodb+srv://englishkafe.xhqpzdd.mongodb.net/english_kafe", env));
+  assert.throws(() => assertProductionTarget(`mongodb+srv://${host}/english_kafe`, env));
+  assert.throws(() => assertProductionTarget(`mongodb://${host}/arunthai`, env));
   assert.throws(() => assertProductionTarget(`${uri}?tls=false`, env));
   for (const option of ["ssl=false", "TLS=FALSE", "tlsInsecure=true",
     "tlsAllowInvalidCertificates=true", "tlsAllowInvalidHostnames=true",
