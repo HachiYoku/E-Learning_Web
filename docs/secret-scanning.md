@@ -9,3 +9,7 @@ Repository-managed hooks in `.githooks/` can automate both local checks. Run `ba
 GitHub Actions scans introduced commits in pull requests to `testing-environment`/`main` and pushes to those branches. Configure branch protection to require the **Secret scan / gitleaks** check before merging and restrict direct pushes separately. GitHub Actions runs after a direct push and cannot prevent that push by itself. Neither gate disables GitHub secret scanning or rewrites previously published history.
 
 If a check flags a secret, stop; do not commit or push, paste the value into chat, or save an unredacted report. Determine whether it is a genuine credential. Rotate and revoke genuine credentials through the owner-approved process; replace synthetic credential-shaped fixtures with credential-free examples. Rerun staged and outgoing checks. Do not dismiss a GitHub alert without its separate review process.
+
+## Temporary PR check
+
+This documentation-only PR verifies that GitHub runs the `gitleaks` check before a change can enter `testing-environment`. Do not merge the PR.
