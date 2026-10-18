@@ -74,7 +74,7 @@ async function published(setId) {
 }
 async function attachManagedCover(set, { environment = "testing", state = "active", url } = {}) {
   const assetId = id();
-  const coverUrl = url || `https://res.cloudinary.com/test/image/upload/${TESTING_FOLDER}/${assetId}.jpg`;
+  const coverUrl = url || `https://res.cloudinary.com/du6lhdq8t/image/upload/${TESTING_FOLDER}/${assetId}.jpg`;
   const asset = await CoverAsset.create({ _id: assetId, quizSet: set._id, environment,
     publicId: `${TESTING_FOLDER}/${assetId}`, url: coverUrl, state,
     abandonAfter: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
@@ -504,6 +504,25 @@ test("legacy URL-only cover is never sent to managed Cloudinary cleanup", async 
   try {
     assert.deepEqual(await sets.deleteEmptySet(set._id, set.version, { env: coverEnv }), { deleted: true });
     assert.equal(destroy.mock.calls.length, 0);
+  } finally { destroy.mock.restore(); }
+});
+
+test("a transformed legacy URL-only reference prevents managed cover deletion", async () => {
+  const owned = await sets.createSet({ name: "Managed source" });
+  const asset = await attachManagedCover(owned);
+  const legacy = await sets.createSet({ name: "Legacy transformed reference" });
+  const alternateUrl = asset.url.replace("/image/upload/", "/image/upload/c_fill,w_300/").replace(/\.jpg$/, ".webp");
+  await QuizSet.updateOne({ _id: legacy._id }, { $set: { coverImage: alternateUrl } });
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => {
+    throw new Error("referenced cover must not be deleted");
+  });
+  try {
+    assert.deepEqual(await sets.deleteEmptySet(owned._id, owned.version, { env: coverEnv }),
+      { deleted: true, mediaCleanup: "retry_required" });
+    assert.equal((await CoverAsset.findById(asset._id).lean()).state, "cleanup_pending");
+    assert.equal((await covers.retryCoverCleanup({ execute: true, env: coverEnv })).deleted, 0);
+    assert.equal(destroy.mock.calls.length, 0);
+    assert.ok(await QuizSet.exists({ _id: legacy._id }));
   } finally { destroy.mock.restore(); }
 });
 

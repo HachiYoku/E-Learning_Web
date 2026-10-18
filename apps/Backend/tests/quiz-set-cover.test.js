@@ -18,6 +18,8 @@ const productionEnv = { ...env, QUIZ_SET_COVER_ENV: 'production', NODE_ENV: 'pro
   STANDALONE_QUIZ_EXPECTED_DB: 'arunthai' };
 
 const setId = new mongoose.Types.ObjectId();
+const ownedUrl = (asset, cloud = 'du6lhdq8t') =>
+  `https://res.cloudinary.com/${cloud}/image/upload/v1/${asset.publicId}.jpg`;
 const baseSet = () => ({ _id: setId, version: 1, coverImage: '', coverAsset: null });
 const image = { buffer: Buffer.from([0xff, 0xd8, 0xff]) };
 let configuredCloud = 'du6lhdq8t';
@@ -105,6 +107,7 @@ test('replacement cleanup checks references and preserves a retry record on prov
     url: 'https://res.cloudinary.com/test/image/upload/old.jpg', state: 'active', abandonAfter: new Date(0) };
   asset.environment = 'testing';
   asset.publicId = `${TESTING_FOLDER}/${asset._id}`;
+  asset.url = ownedUrl(asset);
   const methods = [
     mock.method(QuizSet, 'exists', async () => false),
     mock.method(CoverAsset, 'findOneAndUpdate', async () => asset),
@@ -123,12 +126,13 @@ test('abandoned cover waits seven days and cannot delete a referenced asset', as
     abandonAfter: new Date('2030-01-08') };
   asset.environment = 'testing';
   asset.publicId = `${TESTING_FOLDER}/${asset._id}`;
+  asset.url = ownedUrl(asset);
   const methods = [
     mock.method(CoverAsset, 'findOneAndUpdate', async () => asset),
     mock.method(CoverAsset, 'updateOne', async () => ({ matchedCount: 1 })),
     mock.method(QuizSet, 'exists', async (filter) => {
       assert.deepEqual(filter.$or[0], { coverAsset: asset._id });
-      assert.deepEqual(filter.$or[1], { coverImage: asset.url });
+      assert.deepEqual(filter.$or[1], { coverImage: { $regex: String(asset._id), $options: 'i' } });
       return true; // A different Set may still reference the asset URL.
     }),
     mock.method(cloudinary.uploader, 'destroy', async () => ({ result: 'ok' })),
@@ -146,6 +150,7 @@ test('an unreferenced abandoned cover is eligible after seven days', async () =>
     abandonAfter: new Date('2030-01-08') };
   asset.environment = 'testing';
   asset.publicId = `${TESTING_FOLDER}/${asset._id}`;
+  asset.url = ownedUrl(asset);
   const methods = [
     mock.method(QuizSet, 'exists', async () => false),
     mock.method(CoverAsset, 'findOneAndUpdate', async () => asset),
@@ -169,7 +174,9 @@ test('ordinary Set creation rejects client-supplied cover URLs', async () => {
 
 function owned(state = 'cleanup_pending', extras = {}) {
   const _id = new mongoose.Types.ObjectId();
-  return { _id, quizSet: setId, environment: 'testing', publicId: `${TESTING_FOLDER}/${_id}`,
+  const publicId = `${TESTING_FOLDER}/${_id}`;
+  return { _id, quizSet: setId, environment: 'testing', publicId,
+    url: `https://res.cloudinary.com/du6lhdq8t/image/upload/v1/${publicId}.jpg`,
     state, abandonAfter: new Date('2020-01-01'), cleanupAttempts: 0, ...extras };
 }
 
@@ -254,7 +261,7 @@ test('operator retry records a provider failure and leaves the asset retryable',
 });
 
 test('concurrent claim loser and active or cross-Set references cannot delete', async () => {
-  const asset = owned('cleanup_pending', { url: 'https://res.cloudinary.com/test/image/upload/cover.jpg' });
+  const asset = owned('cleanup_pending');
   let claimed = false;
   let referenced = false;
   const methods = [
@@ -267,7 +274,7 @@ test('concurrent claim loser and active or cross-Set references cannot delete', 
       assert.equal(update.$set.cleanupOutcome, 'referenced'); return { matchedCount: 1 };
     }),
     mock.method(QuizSet, 'exists', async (filter) => {
-      assert.deepEqual(filter.$or[1], { coverImage: asset.url });
+      assert.deepEqual(filter.$or[1], { coverImage: { $regex: String(asset._id), $options: 'i' } });
       return referenced;
     }),
     mock.method(cloudinary.uploader, 'destroy', async () => ({ result: 'ok' })),
@@ -309,8 +316,8 @@ test('abandoned reservations wait seven days; spoofed ownership cannot claim', a
 
 test('operator command requires explicit execution and the approved testing target', () => {
   const command = require('../scripts/retryQuizSetCoverCleanup');
-  assert.deepEqual(command.options([]), { execute: false, limit: 20 });
-  assert.deepEqual(command.options(['--execute', '--limit=1']), { execute: true, limit: 1 });
+  assert.deepEqual(command.options([]), { execute: false, limit: 20, production: false });
+  assert.deepEqual(command.options(['--execute', '--limit=1']), { execute: true, limit: 1, production: false });
   assert.throws(() => command.options(['--limit=101']));
   assert.doesNotThrow(() => command.assertTestingTarget(env.MONGO_DB, env));
   assert.doesNotThrow(() => command.assertConfiguredCloud(command.assertTestingTarget(env.MONGO_DB, env), 'du6lhdq8t'));

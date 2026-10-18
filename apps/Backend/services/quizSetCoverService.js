@@ -36,6 +36,22 @@ function verifiedUpload(result, publicId) {
   } catch { return false; }
 }
 
+function verifiedOwnedCoverUrl(value, identity, publicId) {
+  if (typeof value !== "string" || !value) return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.hostname !== "res.cloudinary.com"
+      || url.username || url.password || url.port) return false;
+    const parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    if (parts.some((part) => part.includes("/")) || parts[0] !== identity.cloudName
+      || parts[1] !== "image" || parts[2] !== "upload") return false;
+    const owned = publicId.split("/");
+    const suffix = parts.slice(-owned.length);
+    if (suffix.length !== owned.length || owned.slice(0, -1).some((part, index) => suffix[index] !== part)) return false;
+    return new RegExp(`^${owned.at(-1)}(?:\\.[a-zA-Z0-9]+)?$`).test(suffix.at(-1));
+  } catch { return false; }
+}
+
 async function queueSetCoverDeletion(set, session, { env = process.env } = {}) {
   if (!set.coverAsset) return null; // URL-only legacy covers have no verified asset to delete.
   const identity = resolveCoverEnvironment(env);
@@ -60,26 +76,31 @@ async function cleanupCoverAsset(asset, { abandoned = false, now = new Date(), e
   // Only a server-created ownership record may authorize a provider deletion.
   if (!mongoose.isValidObjectId(asset._id) || !mongoose.isValidObjectId(asset.quizSet)
     || asset.environment !== identity.mode || asset.publicId !== `${identity.folder}/${asset._id}`) return false;
+  // A URL-less reservation or mismatched provider URL cannot prove which
+  // Cloudinary bytes it owns. Leave it for supervised recovery.
+  if (!verifiedOwnedCoverUrl(asset.url, identity, asset.publicId)) return false;
   const isAbandoned = abandoned || asset.cleanupReason === "abandoned";
   if (isAbandoned && (asset.state === "active" || !asset.abandonAfter || asset.abandonAfter > now)) return false;
   const claim = await CoverAsset.findOneAndUpdate({ _id: asset._id, quizSet: asset.quizSet, environment: identity.mode,
-    publicId: asset.publicId, state: asset.state,
+    publicId: asset.publicId, url: asset.url, state: asset.state,
     ...(isAbandoned ? { abandonAfter: { $lte: now } } : {}) },
   { $set: { state: "cleanup_processing", cleanupStartedAt: now, cleanupOutcome: "processing",
     cleanupReason: isAbandoned ? "abandoned" : (asset.cleanupReason || "replaced") }, $inc: { cleanupAttempts: 1 } },
   { returnDocument: "after" });
   if (!claim) return false; // Another cleanup process won the claim.
-  if (claim.environment !== identity.mode || claim.publicId !== asset.publicId || String(claim.quizSet) !== String(asset.quizSet)) {
+  if (claim.environment !== identity.mode || claim.publicId !== asset.publicId || String(claim.quizSet) !== String(asset.quizSet)
+    || !verifiedOwnedCoverUrl(claim.url, identity, claim.publicId)) {
     // The claim is unexpectedly inconsistent. Keep it for supervised recovery; never call Cloudinary.
     return false;
   }
   const claimFilter = { _id: asset._id, state: "cleanup_processing", cleanupStartedAt: now };
-  // A legacy URL-only Set could also refer to this URL. Recheck *after* the
-  // claim; never delete on an Admin-provided ID or a stale ownership snapshot.
+  // Legacy URLs can use different transformations, versions or delivery formats.
+  // The server-generated ObjectId is the stable public-ID suffix, so any Set
+  // URL containing it is conservatively treated as a live reference.
   let referenced;
   try {
     referenced = await QuizSet.exists({ $or: [{ coverAsset: asset._id },
-      ...(claim.url ? [{ coverImage: claim.url }] : [])] });
+      { coverImage: { $regex: String(asset._id), $options: "i" } }] });
   } catch (error) {
     await CoverAsset.updateOne(claimFilter, { $set: { state: "cleanup_pending",
       cleanupError: error?.name || "reference_check_failed", cleanupFinishedAt: new Date(), cleanupOutcome: "failed" } });
@@ -109,17 +130,17 @@ async function retryCoverCleanup({ execute = false, limit = 20, now = new Date()
   // Filter references before applying the limit. Healthy active covers never enter
   // this queue, and a referenced pending cover cannot starve other work.
   const candidates = await CoverAsset.aggregate([
-    { $match: { environment: identity.mode, $or: [
+    { $match: { environment: identity.mode, url: { $type: "string", $ne: "" }, $or: [
       { state: "cleanup_pending", cleanupReason: { $ne: "abandoned" } },
       { state: "cleanup_pending", cleanupReason: "abandoned", abandonAfter: { $lte: now } },
       { state: { $in: ["reserved", "available"] }, abandonAfter: { $lte: now } },
     ] } },
     { $addFields: { cleanupPriority: { $cond: [{ $eq: ["$state", "cleanup_pending"] }, 0, 1] } } },
     { $sort: { cleanupPriority: 1, _id: 1 } },
-    { $lookup: { from: "quizsets", let: { assetId: "$_id", assetUrl: "$url" }, pipeline: [
+    { $lookup: { from: "quizsets", let: { assetId: "$_id" }, pipeline: [
       { $match: { $expr: { $or: [
         { $eq: ["$coverAsset", "$$assetId"] },
-        { $and: [{ $ne: ["$$assetUrl", ""] }, { $eq: ["$coverImage", "$$assetUrl"] }] },
+        { $regexMatch: { input: { $ifNull: ["$coverImage", ""] }, regex: { $toString: "$$assetId" }, options: "i" } },
       ] } } }, { $limit: 1 }, { $project: { _id: 1 } },
     ], as: "references" } },
     { $match: { references: { $size: 0 } } },
