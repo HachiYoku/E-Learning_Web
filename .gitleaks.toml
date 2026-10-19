@@ -1,0 +1,9 @@
+title = "ARUN THAI secret checks"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "mongodb-uri-userinfo"
+description = "MongoDB URI containing embedded username and password"
+regex = '''(?i)mongodb(?:\+srv)?://[^\s/@:]+:[^\s/@]+@[^\s/]+'''
