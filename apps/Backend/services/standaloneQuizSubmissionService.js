@@ -147,8 +147,13 @@ async function submitStandaloneQuiz({ quizId, sessionId, user, submittedRevision
       || previous.attemptNumber === Number.MAX_SAFE_INTEGER)) throw invalidHistory();
     const attemptNumber = previous ? previous.attemptNumber + 1 : 1;
     const questions = quizSession.snapshot.questions;
-    const score = questions.reduce((total, question, index) => total +
-      (question.correctAnswer === submittedAnswers[index] ? 1 : 0), 0);
+    // The request array follows the displayed session order. Associate each
+    // answer with its immutable snapshot question ID before scoring/review.
+    const answersByQuestionId = new Map(questions.map((question, index) =>
+      [String(question.questionId), submittedAnswers[index]]));
+    const snapshotAnswers = questions.map((question) => answersByQuestionId.get(String(question.questionId)));
+    const score = questions.reduce((total, question) => total +
+      (question.correctAnswer === answersByQuestionId.get(String(question.questionId)) ? 1 : 0), 0);
     const submittedAt = new Date();
     const snapshotQuiz = {
       contextType: "standalone", title: quizSession.snapshot.title,
@@ -156,10 +161,10 @@ async function submitStandaloneQuiz({ quizId, sessionId, user, submittedRevision
       questions: questions.map((question) => ({ ...question, _id: question.questionId })),
     };
     const submissionSnapshot = buildQuizSubmissionSnapshot({ quiz: snapshotQuiz,
-      answers: submittedAnswers, score, total: questions.length, submittedAt });
+      answers: snapshotAnswers, score, total: questions.length, submittedAt });
     const [attempt] = await QuizAttempt.create([{
       quiz: fenced._id, user: userId, session: quizSession._id,
-      attemptNumber, answers: submittedAnswers, score, total: questions.length,
+      attemptNumber, answers: snapshotAnswers, score, total: questions.length,
       submissionSnapshot, createdAt: submittedAt,
     }], { session });
     const released = await QuizSession.updateOne({ _id: quizSession._id, quiz: fenced._id, user: userId,

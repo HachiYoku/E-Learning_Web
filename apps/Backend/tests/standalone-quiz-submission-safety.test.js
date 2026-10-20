@@ -108,6 +108,30 @@ test("server scores immutable snapshot and atomically releases the active slot",
   assert.notEqual(next.sessionId, session.sessionId);
 });
 
+test("shuffled session IDs govern grading, saved review order, history and repeat submission", async () => {
+  const quiz = await publishedQuiz([
+    { ...question("First"), correctAnswer: 0 },
+    { ...question("Second"), correctAnswer: 1 },
+    { ...question("Third"), correctAnswer: 0 },
+  ]);
+  const learner = user();
+  const session = await start({ quizId: quiz._id, user: learner });
+  const authored = new Map(quiz.questions.map((item) => [String(item._id), item]));
+  const answers = session.questions.map((item) => authored.get(String(item._id)).correctAnswer);
+  const args = { quizId: quiz._id, sessionId: session.sessionId,
+    submittedRevision: session.revision, user: learner, answers };
+  const saved = await submit(args);
+  assert.equal(saved.score, 3);
+  assert.deepEqual(saved.review.map((item) => String(item.questionId)),
+    session.questions.map((item) => String(item._id)));
+  assert.deepEqual(saved.review.map((item) => item.prompt), session.questions.map((item) => item.prompt));
+  assert.ok(saved.review.every((item) => item.isCorrect));
+  assert.deepEqual((await result({ attemptId: saved.attemptId, user: learner })).review, saved.review);
+  assert.deepEqual((await history({ user: learner, quizId: quiz._id }))[0].review, saved.review);
+  assert.deepEqual(await submit({ ...args, answers: [1, 1, 1] }), saved);
+  assert.equal(await QuizAttempt.countDocuments({ session: session.sessionId }), 1);
+});
+
 test("malformed, missing, extra and out-of-range answers do not create attempts or release a slot", async () => {
   const { args, session } = await ready();
   for (const answers of [null, {}, [], [0], [0, 1, 0], [0, 2], [-1, 0], [0, null], [0, false], [0, "1"], [0, 1.5]]) {
@@ -330,16 +354,16 @@ for (const action of ["disable", "archive"]) {
 }
 
 test("published edits do not change older snapshot grading or saved review", async () => {
-  const { quiz, learner, args } = await ready();
+  const { quiz, learner, args, session } = await ready();
   await revisions.saveDraft(quiz._id, 0, { questions: [{ ...question("New first"), correctAnswer: 1 }, question("New second")] });
   await revisions.publishDraft(quiz._id, 1);
   const saved = await submit(args);
   assert.equal(saved.score, 1);
-  assert.equal(saved.review[0].prompt, "First question");
+  assert.deepEqual(saved.review.map((item) => item.prompt), session.questions.map((item) => item.prompt));
   assert.equal(saved.review[0].correctAnswer, 0);
   const newer = await start({ quizId: quiz._id, user: learner });
   assert.equal(newer.revision, 2);
-  assert.equal((await result({ attemptId: saved.attemptId, user: learner })).review[0].prompt, "First question");
+  assert.deepEqual((await result({ attemptId: saved.attemptId, user: learner })).review, saved.review);
 });
 
 test("media remains protected across session-to-attempt transition and TTL deletion", async () => {
