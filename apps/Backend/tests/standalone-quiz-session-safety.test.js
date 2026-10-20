@@ -9,7 +9,7 @@ const mongoose = require("mongoose");
 const { initiateReplicaSet } = require("./helpers/replicaSet");
 
 let mongo; let directory; let Quiz; let QuizSession; let QuizAttempt; let QuizMedia;
-let revisions; let startOrResume; let oldStart;
+let revisions; let startOrResume; let shuffleSnapshotQuestions; let oldStart; let sessionSnapshot;
 const id = () => new mongoose.Types.ObjectId();
 const user = () => ({ id: id(), role: "user" });
 const question = (prompt = "Original question") => ({ prompt, options: ["A", "B"], correctAnswer: 0,
@@ -55,8 +55,9 @@ before(async () => {
   QuizMedia = require("../models/quizMediaModel");
   revisions = { ...require("../services/standaloneQuizRevisions"),
     createDraft: require("./helpers/legacyStandaloneDraft") };
-  ({ startOrResumeStandaloneQuizSession: startOrResume } = require("../services/standaloneQuizSessionService"));
-  ({ startQuizSession: oldStart } = require("../services/quizSessionService"));
+  ({ startOrResumeStandaloneQuizSession: startOrResume, shuffleSnapshotQuestions } =
+    require("../services/standaloneQuizSessionService"));
+  ({ startQuizSession: oldStart, sessionSnapshot } = require("../services/quizSessionService"));
 });
 
 beforeEach(async () => {
@@ -86,6 +87,52 @@ test("internal start stores a 24-hour snapshot, resumes it, and leaves public st
   assert.deepEqual(resumed.questions, started.questions);
   await assert.rejects(oldStart({ quizId: quiz._id, user: learner }), /unavailable/i);
   assert.equal(await QuizSession.countDocuments({ quiz: quiz._id, user: learner.id, activeSlot: true }), 1);
+});
+
+test("Fisher-Yates uses a controlled random source without changing authored or shared-context order", () => {
+  const authored = [{ questionId: "A" }, { questionId: "B" }, { questionId: "C" }, { questionId: "D" }];
+  const choices = [];
+  const shuffled = shuffleSnapshotQuestions({ questions: authored }, (upper) => {
+    choices.push(upper);
+    return 0;
+  });
+  assert.deepEqual(choices, [4, 3, 2]);
+  assert.deepEqual(shuffled.questions.map((item) => item.questionId), ["B", "C", "D", "A"]);
+  assert.deepEqual(authored.map((item) => item.questionId), ["A", "B", "C", "D"]);
+  for (const contextType of ["course_lesson", "homework_lesson"]) {
+    const shared = sessionSnapshot({ contextType, title: "Existing quiz", revision: 1,
+      questions: authored.map((item) => ({ _id: item.questionId, prompt: item.questionId,
+        options: ["A", "B"], correctAnswer: 0 })) });
+    assert.deepEqual(shared.questions.map((item) => item.questionId), ["A", "B", "C", "D"]);
+  }
+});
+
+test("new standalone sessions persist a complete permutation; resume preserves it", async () => {
+  const created = await revisions.createDraft({ ...draft(), questions: [question("One"), question("Two"), question("Three")] });
+  const quiz = await revisions.publishDraft(created._id, 1); const learner = user();
+  const started = await startOrResume({ quizId: quiz._id, user: learner });
+  const stored = await QuizSession.findById(started.sessionId);
+  const ids = started.questions.map((item) => String(item._id));
+  assert.equal(new Set(ids).size, quiz.questions.length);
+  assert.deepEqual([...ids].sort(), quiz.questions.map((item) => String(item._id)).sort());
+  assert.deepEqual(stored.snapshot.questions.map((item) => String(item.questionId)), ids);
+  assert.deepEqual((await startOrResume({ quizId: quiz._id, user: learner })).questions, started.questions);
+  assert.equal("correctAnswer" in started.questions[0], false);
+});
+
+test("an existing authored-order session keeps that order when resumed", async () => {
+  const created = await revisions.createDraft({ ...draft(), questions: [question("One"), question("Two"), question("Three")] });
+  const quiz = await revisions.publishDraft(created._id, 1); const learner = user();
+  const started = await startOrResume({ quizId: quiz._id, user: learner });
+  const stored = await QuizSession.findById(started.sessionId);
+  const byId = new Map(stored.snapshot.questions.map((item) => [String(item.questionId), item]));
+  const authoredOrder = quiz.questions.map((item) => byId.get(String(item._id)));
+  // Emulate a session saved before randomization; the application model keeps
+  // snapshots immutable, so the disposable fixture uses the collection API.
+  await QuizSession.collection.updateOne({ _id: stored._id }, { $set: { "snapshot.questions": authoredOrder } });
+  const resumed = await startOrResume({ quizId: quiz._id, user: learner });
+  assert.equal(resumed.sessionId, started.sessionId);
+  assert.deepEqual(resumed.questions.map((item) => String(item._id)), quiz.questions.map((item) => String(item._id)));
 });
 
 test("parallel starts converge on one committed session and the loser resumes it", async () => {

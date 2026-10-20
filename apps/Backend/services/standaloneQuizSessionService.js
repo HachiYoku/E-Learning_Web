@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { randomInt } = require("node:crypto");
 const Quiz = require("../models/quizModel");
 const QuizSession = require("../models/quizSessionModel");
 const QuizSet = require("../models/quizSetModel");
@@ -30,6 +31,15 @@ function studentSession(session, created) {
       audio: question.audio, audioLabel: question.audioLabel,
     })),
   };
+}
+
+function shuffleSnapshotQuestions(snapshot, chooseIndex = randomInt) {
+  const questions = [...snapshot.questions];
+  for (let index = questions.length - 1; index > 0; index -= 1) {
+    const swapIndex = chooseIndex(index + 1);
+    [questions[index], questions[swapIndex]] = [questions[swapIndex], questions[index]];
+  }
+  return { ...snapshot, questions };
 }
 
 async function startOrResumeStandaloneQuizSession({ quizId, user }) {
@@ -65,7 +75,7 @@ async function startOrResumeStandaloneQuizSession({ quizId, user }) {
     const existing = await QuizSession.findOne({ ...ownership, invalidatedAt: null, expiresAt: { $gt: now },
       ...(set ? { setEpoch: set.runtimeEpoch } : {}) }).session(session);
     if (existing) return studentSession(existing, false);
-    const snapshot = sessionSnapshot(fenced);
+    const snapshot = shuffleSnapshotQuestions(sessionSnapshot(fenced));
     const [created] = await QuizSession.create([{
       user: userId, quiz: fenced._id, contextType: "standalone", activeSlot: true,
       ...(set ? { setEpoch: set.runtimeEpoch } : {}),
@@ -76,4 +86,5 @@ async function startOrResumeStandaloneQuizSession({ quizId, user }) {
   }, { resolveAmbiguous });
 }
 
-module.exports = { startOrResumeStandaloneQuizSession, publishedQuizIsUsable, studentSession };
+module.exports = { startOrResumeStandaloneQuizSession, publishedQuizIsUsable, studentSession,
+  shuffleSnapshotQuestions };
