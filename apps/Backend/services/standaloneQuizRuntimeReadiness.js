@@ -7,7 +7,7 @@ const { INDEXES, sameDefinition } = require("../scripts/prepareQuizIndexes");
 const REQUIRED_INDEXES = Object.freeze({
   quizsessions: ["expiresAt_1", "one_active_standalone_session"],
   quizattempts: ["quiz_1_user_1_attemptNumber_1", "one_standalone_attempt_per_session"],
-  quizratewindows: ["one_quiz_rate_window", "quiz_rate_window_expiry"],
+  standalonequizratewindows: ["one_standalone_quiz_rate_window", "standalone_quiz_rate_window_expiry"],
 });
 
 const unavailable = (reason) => ({ ready: false, reason });

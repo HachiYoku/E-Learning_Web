@@ -170,7 +170,7 @@ test("HTTP submission scores saved snapshots, replays changed payload, and isola
   assert.equal((await request(`/standalone/attempts/${saved.body.attemptId}`, { token: student.token })).body.attemptId,
     saved.body.attemptId);
   assert.equal((await request(`/standalone/${quiz._id}/submit`, { method: "POST", token: admin.token,
-    body: { sessionId: session.sessionId, revision: session.revision, answers: [0] } })).status, 409);
+    body: { sessionId: session.sessionId, revision: session.revision, answers: [0] } })).status, 404);
 });
 
 test("history keyset pages stay stable as new attempts arrive and survive Archive", async () => {
@@ -219,6 +219,56 @@ test("twentieth request passes, twenty-first is 429, and submit uses an independ
   assert.equal(submitBlocked.status, 429);
   assert.ok(Number(submitBlocked.headers.get("retry-after")) >= 1);
   assert.equal(await QuizAttempt.countDocuments({ quiz: quiz._id }), 1);
+  assert.equal((await QuizRateWindow.findOne({ user: student.id, quiz: quiz._id, operation: "start" })).count, 20);
+  assert.equal((await QuizRateWindow.findOne({ user: student.id, quiz: quiz._id, operation: "submit" })).count, 20);
+});
+
+test("exhausting Quiz A does not consume Quiz B's start or submission allowance", async () => {
+  const first = await published(); const second = await published(); const student = await account();
+  const firstSession = (await start(first, student.token)).body;
+  for (let index = 1; index < 20; index += 1) {
+    const resumed = await start(first, student.token);
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.body.sessionId, firstSession.sessionId);
+  }
+  assert.equal((await start(first, student.token)).status, 429);
+  const secondSession = await start(second, student.token);
+  assert.equal(secondSession.status, 201);
+  for (let index = 0; index < 20; index += 1) {
+    const replay = await submit(first, firstSession, student.token);
+    assert.equal(replay.status, 200);
+    assert.equal(replay.body.attemptId, (await QuizAttempt.findOne({ session: firstSession.sessionId })).id);
+  }
+  assert.equal((await submit(first, firstSession, student.token)).status, 429);
+  assert.equal((await submit(second, secondSession.body, student.token)).status, 200);
+  assert.equal((await QuizRateWindow.findOne({ user: student.id, quiz: second._id, operation: "start" })).count, 1);
+  assert.equal((await QuizRateWindow.findOne({ user: student.id, quiz: second._id, operation: "submit" })).count, 1);
+});
+
+test("canonical owned session or attempt rejects a mismatched Quiz URL without charging it", async () => {
+  const first = await published(); const second = await published(); const student = await account();
+  const session = (await start(first, student.token)).body;
+  assert.equal((await submit(second, session, student.token)).status, 404);
+  assert.equal(await QuizRateWindow.countDocuments({ quiz: second._id, operation: "submit" }), 0);
+  const saved = await submit(first, session, student.token);
+  assert.equal(saved.status, 200);
+  await QuizSession.deleteOne({ _id: session.sessionId });
+  assert.equal((await submit(second, session, student.token)).status, 404);
+  assert.equal(await QuizRateWindow.countDocuments({ quiz: second._id, operation: "submit" }), 0);
+  const replay = await submit(first, session, student.token, [1]);
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.attemptId, saved.body.attemptId);
+  assert.equal((await QuizRateWindow.findOne({ quiz: first._id, operation: "submit" })).count, 2);
+});
+
+test("malformed, unknown, and unowned identities do not create arbitrary rate rows", async () => {
+  const quiz = await published(); const student = await account();
+  assert.equal((await request("/standalone/not-an-id/sessions", { method: "POST", token: student.token })).status, 404);
+  assert.equal((await start({ _id: id() }, student.token)).status, 404);
+  assert.equal((await request(`/standalone/${quiz._id}/submit`, { method: "POST", token: student.token,
+    body: { revision: 1, answers: [0] } })).status, 400);
+  assert.equal((await submit(quiz, { sessionId: id(), revision: 1 }, student.token)).status, 404);
+  assert.equal(await QuizRateWindow.countDocuments({}), 0);
 });
 
 test("invalid submissions still count and Disable invalidates an unfinished session", async () => {
@@ -242,7 +292,7 @@ test("runtime flag and missing indexes fail closed on start, result, and history
   assert.equal((await request(`/standalone/attempts/${id()}`, { token: student.token })).status, 503);
   assert.equal((await request("/standalone")).status, 200);
   process.env.STANDALONE_QUIZ_RUNTIME_ENABLED = "true";
-  await QuizRateWindow.collection.dropIndex("one_quiz_rate_window");
+  await QuizRateWindow.collection.dropIndex("one_standalone_quiz_rate_window");
   assert.equal((await start(quiz, student.token)).status, 503);
   assert.equal(await QuizSession.countDocuments({ quiz: quiz._id }), 0);
   await QuizRateWindow.syncIndexes();

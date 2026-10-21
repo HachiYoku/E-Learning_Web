@@ -15,7 +15,7 @@ const modelPaths = {
   homeworksetassignments: "homeworkSetAssignmentModel", quizunlocks: "quizUnlockModel",
   quizgoalachievements: "quizGoalAchievementModel", quizattemptgrants: "quizAttemptGrantModel",
   quizattemptrequests: "quizAttemptRequestModel", quizsessions: "quizSessionModel", quizmedias: "quizMediaModel",
-  quizratewindows: "quizRateWindowModel",
+  standalonequizratewindows: "quizRateWindowModel",
 };
 
 const freePort = () => new Promise((resolve, reject) => {
@@ -83,7 +83,7 @@ test("Package 2 fields are optional and partial indexes exclude Course records",
   const Quiz = models.quizzes;
   const Session = models.quizsessions;
   const Attempt = models.quizattempts;
-  const RateWindow = models.quizratewindows;
+  const RateWindow = models.standalonequizratewindows;
   const id = () => new mongoose.Types.ObjectId();
   assert.equal(new Quiz({ title: "Course", contextType: "course_final" }).runtimeFence, undefined);
   assert.equal(new Session({ user: id(), quiz: id(), revision: 1, contextType: "course_final", snapshot: {}, expiresAt: new Date() }).activeSlot, undefined);
@@ -103,7 +103,7 @@ test("Package 2 fields are optional and partial indexes exclude Course records",
     { ...attemptBase, attemptNumber: 3, session: otherSession },
   ]);
   await assert.rejects(Attempt.collection.insertOne({ ...attemptBase, attemptNumber: 4, session: otherSession }), (error) => error.code === 11000);
-  const window = { user, operation: "start", windowStart: new Date(0), count: 1, expiresAt: new Date(Date.now() + 60000) };
+  const window = { user, quiz, operation: "start", windowStart: new Date(0), count: 1, expiresAt: new Date(Date.now() + 60000) };
   await RateWindow.collection.insertOne(window);
   await assert.rejects(RateWindow.collection.insertOne(window), (error) => error.code === 11000);
 });
@@ -256,7 +256,12 @@ test("Package 2 preflight validates rate-window counts, dates, boundaries, user 
 });
 
 test("Package 2 read-only CLI preflight succeeds on isolated local MongoDB without changing data or indexes", async () => {
-  await Promise.all([models.quizsessions, models.quizattempts, models.quizratewindows].map((model) => model.syncIndexes()));
+  await Promise.all([models.quizsessions, models.quizattempts, models.standalonequizratewindows].map((model) => model.syncIndexes()));
+  // The historical preflight still checks the retained legacy rate collection.
+  await db.createCollection("quizratewindows");
+  for (const spec of INDEXES.quizratewindows) {
+    await db.collection("quizratewindows").createIndex(spec.key, { ...spec.options, name: spec.name });
+  }
   const beforeNames = (await db.listCollections({}, { nameOnly: true }).toArray()).map(({ name }) => name).sort();
   const beforeIndexes = Object.fromEntries(await Promise.all(beforeNames.map(async (name) =>
     [name, await db.collection(name).listIndexes().toArray()])));

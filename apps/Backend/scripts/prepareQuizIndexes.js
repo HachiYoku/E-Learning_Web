@@ -58,6 +58,10 @@ const INDEXES = Object.freeze({
     index({ user: 1, operation: 1, windowStart: 1 }, { name: "one_quiz_rate_window", unique: true }),
     index({ expiresAt: 1 }, { name: "quiz_rate_window_expiry", expireAfterSeconds: 0 }),
   ],
+  standalonequizratewindows: [
+    index({ user: 1, quiz: 1, operation: 1, windowStart: 1 }, { name: "one_standalone_quiz_rate_window", unique: true }),
+    index({ expiresAt: 1 }, { name: "standalone_quiz_rate_window_expiry", expireAfterSeconds: 0 }),
+  ],
   quizmedias: [
     index({ quiz: 1 }), index({ questionId: 1 }), index({ publicId: 1 }, { unique: true }),
     index({ cleanupState: 1 }), index({ quiz: 1, questionId: 1, mediaType: 1 }),

@@ -128,7 +128,7 @@ test("local apply creates only missing approved indexes, verifies definitions an
 test("a missing index at final verification makes apply incomplete and retry restores readiness", async () => {
   const raced = withCreateHook(async ({ name, create }) => {
     const result = await create();
-    if (name === "quiz_rate_window_expiry") {
+    if (name === "standalone_quiz_rate_window_expiry") {
       // Simulate an external index change after this tool verified an earlier index.
       await db.collection("quizsessions").dropIndex("expiresAt_1");
     }
@@ -173,7 +173,7 @@ test("an absent required collection is created only as a consequence of its appr
   assert.equal(report.status, "INDEXES_READY");
   assert.equal(report.created.length, 6);
   const names = (await db.listCollections({}, { nameOnly: true }).toArray()).map((row) => row.name).sort();
-  assert.deepEqual(names, ["quizattempts", "quizratewindows", "quizsessions"]);
+  assert.deepEqual(names, ["quizattempts", "quizsessions", "standalonequizratewindows"]);
   for (const name of names) assert.equal(await db.collection(name).countDocuments({}), 0);
 });
 

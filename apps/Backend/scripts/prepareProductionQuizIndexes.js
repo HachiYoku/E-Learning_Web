@@ -29,7 +29,7 @@ const requiredFromManifest = (collection, names) => names.map((name) => {
 const REQUIRED = Object.freeze({
   quizsessions: requiredFromManifest("quizsessions", REQUIRED_INDEXES.quizsessions),
   quizattempts: requiredFromManifest("quizattempts", REQUIRED_INDEXES.quizattempts),
-  quizratewindows: requiredFromManifest("quizratewindows", REQUIRED_INDEXES.quizratewindows),
+  standalonequizratewindows: requiredFromManifest("standalonequizratewindows", REQUIRED_INDEXES.standalonequizratewindows),
   quizsets: schemaSpecs(QuizSet),
   quizzes: schemaSpecs(Quiz).filter((spec) => Object.hasOwn(spec.key, "quizSet")),
   quizcreationrequests: schemaSpecs(QuizCreationRequest),
