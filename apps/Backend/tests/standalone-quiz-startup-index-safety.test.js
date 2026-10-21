@@ -65,7 +65,7 @@ test("application connection disables autoIndex and autoCreate before model init
 test("schema index declarations remain available for separately approved preparation", () => {
   for (const [name, required] of Object.entries(REQUIRED_INDEXES)) {
     const Model = { quizsessions: QuizSession, quizattempts: QuizAttempt,
-      quizratewindows: QuizRateWindow }[name];
+      standalonequizratewindows: QuizRateWindow }[name];
     const declared = Model.schema.indexes().map(([keys, options]) =>
       options.name || Object.entries(keys).map(([field, direction]) => `${field}_${direction}`).join("_"));
     for (const indexName of required) assert.ok(declared.includes(indexName), `${name}.${indexName} remains declared`);
@@ -92,7 +92,7 @@ test("an enable flag and matching database cannot bypass missing collections or 
 });
 
 test("a missing required index fails closed even with activation configured", async () => {
-  await QuizRateWindow.collection.dropIndex("one_quiz_rate_window"); // Isolated local database only.
+  await QuizRateWindow.collection.dropIndex("one_standalone_quiz_rate_window"); // Isolated local database only.
   assert.deepEqual(await inspectStandaloneRuntimeReadiness({ env: enabled }),
     { ready: false, reason: "index_readiness_unverified" });
   await QuizRateWindow.syncIndexes();

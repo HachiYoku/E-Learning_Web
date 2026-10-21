@@ -7,8 +7,9 @@ const LIMIT = 20;
 const MAX_RETRIES = 64;
 const OPERATIONS = new Set(["start", "submit"]);
 
-function validWindow(record, userId, operation, windowStart, windowEnd) {
+function validWindow(record, userId, quizId, operation, windowStart, windowEnd) {
   return record && String(record.user) === String(userId)
+    && String(record.quiz) === String(quizId)
     && record.operation === operation
     && record.windowStart instanceof Date && record.windowStart.getTime() === windowStart.getTime()
     && record.expiresAt instanceof Date && record.expiresAt.getTime() === windowEnd.getTime()
@@ -19,7 +20,7 @@ async function assertRateIndexes(db) {
   const names = await db.listCollections({ name: QuizRateWindow.collection.name }, { nameOnly: true }).toArray();
   if (!names.some(({ name }) => name === QuizRateWindow.collection.name)) throw new Error("Rate collection is unavailable");
   const actual = await db.collection(QuizRateWindow.collection.name).listIndexes().toArray();
-  const required = INDEXES.quizratewindows;
+  const required = INDEXES[QuizRateWindow.collection.name];
   if (!required.every((expected) => actual.some((candidate) => sameDefinition(candidate, expected)))) {
     throw new Error("Rate indexes are unavailable");
   }
@@ -37,14 +38,16 @@ async function databaseWindow(db) {
     retryAfter: Math.max(1, Math.ceil((start + WINDOW_MS - now.getTime()) / 1000)) };
 }
 
-async function consumeStandaloneQuizRateLimit({ userId, operation, connection = mongoose.connection }) {
-  if (!mongoose.isValidObjectId(userId) || !OPERATIONS.has(operation)) throw new Error("Invalid rate-limit input");
+async function consumeStandaloneQuizRateLimit({ userId, quizId, operation, connection = mongoose.connection }) {
+  if (!mongoose.isValidObjectId(userId) || !mongoose.isValidObjectId(quizId)
+    || !OPERATIONS.has(operation)) throw new Error("Invalid rate-limit input");
   if (connection?.readyState !== 1 || !connection.db) throw new Error("Database is unavailable");
   const db = connection.db;
   await assertRateIndexes(db);
   const { windowStart, windowEnd, retryAfter } = await databaseWindow(db);
   const collection = db.collection(QuizRateWindow.collection.name);
-  const key = { user: new mongoose.Types.ObjectId(String(userId)), operation, windowStart };
+  const key = { user: new mongoose.Types.ObjectId(String(userId)),
+    quiz: new mongoose.Types.ObjectId(String(quizId)), operation, windowStart };
   const readOptions = { readPreference: "primary", readConcern: { level: "majority" } };
   const writeOptions = { writeConcern: { w: "majority" } };
 
@@ -61,7 +64,7 @@ async function consumeStandaloneQuizRateLimit({ userId, operation, connection = 
         throw error;
       }
     }
-    if (!validWindow(current, key.user, operation, windowStart, windowEnd)) {
+    if (!validWindow(current, key.user, key.quiz, operation, windowStart, windowEnd)) {
       throw new Error("Rate window is malformed");
     }
     if (current.count === LIMIT) return { allowed: false, retryAfter };
