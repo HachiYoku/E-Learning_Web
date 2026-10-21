@@ -1,6 +1,11 @@
+export function isStandaloneTransactionConflict(error) {
+  return error?.status === 409 && error?.code === "standalone_transaction_conflict"
+}
+
 export function generalPracticeErrorMessage(error) {
   if (error?.status === 401) return "Your session has expired. Please sign in again."
   if (error?.status === 404) return "This quiz is no longer available."
+  if (isStandaloneTransactionConflict(error)) return "This quiz is busy right now. Please try again."
   if (error?.status === 409) return "This quiz session has expired or is no longer available. Your answers were not submitted."
   if (error?.status === 429) {
     const seconds = Number(error.retryAfter)
