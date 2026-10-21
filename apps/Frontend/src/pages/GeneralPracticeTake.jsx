@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { startGeneralPracticeSession, submitGeneralPracticeQuiz } from "../services/generalPracticeService"
 import { fetchGuestGeneralPracticeSession, startGuestGeneralPracticeSession, submitGuestGeneralPracticeQuiz } from "../services/guestGeneralPracticeService"
-import { generalPracticeErrorMessage, guestGeneralPracticeErrorMessage } from "../utils/generalPracticeErrors"
+import { generalPracticeErrorMessage, guestGeneralPracticeErrorMessage, isStandaloneTransactionConflict } from "../utils/generalPracticeErrors"
 
 function validSession(value) {
   return typeof value?.sessionId === "string" && value.sessionId.length > 0
@@ -28,6 +28,7 @@ function GeneralPracticeTake({ guest = false }) {
   const [submitting, setSubmitting] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [uncertain, setUncertain] = useState(false)
+  const [conflicted, setConflicted] = useState(false)
   const [invalidated, setInvalidated] = useState(false)
   const [unavailable, setUnavailable] = useState(false)
   const [error, setError] = useState("")
@@ -101,7 +102,7 @@ function GeneralPracticeTake({ guest = false }) {
   }
 
   useEffect(() => {
-    if (!uncertain) return undefined
+    if (!uncertain && !conflicted) return undefined
     const confirmLeaving = (event) => {
       const anchor = event.target.closest?.("a[href]")
       const button = event.target.closest?.("button")
@@ -114,14 +115,17 @@ function GeneralPracticeTake({ guest = false }) {
         if (destination.origin !== window.location.origin) return
         if (destination.pathname === location.pathname && destination.search === location.search) return
       }
-      if (!window.confirm("Your submission status is unknown. Leaving will lose the original submission needed for a safe retry. Stay on this page to retry it. Leave anyway?")) {
+      const warning = uncertain
+        ? "Your submission status is unknown. Leaving will lose the original submission needed for a safe retry. Stay on this page to retry it. Leave anyway?"
+        : "Your answers and retry submission will be lost if you leave. Stay on this page to try again. Leave anyway?"
+      if (!window.confirm(warning)) {
         event.preventDefault()
         event.stopPropagation()
       }
     }
     document.addEventListener("click", confirmLeaving, true)
     return () => document.removeEventListener("click", confirmLeaving, true)
-  }, [uncertain, location.pathname, location.search])
+  }, [uncertain, conflicted, location.pathname, location.search])
 
   const expired = Boolean(session && (Date.parse(session.expiresAt) <= now || Date.parse(session.expiresAt) <= Date.now()))
   const question = session?.questions[currentIndex]
@@ -134,7 +138,7 @@ function GeneralPracticeTake({ guest = false }) {
   }
 
   const requestSubmission = () => {
-    if (!session || submitting || uncertain || expired) return
+    if (!session || submitting || uncertain || conflicted || expired) return
     const firstUnanswered = answers.findIndex((answer) => !Number.isInteger(answer))
     if (firstUnanswered !== -1) {
       const remaining = answers.filter((answer) => !Number.isInteger(answer)).length
@@ -160,6 +164,7 @@ function GeneralPracticeTake({ guest = false }) {
       setNow(Date.now())
       setConfirming(false)
       setUncertain(false)
+      setConflicted(false)
       setInvalidated(false)
       setUnavailable(false)
       pendingSubmission.current = null
@@ -180,9 +185,11 @@ function GeneralPracticeTake({ guest = false }) {
       sessionId: session.sessionId, revision: session.revision, answers: [...answers],
     }
     if (!payload) return
+    const retryingConflict = retry && conflicted
     pendingSubmission.current = payload
     submitInFlight.current = true
     setSubmitting(true)
+    setConflicted(false)
     setConfirming(false)
     setError("")
     try {
@@ -192,12 +199,15 @@ function GeneralPracticeTake({ guest = false }) {
         replace: true, state: { confirmedQuizId: quizId, confirmedAttemptId: result.attemptId },
       })
     } catch (requestError) {
+      const transactionConflict = !guest && isStandaloneTransactionConflict(requestError)
       setError(messageFor(requestError))
+      setConflicted(transactionConflict || (retryingConflict && requestError?.status === 429))
       setUncertain((previous) => {
+        if (transactionConflict) return false
         if ([400, 401, 404, 409].includes(requestError?.status)) return false
         return previous || !requestError?.status || requestError.status === 503
       })
-      if (requestError?.status === 409 || (guest && requestError?.status === 401)) setInvalidated(true)
+      if ((requestError?.status === 409 && !transactionConflict) || (guest && requestError?.status === 401)) setInvalidated(true)
       if (requestError?.status === 404) setUnavailable(true)
     } finally {
       submitInFlight.current = false
@@ -246,18 +256,18 @@ function GeneralPracticeTake({ guest = false }) {
               <legend className="mb-4 text-center text-xs font-bold uppercase tracking-[0.18em] text-[#765F55]">Choose the best answer<span className="sr-only"> for question {currentIndex + 1}</span></legend>
               {question.options.map((option, optionIndex) => (
                 <label key={optionIndex} className="flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border-2 border-[#2D2E30]/10 bg-white px-4 py-4 text-left text-sm font-semibold leading-relaxed shadow-sm transition hover:border-[#E58C1A]/45 hover:bg-[#FFF9EA] hover:shadow-md has-[:checked]:border-[#E58C1A] has-[:checked]:bg-[#FFF4D8] has-[:checked]:shadow-[#E58C1A]/10 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[#A94F00] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
-                  <input type="radio" name={`question-${currentIndex}`} value={optionIndex} checked={answers[currentIndex] === optionIndex} onChange={() => chooseAnswer(optionIndex)} disabled={uncertain || submitting} className="sr-only" />
+                  <input type="radio" name={`question-${currentIndex}`} value={optionIndex} checked={answers[currentIndex] === optionIndex} onChange={() => chooseAnswer(optionIndex)} disabled={uncertain || conflicted || submitting} className="sr-only" />
                   <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${answers[currentIndex] === optionIndex ? "bg-[#E58C1A] text-white" : "bg-[#F0E7DC] text-[#765F55]"}`}>{String.fromCharCode(65 + optionIndex)}</span>
                   <span className="break-words">{option}</span>
                 </label>
               ))}
             </fieldset>
-            {error && !uncertain ? <p role="alert" className="mx-auto mt-4 max-w-lg rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p> : null}
+            {error && !uncertain && !conflicted ? <p role="alert" className="mx-auto mt-4 max-w-lg rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p> : null}
           </section>
 
           <div className="mt-5 flex items-center justify-between gap-3 border-t border-[#2D2E30]/10 pt-6">
             <button type="button" onClick={() => { setCurrentIndex((index) => index - 1); setError("") }} disabled={currentIndex === 0} className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF4D8] hover:text-[#C97112] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]">Previous</button>
-            {currentIndex < session.questions.length - 1 ? <button type="button" onClick={() => { setCurrentIndex((index) => index + 1); setError("") }} className="min-h-11 rounded-xl bg-[#F8C56A] px-6 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]">Next</button> : <button ref={submitTrigger} type="button" onClick={requestSubmission} disabled={submitting || uncertain || expired} className="min-h-11 rounded-xl bg-[#F8C56A] px-6 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]">Submit Quiz</button>}
+            {currentIndex < session.questions.length - 1 ? <button type="button" onClick={() => { setCurrentIndex((index) => index + 1); setError("") }} className="min-h-11 rounded-xl bg-[#F8C56A] px-6 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]">Next</button> : <button ref={submitTrigger} type="button" onClick={requestSubmission} disabled={submitting || uncertain || conflicted || expired} className="min-h-11 rounded-xl bg-[#F8C56A] px-6 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]">Submit Quiz</button>}
           </div>
 
           {confirming ? <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#2D2E30]/55 p-4"><section ref={confirmDialog} role="dialog" aria-modal="true" aria-labelledby="confirm-general-submission" aria-describedby="confirm-general-description" onKeyDown={handleConfirmationKeyDown} className="w-full max-w-lg overflow-hidden rounded-3xl border border-[#E58C1A]/20 bg-white shadow-2xl">
@@ -267,6 +277,7 @@ function GeneralPracticeTake({ guest = false }) {
           </section></div> : null}
 
           {submitting ? <p role="status" className="mt-5 text-sm font-semibold text-[#765F55]">Submitting your answers...</p> : null}
+          {conflicted ? <section className="mt-4 rounded-2xl border border-[#E58C1A]/30 bg-[#FFF9EA] p-5" aria-labelledby="conflicted-submission"><h2 id="conflicted-submission" className="text-lg font-bold">Please try your submission again</h2><p role="alert" className="mt-2 text-sm text-[#765F55]">{error} Your answers are still here.</p><button type="button" onClick={() => submit(true)} disabled={submitting} className="mt-4 min-h-11 w-full rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md disabled:cursor-wait disabled:opacity-50 sm:w-auto">{submitting ? "Submitting..." : "Retry this same submission"}</button></section> : null}
           {error && uncertain ? <p role="alert" className="mt-5 rounded-xl bg-[#FFF0EE] p-4 text-sm font-semibold text-[#A84646]">{error}</p> : null}
           {uncertain ? <section className="mt-4 rounded-2xl border border-[#E58C1A]/30 bg-[#FFF9EA] p-5" aria-labelledby="uncertain-submission"><h2 id="uncertain-submission" className="text-lg font-bold">Submission status unknown</h2><p className="mt-2 text-sm text-[#765F55]">Your attempt may already be saved. Do not start another quiz or reload this page yet. The Backend can safely replay this exact submission without creating a second attempt.</p><button type="button" onClick={() => submit(true)} disabled={submitting} className="mt-4 min-h-11 w-full rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md disabled:cursor-wait disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:w-auto">{submitting ? "Checking submission..." : "Retry this same submission"}</button></section> : null}
         </>
