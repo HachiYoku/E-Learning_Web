@@ -15,6 +15,7 @@ vi.mock("../services/generalPracticeService", () => ({
 
 import { fetchGeneralPracticeQuiz, startGeneralPracticeSession, submitGeneralPracticeQuiz, fetchGeneralPracticeResult } from "../services/generalPracticeService"
 import { apiClient } from "../api/client"
+import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
 
 const quizId = "6acc46dbad4ace5e3d908d2c"
 const attemptId = "6acc46dbad4ace5e3d908d2d"
@@ -53,6 +54,13 @@ beforeEach(() => {
 })
 
 describe("General Practice taking", () => {
+  it("formats only the exact transaction-conflict code as a retryable quiz error", () => {
+    expect(generalPracticeErrorMessage({ status: 409, code: "standalone_transaction_conflict" })).toBe("This quiz is busy right now. Please try again.")
+    expect(generalPracticeErrorMessage({ status: 409, code: "quiz_session_unavailable" })).toContain("expired or is no longer available")
+    expect(generalPracticeErrorMessage({ status: 409, code: "unknown_conflict" })).toContain("expired or is no longer available")
+    expect(generalPracticeErrorMessage({ status: 500 })).toContain("could not be completed")
+  })
+
   it("starts once despite repeated clicks, then renders the new session", async () => {
     let resolveStart
     startGeneralPracticeSession.mockImplementation(() => new Promise((resolve) => { resolveStart = resolve }))
@@ -91,6 +99,28 @@ describe("General Practice taking", () => {
     renderFlow(`/app/practice/general/${quizId}`, null)
     await userEvent.setup().click(await screen.findByRole("button", { name: "Start / Resume Quiz" }))
     expect((await screen.findByRole("alert")).textContent).toContain("temporarily unavailable")
+  })
+
+  it("keeps Details usable after a transaction-conflict start without automatic retry", async () => {
+    startGeneralPracticeSession.mockRejectedValueOnce(Object.assign(new Error("Conflict"), { status: 409, code: "standalone_transaction_conflict" }))
+    const user = userEvent.setup()
+    renderFlow(`/app/practice/general/${quizId}`, null)
+    await user.click(await screen.findByRole("button", { name: "Start / Resume Quiz" }))
+    expect((await screen.findByRole("alert")).textContent).toContain("Please try again")
+    expect(screen.queryByText(/session has expired/i)).toBeNull()
+    expect(screen.getByRole("button", { name: "Start / Resume Quiz" }).disabled).toBe(false)
+    expect(startGeneralPracticeSession).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole("button", { name: "Start / Resume Quiz" }))
+    expect(startGeneralPracticeSession).toHaveBeenCalledTimes(2)
+    expect(await screen.findByRole("heading", { name: quiz.title })).toBeTruthy()
+  })
+
+  it("retains the existing invalid-session message on Details", async () => {
+    startGeneralPracticeSession.mockRejectedValueOnce(Object.assign(new Error("Expired"), { status: 409, code: "quiz_session_unavailable" }))
+    renderFlow(`/app/practice/general/${quizId}`, null)
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Start / Resume Quiz" }))
+    expect((await screen.findByRole("alert")).textContent).toContain("expired or is no longer available")
+    expect(screen.getByRole("button", { name: "Start / Resume Quiz" }).disabled).toBe(false)
   })
 
   it("navigates questions, renders supported media, and tracks answers without browser storage", async () => {
@@ -260,6 +290,55 @@ describe("General Practice taking", () => {
     expect(screen.getByRole("radio", { name: "ขอบคุณ" }).checked).toBe(true)
   })
 
+  it("preserves answers and the exact submission payload after a transaction conflict until deliberate retry", async () => {
+    submitGeneralPracticeQuiz.mockRejectedValueOnce(Object.assign(new Error("Conflict"), { status: 409, code: "standalone_transaction_conflict" }))
+    const user = userEvent.setup()
+    renderFlow()
+    await answerAndConfirm(user)
+    await user.click(screen.getByRole("button", { name: "Confirm Submit" }))
+    expect(await screen.findByRole("heading", { name: "Please try your submission again" })).toBeTruthy()
+    expect(screen.getByRole("alert").textContent).toContain("Please try again")
+    expect(screen.queryByRole("heading", { name: "Session unavailable" })).toBeNull()
+    expect(screen.getByRole("radio", { name: "ขอบคุณ" }).checked).toBe(true)
+    expect(screen.getByRole("radio", { name: "ขอบคุณ" }).disabled).toBe(true)
+    expect(submitGeneralPracticeQuiz).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole("button", { name: "Retry this same submission" }))
+    expect(submitGeneralPracticeQuiz).toHaveBeenCalledTimes(2)
+    expect(submitGeneralPracticeQuiz.mock.calls[1][1]).toBe(submitGeneralPracticeQuiz.mock.calls[0][1])
+    expect(await screen.findByRole("heading", { name: quiz.title })).toBeTruthy()
+  })
+
+  it("warns before leaving a conflicted submission with its answers and retry payload", async () => {
+    submitGeneralPracticeQuiz.mockRejectedValueOnce(Object.assign(new Error("Conflict"), { status: 409, code: "standalone_transaction_conflict" }))
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    try {
+      const user = userEvent.setup()
+      renderFlow()
+      await answerAndConfirm(user)
+      await user.click(screen.getByRole("button", { name: "Confirm Submit" }))
+      await user.click(await screen.findByRole("link", { name: "Back to quiz details" }))
+      expect(confirm).toHaveBeenCalledWith(expect.stringContaining("answers and retry submission"))
+      expect(screen.getByRole("heading", { name: "Please try your submission again" })).toBeTruthy()
+      expect(submitGeneralPracticeQuiz).toHaveBeenCalledTimes(1)
+    } finally {
+      confirm.mockRestore()
+    }
+  })
+
+  it("keeps the frozen conflict payload for a later retry when the first retry is rate limited", async () => {
+    submitGeneralPracticeQuiz.mockRejectedValueOnce(Object.assign(new Error("Conflict"), { status: 409, code: "standalone_transaction_conflict" }))
+      .mockRejectedValueOnce(Object.assign(new Error("Limited"), { status: 429, retryAfter: "10" }))
+    const user = userEvent.setup()
+    renderFlow()
+    await answerAndConfirm(user)
+    await user.click(screen.getByRole("button", { name: "Confirm Submit" }))
+    await user.click(await screen.findByRole("button", { name: "Retry this same submission" }))
+    expect((await screen.findByRole("alert")).textContent).toContain("10 seconds")
+    expect(submitGeneralPracticeQuiz).toHaveBeenCalledTimes(2)
+    await user.click(screen.getByRole("button", { name: "Retry this same submission" }))
+    expect(submitGeneralPracticeQuiz.mock.calls[2][1]).toBe(submitGeneralPracticeQuiz.mock.calls[0][1])
+  })
+
   it("handles invalidated and unavailable sessions without submitting again", async () => {
     submitGeneralPracticeQuiz.mockRejectedValueOnce(Object.assign(new Error("Expired"), { status: 409 }))
     const user = userEvent.setup()
@@ -342,6 +421,18 @@ describe("General Practice taking", () => {
     }))
     try {
       await expect(apiClient.get("/quizzes/standalone")).rejects.toMatchObject({ status: 429, retryAfter: "42" })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("preserves the Backend conflict code and status in API errors", async () => {
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: "standalone_transaction_conflict", message: "Please retry" }), {
+      status: 409, headers: { "Content-Type": "application/json" },
+    }))
+    try {
+      await expect(apiClient.get("/quizzes/standalone")).rejects.toMatchObject({ status: 409, code: "standalone_transaction_conflict" })
     } finally {
       globalThis.fetch = originalFetch
     }
