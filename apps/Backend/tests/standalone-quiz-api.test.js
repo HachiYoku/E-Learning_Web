@@ -202,6 +202,33 @@ test("history keyset pages stay stable as new attempts arrive and survive Archiv
     revision: results[0].revision }, student.token, [1])).body.attemptId, results[0].attemptId);
 });
 
+test("only an Admin can restore an archived quiz, and students cannot see it until republished", async () => {
+  const quiz = await published(); const student = await account(); const admin = await account("admin");
+  const session = (await start(quiz, student.token)).body;
+  const result = await submit(quiz, session, student.token);
+  assert.equal(result.status, 200);
+  assert.equal((await request(`/admin/standalone/${quiz._id}/archive`,
+    { method: "POST", token: admin.token })).status, 200);
+  const route = `/admin/standalone/${quiz._id}/restore`;
+  assert.equal((await request(route, { method: "POST" })).status, 401);
+  assert.equal((await request(route, { method: "POST", token: student.token })).status, 403);
+  const restored = await request(route, { method: "POST", token: admin.token });
+  assert.equal(restored.status, 200);
+  assert.equal(restored.body.status, "draft");
+  assert.equal(restored.body.draft.version, 1);
+  assert.equal(restored.body.published.revision, 1);
+  assert.equal((await request(route, { method: "POST", token: admin.token })).status, 409);
+  assert.equal((await request("/standalone")).body.quizzes.some((item) => item.id === String(quiz._id)), false);
+  assert.equal((await request(`/standalone/${quiz._id}`)).status, 404);
+  assert.equal((await request(`/standalone/${quiz._id}/attempts`, { token: student.token })).status, 200);
+  assert.equal((await request(`/standalone/attempts/${result.body.attemptId}`, { token: student.token })).status, 200);
+  const republished = await request(`/admin/standalone/${quiz._id}/publish`,
+    { method: "POST", token: admin.token, body: { expectedVersion: 1 } });
+  assert.equal(republished.status, 200);
+  assert.equal(republished.body.published.revision, 2);
+  assert.equal((await request(`/standalone/${quiz._id}`)).status, 200);
+});
+
 test("twentieth request passes, twenty-first is 429, and submit uses an independent counter", async () => {
   const quiz = await published(); const student = await account();
   let session;

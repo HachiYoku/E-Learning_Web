@@ -155,6 +155,10 @@ export async function archiveGeneralPracticeQuiz(quizId) {
   return apiClient.post(`/quizzes/admin/standalone/${encodeURIComponent(quizId)}/archive`)
 }
 
+export async function restoreGeneralPracticeQuiz(quizId) {
+  return apiClient.post(`/quizzes/admin/standalone/${encodeURIComponent(quizId)}/restore`)
+}
+
 export async function retryGeneralPracticeMedia(quizId) {
   return apiClient.post(`/quizzes/admin/standalone/${encodeURIComponent(quizId)}/media/retry`)
 }

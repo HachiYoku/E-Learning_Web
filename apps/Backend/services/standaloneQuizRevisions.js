@@ -174,7 +174,8 @@ async function publishDraft(quizId, expectedVersion) {
 }
 
 async function changeAvailability(quizId, action) {
-  const transitions = { disable: ["published", "disabled"], enable: ["disabled", "published"], archive: [["draft", "published", "disabled"], "archived"] };
+  const transitions = { disable: ["published", "disabled"], enable: ["disabled", "published"],
+    archive: [["draft", "published", "disabled"], "archived"], restore: ["archived", "draft"] };
   const [from, to] = transitions[action] || [];
   if (!from) throw new StandaloneQuizError(400, "Invalid action.", "invalid_quiz_action");
   try {
@@ -186,9 +187,16 @@ async function changeAvailability(quizId, action) {
       if (action === "enable" && quiz.publishedRevision === null) {
         throw new StandaloneQuizError(409, "Publish the quiz first.", "quiz_unpublished");
       }
-      const updated = await writeQuizFence(quiz, session, { status: to });
+      if (action === "restore" && !quiz.draft && quiz.publishedRevision === null) {
+        throw new StandaloneQuizError(409, "This quiz has no revision to restore.", "quiz_unpublished");
+      }
+      // An archived published quiz may have no pending draft. Copy its last
+      // published content into a new draft without changing that revision.
+      const update = action === "restore" && !quiz.draft
+        ? { $set: { draft: { ...draftFromPublished(quiz), version: 1 } } } : {};
+      const updated = await writeQuizFence(quiz, session, { status: to, update });
       if (!updated) throw new StandaloneTransactionConflict();
-      if (action !== "enable") await invalidateStandaloneSessions(quiz._id, to, session);
+      if (action !== "enable" && action !== "restore") await invalidateStandaloneSessions(quiz._id, to, session);
       return updated;
     }, { resolveAmbiguous: async (result) => {
       if (!result) return undefined;
