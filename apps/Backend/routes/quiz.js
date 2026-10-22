@@ -62,6 +62,7 @@ router.post("/admin/standalone/:quizId/media/retry", validateToken, requireAdmin
 router.post("/admin/standalone/:quizId/disable", validateToken, requireAdmin, standalone.lifecycle("disable"));
 router.post("/admin/standalone/:quizId/enable", validateToken, requireAdmin, standalone.lifecycle("enable"));
 router.post("/admin/standalone/:quizId/archive", validateToken, requireAdmin, standalone.lifecycle("archive"));
+router.post("/admin/standalone/:quizId/restore", validateToken, requireAdmin, standalone.lifecycle("restore"));
 router.delete("/admin/standalone/:quizId", validateToken, requireAdmin, standalone.remove);
 
 function validateQuizImageFields(req, res, next) {

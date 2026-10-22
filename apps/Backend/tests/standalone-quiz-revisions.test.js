@@ -143,6 +143,84 @@ test("disable and re-enable preserve published revision and unpublished draft; d
   await assert.rejects(revisions.publishDraft(quiz._id, 1), /Archived/);
 });
 
+test("restoring an archived draft keeps its content and still requires publication", async () => {
+  const quiz = await revisions.createDraft(draft("Saved draft"));
+  const original = quiz.draft.toObject();
+  await revisions.changeAvailability(quiz._id, "archive");
+  const restored = await revisions.changeAvailability(quiz._id, "restore");
+  assert.equal(restored.status, "draft");
+  assert.deepEqual(restored.draft.toObject(), original);
+  assert.equal(restored.publishedRevision, null);
+  assert.equal(restored.questions.length, 0);
+  const hidden = response();
+  await controller.listPublished({}, hidden);
+  assert.deepEqual(hidden.body, { quizzes: [] });
+  const published = await revisions.publishDraft(quiz._id, original.version);
+  assert.equal(published.status, "published");
+  assert.equal(published.title, "Saved draft");
+});
+
+test("restoring an archived published quiz creates an unpublished draft without changing history", async () => {
+  const quiz = await revisions.createDraft(draft("Saved publication"));
+  const published = await revisions.publishDraft(quiz._id, 1);
+  const originalQuestion = published.questions[0].toObject();
+  const attempt = await QuizAttempt.create({ quiz: quiz._id, user: id(), attemptNumber: 1,
+    answers: [0], score: 1, total: 1 });
+  await revisions.changeAvailability(quiz._id, "archive");
+  const restored = await revisions.changeAvailability(quiz._id, "restore");
+  assert.equal(restored.status, "draft");
+  assert.equal(restored.publishedRevision, 1);
+  assert.equal(restored.revision, published.revision);
+  assert.deepEqual(restored.questions[0].toObject(), originalQuestion);
+  assert.deepEqual(restored.draft.questions[0].toObject(), originalQuestion);
+  assert.equal(restored.draft.version, 1);
+  assert.equal(restored.draft.basePublishedRevision, 1);
+  assert.ok(await QuizAttempt.findById(attempt._id));
+  const hidden = response();
+  await controller.getPublished({ params: { quizId: String(quiz._id) } }, hidden);
+  assert.equal(hidden.statusCode, 404);
+  const republished = await revisions.publishDraft(quiz._id, 1);
+  assert.equal(republished.status, "published");
+  assert.equal(republished.publishedRevision, 2);
+  assert.ok(await QuizAttempt.findById(attempt._id));
+});
+
+test("restoring an archived quiz keeps its existing unpublished revision intact", async () => {
+  const quiz = await revisions.createDraft(draft("Original publication"));
+  const published = await revisions.publishDraft(quiz._id, 1);
+  const edited = await revisions.saveDraft(quiz._id, 0, {
+    title: "Pending edition", questions: [question("Pending question")],
+  });
+  const pending = edited.draft.toObject();
+  await revisions.changeAvailability(quiz._id, "archive");
+  const restored = await revisions.changeAvailability(quiz._id, "restore");
+  assert.equal(restored.status, "draft");
+  assert.deepEqual(restored.draft.toObject(), pending);
+  assert.equal(restored.title, published.title);
+  assert.equal(restored.publishedRevision, published.publishedRevision);
+  assert.equal(restored.questions[0].prompt, published.questions[0].prompt);
+});
+
+test("restore rejects invalid states and permits only one concurrent transition", async () => {
+  const quiz = await revisions.createDraft(draft());
+  await assert.rejects(revisions.changeAvailability(quiz._id, "restore"),
+    (error) => error.status === 409 && error.code === "invalid_quiz_state");
+  await revisions.publishDraft(quiz._id, 1);
+  await assert.rejects(revisions.changeAvailability(quiz._id, "restore"),
+    (error) => error.status === 409 && error.code === "invalid_quiz_state");
+  await revisions.changeAvailability(quiz._id, "archive");
+  const outcomes = await Promise.allSettled([
+    revisions.changeAvailability(quiz._id, "restore"),
+    revisions.changeAvailability(quiz._id, "restore"),
+  ]);
+  assert.equal(outcomes.filter(({ status }) => status === "fulfilled").length, 1);
+  assert.equal(outcomes.filter(({ status }) => status === "rejected").length, 1);
+  assert.equal(outcomes.find(({ status }) => status === "rejected").reason.status, 409);
+  assert.equal((await Quiz.findById(quiz._id)).status, "draft");
+  await assert.rejects(revisions.changeAvailability(id(), "restore"),
+    (error) => error.status === 404 && error.code === "quiz_unavailable");
+});
+
 test("public responses expose only published metadata, with Students Only requiring authentication", async () => {
   const publicQuiz = await revisions.createDraft(draft());
   await revisions.publishDraft(publicQuiz._id, 1);

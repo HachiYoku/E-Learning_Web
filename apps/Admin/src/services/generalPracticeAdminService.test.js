@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 
 vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }))
 import { apiClient } from '../api/client'
-import { archiveGeneralPracticeQuiz, createGeneralPracticeDraft, createGeneralPracticeSet, createGeneralPracticeSetDraft, deleteGeneralPracticeSet, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, fetchGeneralPracticeQuizzes, fetchGeneralPracticeSet, fetchGeneralPracticeSets, isSafeQuizSetCoverImage, publishGeneralPracticeDraft, retryGeneralPracticeMedia, transitionGeneralPracticeSet, updateGeneralPracticeDraft, updateGeneralPracticeSet, uploadGeneralPracticeSetCover, removeGeneralPracticeSetCover } from './generalPracticeAdminService'
+import { archiveGeneralPracticeQuiz, createGeneralPracticeDraft, createGeneralPracticeSet, createGeneralPracticeSetDraft, deleteGeneralPracticeSet, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, fetchGeneralPracticeQuizzes, fetchGeneralPracticeSet, fetchGeneralPracticeSets, isSafeQuizSetCoverImage, publishGeneralPracticeDraft, restoreGeneralPracticeQuiz, retryGeneralPracticeMedia, transitionGeneralPracticeSet, updateGeneralPracticeDraft, updateGeneralPracticeSet, uploadGeneralPracticeSetCover, removeGeneralPracticeSetCover } from './generalPracticeAdminService'
 
 const set = { id: 'set-1', name: 'Thai basics', status: 'active', version: 2, displayOrder: 1,
   description: '', coverImage: '', difficulty: null }
@@ -149,12 +149,14 @@ it('uses the dedicated publish, lifecycle and media-retry endpoints', async () =
   await disableGeneralPracticeQuiz('quiz-1')
   await enableGeneralPracticeQuiz('quiz-1')
   await archiveGeneralPracticeQuiz('quiz-1')
+  await restoreGeneralPracticeQuiz('quiz-1')
   await retryGeneralPracticeMedia('quiz-1')
   expect(apiClient.post.mock.calls).toEqual([
     ['/quizzes/admin/standalone/quiz-1/publish', { expectedVersion: 4 }],
     ['/quizzes/admin/standalone/quiz-1/disable'],
     ['/quizzes/admin/standalone/quiz-1/enable'],
     ['/quizzes/admin/standalone/quiz-1/archive'],
+    ['/quizzes/admin/standalone/quiz-1/restore'],
     ['/quizzes/admin/standalone/quiz-1/media/retry'],
   ])
 })

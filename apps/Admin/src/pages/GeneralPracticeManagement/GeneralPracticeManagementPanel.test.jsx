@@ -6,9 +6,9 @@ import GeneralPracticeManagementPanel from './GeneralPracticeManagementPanel'
 
 vi.mock('../../services/generalPracticeAdminService', () => ({
   fetchGeneralPracticeQuiz: vi.fn(), publishGeneralPracticeDraft: vi.fn(), disableGeneralPracticeQuiz: vi.fn(),
-  enableGeneralPracticeQuiz: vi.fn(), archiveGeneralPracticeQuiz: vi.fn(), retryGeneralPracticeMedia: vi.fn(),
+  enableGeneralPracticeQuiz: vi.fn(), archiveGeneralPracticeQuiz: vi.fn(), restoreGeneralPracticeQuiz: vi.fn(), retryGeneralPracticeMedia: vi.fn(),
 }))
-import { archiveGeneralPracticeQuiz, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, publishGeneralPracticeDraft, retryGeneralPracticeMedia } from '../../services/generalPracticeAdminService'
+import { archiveGeneralPracticeQuiz, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, publishGeneralPracticeDraft, restoreGeneralPracticeQuiz, retryGeneralPracticeMedia } from '../../services/generalPracticeAdminService'
 
 const base = { id: 'quiz-1', contextType: 'standalone', status: 'published', mediaProcessing: 'complete', published: { revision: 1 }, draft: { version: 2 } }
 function Harness({ initial = base }) {
@@ -72,7 +72,7 @@ describe('General Practice management actions', () => {
     expect(screen.getByText(/Unpublished changes: Yes/)).toBeTruthy()
   })
 
-  it('archives only after confirmation and exposes no restore control', async () => {
+  it('archives only after confirmation and then offers Restore', async () => {
     const user = userEvent.setup()
     const archived = { ...base, status: 'archived' }
     archiveGeneralPracticeQuiz.mockResolvedValue(archived)
@@ -81,7 +81,44 @@ describe('General Practice management actions', () => {
     await confirm(user, 'Archive quiz', 'Archive quiz')
     await waitFor(() => expect(archiveGeneralPracticeQuiz).toHaveBeenCalledWith('quiz-1'))
     expect(screen.queryByRole('button', { name: 'Archive quiz' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /restore/i })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Restore quiz' })).toBeTruthy()
+  })
+
+  it('restores only after confirmation, reloads Draft, and never publishes automatically', async () => {
+    const user = userEvent.setup()
+    const archived = { ...base, status: 'archived' }
+    const restored = { ...archived, status: 'draft' }
+    restoreGeneralPracticeQuiz.mockResolvedValue(restored)
+    fetchGeneralPracticeQuiz.mockResolvedValue(restored)
+    render(<Harness initial={archived} />)
+    await user.click(screen.getByRole('button', { name: 'Restore quiz' }))
+    expect(within(screen.getByRole('dialog')).getByText(/remain unavailable to students until you explicitly publish/)).toBeTruthy()
+    expect(restoreGeneralPracticeQuiz).not.toHaveBeenCalled()
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+    expect(restoreGeneralPracticeQuiz).not.toHaveBeenCalled()
+    await confirm(user, 'Restore quiz', 'Restore quiz')
+    await waitFor(() => expect(restoreGeneralPracticeQuiz).toHaveBeenCalledWith('quiz-1'))
+    await waitFor(() => expect(fetchGeneralPracticeQuiz).toHaveBeenCalledWith('quiz-1'))
+    expect(screen.getByRole('button', { name: 'Publish draft' })).toBeTruthy()
+    expect(publishGeneralPracticeDraft).not.toHaveBeenCalled()
+  })
+
+  it('blocks duplicate Restore requests and requires reload after a conflict', async () => {
+    const user = userEvent.setup()
+    const archived = { ...base, status: 'archived' }
+    let rejectRestore
+    restoreGeneralPracticeQuiz.mockReturnValue(new Promise((_resolve, reject) => { rejectRestore = reject }))
+    fetchGeneralPracticeQuiz.mockResolvedValue(archived)
+    render(<Harness initial={archived} />)
+    await confirm(user, 'Restore quiz', 'Restore quiz')
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Processing…' }).disabled).toBe(true)
+    expect(restoreGeneralPracticeQuiz).toHaveBeenCalledTimes(1)
+    rejectRestore(Object.assign(new Error('Changed'), { status: 409 }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/changed or this action is no longer allowed/)
+    expect(screen.getByRole('button', { name: 'Restore quiz' }).disabled).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Reload current quiz' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Restore quiz' }).disabled).toBe(false))
+    expect(restoreGeneralPracticeQuiz).toHaveBeenCalledTimes(1)
   })
 
   it('uses only the media-retry endpoint for a pending media operation', async () => {

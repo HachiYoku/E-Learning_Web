@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react'
 import QuizDialog from '../QuizManagement/QuizDialog'
-import { archiveGeneralPracticeQuiz, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, publishGeneralPracticeDraft, retryGeneralPracticeMedia } from '../../services/generalPracticeAdminService'
+import { archiveGeneralPracticeQuiz, disableGeneralPracticeQuiz, enableGeneralPracticeQuiz, fetchGeneralPracticeQuiz, publishGeneralPracticeDraft, restoreGeneralPracticeQuiz, retryGeneralPracticeMedia } from '../../services/generalPracticeAdminService'
 
 const actions = {
   publish: { title: 'Publish draft?', confirmText: 'Publish draft', message: 'The pending draft will become the student-visible revision. Existing saved attempts remain unchanged.' },
   disable: { title: 'Disable quiz?', confirmText: 'Disable quiz', message: 'New attempts and unfinished sessions will be unavailable. Saved results and history remain available.' },
   enable: { title: 'Enable quiz?', confirmText: 'Enable quiz', message: 'The last published revision becomes available again. Any unpublished draft remains unpublished.' },
   archive: { title: 'Archive quiz?', confirmText: 'Archive quiz', message: 'This removes the quiz from new-attempt availability and invalidates unfinished sessions. Saved attempts remain available. Archived quizzes cannot be re-enabled or edited.' },
+  restore: { title: 'Restore quiz to Draft?', confirmText: 'Restore quiz', message: 'The quiz will return to Draft and remain unavailable to students until you explicitly publish it. Saved attempts remain available.' },
   retry: { title: 'Retry media processing?', confirmText: 'Retry media processing', message: 'Retry media reconciliation only. This will not save or publish the draft again.' },
 }
 
@@ -14,6 +15,8 @@ function responseConfirmed(action, before, result) {
   if (result?.id !== before.id || result.contextType !== 'standalone') return false
   if (action === 'retry') return ['complete', 'retry_required'].includes(result.mediaProcessing)
   if (action === 'publish') return result.status === 'published' && !result.draft && result.published?.revision === (before.published?.revision ?? 0) + 1
+  if (action === 'restore') return result.status === 'draft' && result.draft?.version === (before.draft?.version ?? 1)
+    && (result.published?.revision ?? null) === (before.published?.revision ?? null)
   return result.status === ({ disable: 'disabled', enable: 'published', archive: 'archived' })[action]
 }
 
@@ -54,6 +57,7 @@ function GeneralPracticeManagementPanel({ quiz, onQuizChange }) {
         disable: () => disableGeneralPracticeQuiz(quiz.id),
         enable: () => enableGeneralPracticeQuiz(quiz.id),
         archive: () => archiveGeneralPracticeQuiz(quiz.id),
+        restore: () => restoreGeneralPracticeQuiz(quiz.id),
         retry: () => retryGeneralPracticeMedia(quiz.id),
       })[action]()
       if (!responseConfirmed(action, quiz, result)) {
@@ -107,6 +111,7 @@ function GeneralPracticeManagementPanel({ quiz, onQuizChange }) {
       {quiz.status === 'published' ? button('disable', 'Disable quiz') : null}
       {quiz.status === 'disabled' && quiz.published ? button('enable', 'Enable quiz') : null}
       {quiz.status !== 'archived' ? button('archive', 'Archive quiz') : null}
+      {quiz.status === 'archived' ? button('restore', 'Restore quiz') : null}
       {mediaPending ? button('retry', 'Retry media processing', busy || reconciliationRequired) : null}
     </div>
     {confirmAction ? <QuizDialog title={actions[confirmAction].title} message={actions[confirmAction].message} confirmText={actions[confirmAction].confirmText} onConfirm={execute} onCancel={() => { if (!busyRef.current) setConfirmAction(null) }} busy={busy} /> : null}
