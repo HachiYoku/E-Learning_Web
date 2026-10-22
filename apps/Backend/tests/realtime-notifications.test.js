@@ -193,6 +193,11 @@ before(async () => {
   Payment = require("../models/paymentModel");
   Notification = require("../models/notificationModel");
   SupportTicket = require("../models/supportTicketModel");
+  const PromoRedemption = require("../models/promoRedemptionModel");
+  const redemptionIndex = PromoRedemption.schema.indexes().find(([, options]) => options.name === "active_promo_user_unique");
+  assert.ok(redemptionIndex, "expected the payment redemption index definition");
+  await PromoRedemption.createCollection();
+  await PromoRedemption.collection.createIndex(...redemptionIndex);
 });
 
 after(async () => {
