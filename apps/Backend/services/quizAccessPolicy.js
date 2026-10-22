@@ -22,6 +22,9 @@ function isQuizAvailable(quiz) {
 async function authorizeStudentQuizAccess({ quiz, user, session, requireAvailable = true }) {
   if (!quiz) throw unavailableQuizError();
   if (requireAvailable && !isQuizAvailable(quiz)) throw unavailableQuizError();
+  // Package 1 stores standalone content, but its attempt/session contract is
+  // not enabled until Package 2 supplies resume and idempotency guarantees.
+  if (quiz.contextType === "standalone") throw unavailableQuizError();
   if (user?.role === "admin") return;
 
   if (COURSE_CONTEXTS.has(quiz.contextType)) {

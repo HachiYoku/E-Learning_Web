@@ -2,6 +2,7 @@ const QuizMedia = require("../models/quizMediaModel");
 const QuizAttempt = require("../models/quizAttemptModel");
 const QuizSession = require("../models/quizSessionModel");
 const Quiz = require("../models/quizModel");
+const { guestMediaIsProtected } = require("./guestQuizDependencies");
 const cloudinary = require("../config/cloudinary");
 
 function mediaValues(question) {
@@ -11,9 +12,21 @@ function mediaValues(question) {
   ].filter(Boolean);
 }
 
-async function registerQuizMedia(quiz) {
-  for (const question of quiz.questions || []) {
+async function registerQuizMedia(quiz, { existingOnly = false } = {}) {
+  for (const question of [...(quiz.questions || []), ...(quiz.draft?.questions || [])]) {
     for (const media of mediaValues(question)) {
+      if (existingOnly) {
+        // Standalone draft media was ownership-checked before persistence. A
+        // stale reconciliation must never re-activate an asset that deletion
+        // has already marked for cleanup (or already deleted).
+        const result = await QuizMedia.updateOne(
+          { quiz: quiz._id, questionId: question._id, publicId: media.publicId,
+            mediaType: media.mediaType, cleanupState: { $ne: "deleted" } },
+          { $set: { quiz: quiz._id } }
+        );
+        if (!result.matchedCount) throw new Error("Standalone quiz media ownership requires recovery");
+        continue;
+      }
       await QuizMedia.updateOne(
         { publicId: media.publicId },
         { $setOnInsert: { quiz: quiz._id, questionId: question._id, ...media }, $set: { cleanupState: "active", cleanupError: "" } },
@@ -33,8 +46,12 @@ async function isHistoricallyReferenced(publicId) {
 }
 
 async function cleanupQuizMedia(record) {
-  if (!record || record.cleanupState === "deleted" || await isHistoricallyReferenced(record.publicId)) return false;
-  if (await Quiz.exists({ $or: [{ "questions.imagePublicId": record.publicId }, { "questions.audioPublicId": record.publicId }] })) return false;
+  if (!record || record.cleanupState === "deleted" || await isHistoricallyReferenced(record.publicId)
+    || await guestMediaIsProtected(record.publicId)) return false;
+  if (await Quiz.exists({ $or: [
+    { "questions.imagePublicId": record.publicId }, { "questions.audioPublicId": record.publicId },
+    { "draft.questions.imagePublicId": record.publicId }, { "draft.questions.audioPublicId": record.publicId },
+  ] })) return false;
   if (await QuizSession.exists({ invalidatedAt: null, expiresAt: { $gt: new Date() }, $or: [{ "snapshot.questions.imagePublicId": record.publicId }, { "snapshot.questions.audioPublicId": record.publicId }] })) {
     await QuizMedia.updateOne({ _id: record._id }, { $set: { cleanupState: "pending_cleanup" } });
     return false;
@@ -50,10 +67,28 @@ async function cleanupQuizMedia(record) {
 }
 
 async function reconcileReplacedQuizMedia(previousQuiz, nextQuiz) {
-  const active = new Set((nextQuiz.questions || []).flatMap(mediaValues).map((media) => media.publicId));
-  const oldIds = (previousQuiz.questions || []).flatMap(mediaValues).map((media) => media.publicId).filter((id) => !active.has(id));
+  const referenced = (quiz) => [...(quiz.questions || []), ...(quiz.draft?.questions || [])].flatMap(mediaValues).map((media) => media.publicId);
+  const active = new Set(referenced(nextQuiz));
+  const oldIds = referenced(previousQuiz).filter((id) => !active.has(id));
   const records = await QuizMedia.find({ quiz: previousQuiz._id, publicId: { $in: oldIds }, cleanupState: { $ne: "deleted" } });
   await Promise.all(records.map(cleanupQuizMedia));
 }
 
-module.exports = { registerQuizMedia, cleanupQuizMedia, reconcileReplacedQuizMedia, isHistoricallyReferenced };
+// Rebuild from the persisted Quiz, not a pre-write snapshot. QuizMedia records
+// already exist for newly selected assets (ownership is checked before save).
+// An unreferenced asset is cleaned only by cleanupQuizMedia's live, session and
+// historical reference checks. Failed/deferred cleanup stays retryable.
+async function reconcileStandaloneQuizMedia(quiz) {
+  await registerQuizMedia(quiz, { existingOnly: true });
+  const records = await QuizMedia.find({ quiz: quiz._id, cleanupState: { $ne: "deleted" } });
+  let pending = false;
+  for (const record of records) {
+    const removed = await cleanupQuizMedia(record);
+    if (removed) continue;
+    const current = await QuizMedia.findById(record._id).select("cleanupState").lean();
+    if (current && ["pending_cleanup", "cleanup_failed"].includes(current.cleanupState)) pending = true;
+  }
+  return !pending;
+}
+
+module.exports = { registerQuizMedia, cleanupQuizMedia, reconcileReplacedQuizMedia, reconcileStandaloneQuizMedia, isHistoricallyReferenced };

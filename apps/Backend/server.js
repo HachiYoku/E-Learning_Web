@@ -14,6 +14,7 @@ const {
 } = require("./middleware/monitoring");
 const healthCheck = require("./middleware/health");
 const { initializeSocketServer, closeSocketServer } = require("./realtime/socketServer");
+const { resolveListenHost, listenOnHost } = require("./config/listenHost");
 
 const parseCookies = (cookieHeader = "") => Object.fromEntries(
   cookieHeader.split(";").map((part) => {
@@ -30,9 +31,11 @@ const port = process.env.PORT || 3000
 const trustProxy = process.env.TRUST_PROXY
 const isProduction = process.env.NODE_ENV === "production"
 let trustedUrls;
+let listenHost;
 
 try {
   trustedUrls = getTrustedUrls();
+  listenHost = resolveListenHost();
 } catch (error) {
   // These validation messages name configuration keys only; they never echo
   // configured origin values or credentials.
@@ -97,7 +100,7 @@ app.use((req, res, next) => {
     }
 
     res.header('Access-Control-Allow-Credentials', 'true')
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Portal')
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Portal, X-Guest-Quiz-Request')
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
 
     if (req.method === 'OPTIONS') {
@@ -241,6 +244,6 @@ app.use(errorHandler)
 server = http.createServer(app);
 initializeSocketServer(server, { allowedOrigins });
 
-server.listen(port, () => {
+listenOnHost(server, port, listenHost, () => {
   console.log(`Example app listening on port ${port}`)
 })

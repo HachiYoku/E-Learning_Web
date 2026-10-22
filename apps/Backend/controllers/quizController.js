@@ -205,7 +205,7 @@ const createQuiz = async (req, res) => {
 
 const getAdminQuizzes = async (_req, res) => {
   try {
-    const quizzes = await Quiz.find().populate("course", "title").populate("lesson", "title order").sort({ createdAt: -1 });
+    const quizzes = await Quiz.find({ contextType: { $ne: "standalone" } }).populate("course", "title").populate("lesson", "title order").sort({ createdAt: -1 });
     const withHistory = await Promise.all(quizzes.map(async (quiz) => ({
       ...quiz.toObject(),
       attemptCount: await QuizAttempt.countDocuments({ quiz: quiz._id }),
@@ -233,6 +233,7 @@ const updateQuiz = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.quizId);
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+    if (quiz.contextType === "standalone") return res.status(409).json({ message: "Use General Practice draft management for this quiz." });
     
     const courseId = req.body.courseId || String(quiz.course);
     const lessonId = req.body.lessonId || String(quiz.lesson);
@@ -292,6 +293,7 @@ const updateQuizQuestion = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.quizId);
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+    if (quiz.contextType === "standalone") return res.status(409).json({ message: "Use General Practice draft management for this quiz." });
     const questionIndex = quiz.questions.findIndex((question) => String(question._id) === String(req.params.questionId));
     if (questionIndex < 0) return res.status(404).json({ message: "Question not found" });
     const previousQuiz = quiz.toObject();
@@ -333,6 +335,7 @@ const createQuizQuestion = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.quizId);
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+    if (quiz.contextType === "standalone") return res.status(409).json({ message: "Use General Practice draft management for this quiz." });
     let rawQuestion = req.body.question || req.body;
     if (typeof rawQuestion === "string") rawQuestion = JSON.parse(rawQuestion);
     const [candidate] = parseQuestions([rawQuestion], req.files);
@@ -369,6 +372,7 @@ const deleteQuiz = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.quizId);
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+    if (quiz.contextType === "standalone") return res.status(409).json({ message: "Use General Practice draft management for this quiz." });
     const attemptCount = await QuizAttempt.countDocuments({ quiz: quiz._id });
     if (attemptCount > 0) {
       return res.status(409).json({
@@ -390,6 +394,7 @@ const archiveQuiz = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.quizId);
     if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+    if (quiz.contextType === "standalone") return res.status(409).json({ message: "Use General Practice draft management for this quiz." });
     quiz.status = "archived";
     await quiz.save();
     await invalidateQuizSessions({ quizId: quiz._id, reason: "archived" });
@@ -402,6 +407,7 @@ const archiveQuiz = async (req, res) => {
 const restoreQuiz = async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.quizId)) return res.status(404).json({ message: "Quiz not found" });
+    if (await Quiz.exists({ _id: req.params.quizId, contextType: "standalone" })) return res.status(409).json({ message: "Use General Practice draft management for this quiz." });
     const quiz = await Quiz.findOneAndUpdate(
       { _id: req.params.quizId, status: "archived" },
       { $set: { status: "disabled" }, $inc: { revision: 1 } },
@@ -420,6 +426,7 @@ const restoreQuiz = async (req, res) => {
 const changeQuizAvailability = async (req, res) => {
   const nextStatus = req.body?.status;
   if (!mongoose.isValidObjectId(req.params.quizId)) return res.status(404).json({ message: "Quiz not found" });
+  if (await Quiz.exists({ _id: req.params.quizId, contextType: "standalone" })) return res.status(409).json({ message: "Use General Practice draft management for this quiz." });
   const allowedPrevious = nextStatus === "disabled" ? ["published"] : nextStatus === "published" ? ["draft", "disabled"] : null;
   if (!allowedPrevious) return res.status(400).json({ message: "Choose Publish Quiz or Disable Quiz." });
   try {

@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const QUIZ_CONTEXTS = ["course_lesson", "course_final", "homework_lesson", "homework_final", "standalone"];
 const QUIZ_STATUSES = ["draft", "published", "disabled", "archived"];
 const STANDALONE_ACCESS = ["public", "students"];
+const STANDALONE_CATEGORIES = ["Vocabulary", "Grammar", "Reading", "Listening", "Conversation"];
+const STANDALONE_DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"];
 const FINAL_CONTEXTS = new Set(["course_final", "homework_final"]);
 
 const questionSchema = new mongoose.Schema(
@@ -30,9 +32,21 @@ const questionSchema = new mongoose.Schema(
       },
     },
     correctAnswer: { type: Number, required: true, min: 0 },
+    explanation: { type: String, trim: true, maxlength: 2000 },
   },
   { _id: true }
 );
+
+const standaloneDraftSchema = new mongoose.Schema({
+  title: { type: String, required: true, trim: true, maxlength: 140 },
+  description: { type: String, trim: true, maxlength: 1000, default: "" },
+  category: { type: String, required: true, enum: STANDALONE_CATEGORIES },
+  difficulty: { type: String, required: true, enum: STANDALONE_DIFFICULTIES },
+  standaloneAccess: { type: String, required: true, enum: STANDALONE_ACCESS },
+  questions: { type: [questionSchema], default: [] },
+  version: { type: Number, required: true, min: 1 },
+  basePublishedRevision: { type: Number, min: 1, default: null },
+}, { _id: false });
 
 questionSchema.pre("validate", function validateQuestion() {
   if (!String(this.prompt || "").trim() && !String(this.image || "").trim() && !String(this.audio || "").trim()) {
@@ -51,9 +65,20 @@ const quizSchema = new mongoose.Schema(
     course: { type: mongoose.Schema.Types.ObjectId, ref: "Course", default: null, index: true },
     lesson: { type: mongoose.Schema.Types.ObjectId, ref: "Lesson", default: null, index: true },
     homeworkSet: { type: mongoose.Schema.Types.ObjectId, ref: "HomeworkSet", default: null, index: true },
+    quizSet: { type: mongoose.Schema.Types.ObjectId, ref: "QuizSet", default: null, immutable: true },
     contextType: { type: String, enum: QUIZ_CONTEXTS, default: undefined, index: true },
     status: { type: String, enum: QUIZ_STATUSES, default: "draft", index: true },
     standaloneAccess: { type: String, enum: STANDALONE_ACCESS, default: null },
+    category: { type: String, enum: STANDALONE_CATEGORIES, default: null },
+    difficulty: { type: String, enum: STANDALONE_DIFFICULTIES, default: null },
+    description: { type: String, trim: true, maxlength: 1000, default: "" },
+    publishedRevision: { type: Number, min: 1, default: null },
+    // Standalone runtime transactions will use this independently of content revisions.
+    runtimeFence: { type: Number, min: 0, default: undefined },
+    // Set in the same write as a standalone draft/publication. A failed media
+    // pass can be retried without repeating that write.
+    mediaReconciliationToken: { type: String, default: undefined },
+    draft: { type: standaloneDraftSchema, default: undefined },
     revision: { type: Number, default: 1, min: 1 },
     sortOrder: { type: Number, default: null, min: 1 },
     quizType: { type: String, enum: ["lesson", "course"], default: "lesson", index: true },
@@ -86,6 +111,7 @@ function validateQuizContext(quiz) {
   const hasCourse = hasValue(quiz.course);
   const hasLesson = hasValue(quiz.lesson);
   const hasHomeworkSet = hasValue(quiz.homeworkSet);
+  const hasQuizSet = hasValue(quiz.quizSet);
 
   if (context === "course_lesson") {
     if (!hasCourse) invalidateContext(quiz, "course", "A course lesson quiz requires a course.");
@@ -115,8 +141,26 @@ function validateQuizContext(quiz) {
     quiz.quizType = "lesson";
   }
 
+  if (context !== "standalone" && hasQuizSet) {
+    invalidateContext(quiz, "quizSet", "Only standalone quizzes can belong to a Quiz Set.");
+  }
+  if (!quiz.isNew && quiz.isModified("quizSet")) {
+    invalidateContext(quiz, "quizSet", "Quiz Set assignment cannot be changed.");
+  }
+
   if (context !== "standalone" && quiz.standaloneAccess) {
     invalidateContext(quiz, "standaloneAccess", "Only standalone quizzes can define standalone access.");
+  }
+  if (context !== "standalone" && (quiz.draft || quiz.publishedRevision !== null || quiz.category || quiz.difficulty)) {
+    invalidateContext(quiz, "draft", "Standalone revision fields require a standalone quiz.");
+  }
+  if (context === "standalone" && quiz.draft) {
+    if (!quiz.draft.questions?.length || quiz.draft.questions.length > 10) {
+      invalidateContext(quiz, "draft.questions", "Add between 1 and 10 questions to the draft.");
+    }
+    if (quiz.draft.basePublishedRevision !== quiz.publishedRevision) {
+      invalidateContext(quiz, "draft.basePublishedRevision", "Draft base must match the published revision.");
+    }
   }
 
   if (FINAL_CONTEXTS.has(context) && (quiz.maxAttempts === null || quiz.maxAttempts === undefined)) {
@@ -159,6 +203,7 @@ quizSchema.pre("validate", async function validateLessonCourseOwnership() {
 });
 
 quizSchema.pre("save", function incrementRevisionForScoringChanges() {
+  if (this.contextType === "standalone" && this.draft) return;
   if (!this.isNew && scoringFieldsChanged(this) && !this.$locals.quizRevisionAlreadyIncremented) {
     this.revision = Number(this.revision || 1) + 1;
   }
@@ -189,6 +234,8 @@ quizSchema.index(
   { homeworkSet: 1, sortOrder: 1 },
   { unique: true, partialFilterExpression: { contextType: "homework_lesson", sortOrder: { $type: "number" } } }
 );
+quizSchema.index({ quizSet: 1, sortOrder: 1, _id: 1 },
+  { name: "standalone_quiz_set_order", partialFilterExpression: { contextType: "standalone", quizSet: { $type: "objectId" } } });
 
 quizSchema.statics.validateContext = validateQuizContext;
 quizSchema.statics.scoringFieldsChanged = scoringFieldsChanged;
@@ -199,4 +246,6 @@ module.exports = Quiz;
 module.exports.QUIZ_CONTEXTS = QUIZ_CONTEXTS;
 module.exports.QUIZ_STATUSES = QUIZ_STATUSES;
 module.exports.STANDALONE_ACCESS = STANDALONE_ACCESS;
+module.exports.STANDALONE_CATEGORIES = STANDALONE_CATEGORIES;
+module.exports.STANDALONE_DIFFICULTIES = STANDALONE_DIFFICULTIES;
 module.exports.FINAL_CONTEXTS = FINAL_CONTEXTS;
