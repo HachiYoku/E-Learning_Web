@@ -159,7 +159,7 @@ function Navbar() {
     { label: "Thai Consonants", path: "/practice/thai-consonants" },
     { label: "Thai Vowels", path: "/practice/thai-vowels" },
     { label: "Level test", path: null },
-    { label: "Quiz", path: null },
+    { label: "General Practice", path: "/practice/general" },
     { label: "Flashcards", path: "/flashcards" },
   ]
 

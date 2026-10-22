@@ -1,6 +1,6 @@
 import { clearToken, getToken, setToken } from "./tokenStorage";
 
-const API_BASE_URL =
+export const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export const SESSION_EXPIRED_EVENT = "user-session-expired";
@@ -87,6 +87,7 @@ async function request(path, options = {}) {
     error.status = response.status;
     error.data = data;
     error.code = data?.code;
+    error.retryAfter = response.headers.get("Retry-After");
     throw error;
   }
 

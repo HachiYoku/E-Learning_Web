@@ -34,6 +34,21 @@ function createImageUpload({ maxFiles } = {}) {
   });
 }
 
+function createQuizSetCoverUpload() {
+  return multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_UPLOAD_SIZE_BYTES, files: 1 },
+    fileFilter(_req, file, callback) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) {
+        const error = new Error("Cover must be a JPG, PNG, or WebP image.");
+        error.statusCode = 400;
+        return callback(error);
+      }
+      return callback(null, true);
+    },
+  });
+}
+
 function quizMediaFileFilter(_req, file, callback) {
   const isImage = /^questionImage_\d+$/.test(file.fieldname);
   const isAudio = /^questionAudio_\d+$/.test(file.fieldname);
@@ -99,6 +114,7 @@ module.exports = {
   ALLOWED_IMAGE_MIME_TYPES,
   MAX_UPLOAD_SIZE_BYTES,
   createImageUpload,
+  createQuizSetCoverUpload,
   validateImageFileContent,
   MAX_QUIZ_AUDIO_SIZE_BYTES,
   createQuizMediaUpload,

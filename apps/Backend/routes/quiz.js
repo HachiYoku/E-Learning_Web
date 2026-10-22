@@ -2,10 +2,68 @@ const express = require("express");
 const validateToken = require("../middleware/authMiddleware");
 const requireAdmin = require("../middleware/adminMiddleware");
 const { createQuizMediaUpload, validateQuizMediaContent } = require("../middleware/uploadValidation");
+const { createQuizSetCoverUpload, validateImageFileContent } = require("../middleware/uploadValidation");
+const { rateLimit } = require("express-rate-limit");
 const controller = require("../controllers/quizController");
+const standalone = require("../controllers/standaloneQuizController");
+const standaloneSets = require("../controllers/standaloneQuizSetController");
+const { attachUserIfPresent } = require("../middleware/authMiddleware");
+const { standaloneQuizRateLimit } = require("../middleware/standaloneQuizRateLimit");
+const { requireStandaloneRuntimeReady } = require("../services/standaloneQuizRuntimeReadiness");
+const guest = require("../controllers/guestQuizController");
+const { requireGuestQuizReady, prepareGuestStart, requireGuestOwner, guestQuizRateLimit } = require("../middleware/guestQuizRuntime");
+const { requireGuestWriteOrigin } = require("../services/guestQuizSecurity");
 
 const router = express.Router();
 const upload = createQuizMediaUpload({ maxFiles: 20 });
+const coverUpload = createQuizSetCoverUpload();
+const coverUploadLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => String(req.user.id),
+  handler: (_req, res) => res.status(429).json({ message: "Too many cover uploads. Try again later." }),
+});
+
+router.get("/standalone/sets", attachUserIfPresent, standaloneSets.listPublic);
+router.get("/standalone/sets/:setId", attachUserIfPresent, standaloneSets.getPublic);
+router.get("/standalone", attachUserIfPresent, standalone.listPublished);
+router.get("/standalone/guest/attempts/:attemptId", requireGuestQuizReady, requireGuestOwner, guest.getResult);
+router.post("/standalone/:quizId/guest/sessions", requireGuestWriteOrigin, requireGuestQuizReady,
+  prepareGuestStart, guestQuizRateLimit("start"), guest.start);
+router.get("/standalone/:quizId/guest/sessions/:sessionId", requireGuestQuizReady, requireGuestOwner, guest.getSession);
+router.post("/standalone/:quizId/guest/submit", requireGuestWriteOrigin, requireGuestQuizReady,
+  requireGuestOwner, guestQuizRateLimit("submit"), guest.submit);
+router.get("/standalone/attempts/:attemptId", validateToken, requireStandaloneRuntimeReady, standalone.getResult);
+router.get("/standalone/:quizId/attempts", validateToken, requireStandaloneRuntimeReady, standalone.getHistory);
+router.post("/standalone/:quizId/sessions", validateToken, standaloneQuizRateLimit("start"),
+  requireStandaloneRuntimeReady, standalone.startSession);
+router.post("/standalone/:quizId/submit", validateToken, standaloneQuizRateLimit("submit"),
+  requireStandaloneRuntimeReady, standalone.submit);
+router.get("/standalone/:quizId", attachUserIfPresent, standalone.getPublished);
+router.get("/admin/standalone/sets", validateToken, requireAdmin, standaloneSets.listAdmin);
+router.post("/admin/standalone/sets", validateToken, requireAdmin, standaloneSets.create);
+router.get("/admin/standalone/sets/:setId", validateToken, requireAdmin, standaloneSets.getAdmin);
+router.put("/admin/standalone/sets/:setId", validateToken, requireAdmin, standaloneSets.update);
+router.post("/admin/standalone/sets/:setId/cover", validateToken, requireAdmin, coverUploadLimit,
+  coverUpload.single("cover"), validateImageFileContent, standaloneSets.uploadCover);
+router.delete("/admin/standalone/sets/:setId/cover", validateToken, requireAdmin, standaloneSets.removeCover);
+router.post("/admin/standalone/sets/:setId/activate", validateToken, requireAdmin, standaloneSets.lifecycle("activate"));
+router.post("/admin/standalone/sets/:setId/disable", validateToken, requireAdmin, standaloneSets.lifecycle("disable"));
+router.post("/admin/standalone/sets/:setId/archive", validateToken, requireAdmin, standaloneSets.lifecycle("archive"));
+router.post("/admin/standalone/sets/:setId/restore", validateToken, requireAdmin, standaloneSets.lifecycle("restore"));
+router.post("/admin/standalone/sets/:setId/quizzes", validateToken, requireAdmin, standaloneSets.createDraft);
+router.put("/admin/standalone/sets/:setId/quizzes/:quizId/order", validateToken, requireAdmin, standaloneSets.orderQuiz);
+router.delete("/admin/standalone/sets/:setId", validateToken, requireAdmin, standaloneSets.remove);
+router.post("/admin/standalone", validateToken, requireAdmin, standalone.create);
+router.get("/admin/standalone", validateToken, requireAdmin, standalone.listAdmin);
+router.get("/admin/standalone/:quizId", validateToken, requireAdmin, standalone.getAdmin);
+router.put("/admin/standalone/:quizId/draft", validateToken, requireAdmin, standalone.editDraft);
+router.post("/admin/standalone/:quizId/publish", validateToken, requireAdmin, standalone.publish);
+router.post("/admin/standalone/:quizId/media/retry", validateToken, requireAdmin, standalone.retryMedia);
+router.post("/admin/standalone/:quizId/disable", validateToken, requireAdmin, standalone.lifecycle("disable"));
+router.post("/admin/standalone/:quizId/enable", validateToken, requireAdmin, standalone.lifecycle("enable"));
+router.post("/admin/standalone/:quizId/archive", validateToken, requireAdmin, standalone.lifecycle("archive"));
+router.post("/admin/standalone/:quizId/restore", validateToken, requireAdmin, standalone.lifecycle("restore"));
+router.delete("/admin/standalone/:quizId", validateToken, requireAdmin, standalone.remove);
 
 function validateQuizImageFields(req, res, next) {
   const invalidFile = (req.files || []).find(
