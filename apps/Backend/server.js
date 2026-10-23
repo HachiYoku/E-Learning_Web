@@ -13,6 +13,7 @@ const {
   redact,
 } = require("./middleware/monitoring");
 const healthCheck = require("./middleware/health");
+const { createProxyDiagnostic } = require("./middleware/proxyDiagnostic");
 const { initializeSocketServer, closeSocketServer } = require("./realtime/socketServer");
 const { resolveListenHost, listenOnHost } = require("./config/listenHost");
 
@@ -237,7 +238,7 @@ app.get('/', (req, res) => {
   res.send('Hello Arun Thai!')
 })
 
-app.get('/health', healthCheck)
+app.get('/health', createProxyDiagnostic(), healthCheck)
 
 app.use(errorHandler)
 
