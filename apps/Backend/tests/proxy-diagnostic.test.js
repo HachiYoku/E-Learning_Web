@@ -8,6 +8,7 @@ const { createProxyDiagnostic } = require("../middleware/proxyDiagnostic");
 const token = crypto.randomBytes(32).toString("base64url");
 const expectedIp = "198.51.100.25";
 const syntheticIp = "192.0.2.10";
+const controlledIp = "203.0.113.77";
 const now = Date.parse("2026-10-24T10:00:00Z");
 const enabled = {
   PROXY_DIAGNOSTIC_ENABLED: "true",
@@ -30,6 +31,11 @@ async function withHealth(config, run) {
   }
 }
 
+function originalComparisons(diagnostic) {
+  const { matchesExpectedClient, matchesExpectedClientNormalized, matchesSyntheticForwarded } = diagnostic;
+  return { matchesExpectedClient, matchesExpectedClientNormalized, matchesSyntheticForwarded };
+}
+
 test("ordinary health checks and disabled diagnostics keep the normal response", async () => {
   await withHealth(enabled, async (url) => {
     const response = await fetch(url);
@@ -48,7 +54,10 @@ test("ordinary health checks and disabled diagnostics keep the normal response",
 
 test("invalid authorization cannot obtain diagnostics", async () => {
   await withHealth(enabled, async (url) => {
-    const response = await fetch(url, { headers: { authorization: `Bearer ${crypto.randomBytes(32).toString("base64url")}` } });
+    const response = await fetch(url, { headers: {
+      authorization: `Bearer ${crypto.randomBytes(32).toString("base64url")}`,
+      "x-forwarded-for": `${controlledIp}, ${expectedIp}`,
+    } });
     assert.deepEqual(await response.json(), { status: "ok" });
   });
 });
@@ -65,7 +74,7 @@ test("HEAD health requests never activate the GET-only diagnostic", async () => 
 test("authorized diagnostics compare the independently configured client address", async () => {
   await withHealth({ ...enabled, PROXY_DIAGNOSTIC_EXPECTED_CLIENT_IP: "127.0.0.1" }, async (url) => {
     const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
-    assert.deepEqual((await response.json()).proxyDiagnostic, {
+    assert.deepEqual(originalComparisons((await response.json()).proxyDiagnostic), {
       matchesExpectedClient: true, matchesExpectedClientNormalized: true, matchesSyntheticForwarded: false,
     });
   });
@@ -75,9 +84,11 @@ test("authorized diagnostics compare the independently configured client address
     });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
-    assert.deepEqual(await response.json(), { status: "ok", proxyDiagnostic: {
+    const body = await response.json();
+    assert.equal(body.status, "ok");
+    assert.deepEqual(originalComparisons(body.proxyDiagnostic), {
       matchesExpectedClient: true, matchesExpectedClientNormalized: true, matchesSyntheticForwarded: false,
-    } });
+    });
   });
 });
 
@@ -87,7 +98,7 @@ test("IPv4-mapped IPv6 matches IPv4 only in the normalized comparison", async ()
       const response = await fetch(url, {
         headers: { authorization: `Bearer ${token}`, "x-forwarded-for": forwarded },
       });
-      assert.deepEqual((await response.json()).proxyDiagnostic, {
+      assert.deepEqual(originalComparisons((await response.json()).proxyDiagnostic), {
         matchesExpectedClient: false, matchesExpectedClientNormalized: true, matchesSyntheticForwarded: false,
       });
     }
@@ -96,7 +107,7 @@ test("IPv4-mapped IPv6 matches IPv4 only in the normalized comparison", async ()
     const response = await fetch(url, {
       headers: { authorization: `Bearer ${token}`, "x-forwarded-for": expectedIp },
     });
-    assert.deepEqual((await response.json()).proxyDiagnostic, {
+    assert.deepEqual(originalComparisons((await response.json()).proxyDiagnostic), {
       matchesExpectedClient: false, matchesExpectedClientNormalized: true, matchesSyntheticForwarded: false,
     });
   });
@@ -108,7 +119,7 @@ test("unrelated IPv4 and IPv6 addresses do not normalize to a match", async () =
       const response = await fetch(url, {
         headers: { authorization: `Bearer ${token}`, "x-forwarded-for": forwarded },
       });
-      assert.deepEqual((await response.json()).proxyDiagnostic, {
+      assert.deepEqual(originalComparisons((await response.json()).proxyDiagnostic), {
         matchesExpectedClient: false, matchesExpectedClientNormalized: false, matchesSyntheticForwarded: false,
       });
     }
@@ -124,7 +135,7 @@ test("equivalent IPv6 spellings match without equating different IPv6 addresses"
       const response = await fetch(url, {
         headers: { authorization: `Bearer ${token}`, "x-forwarded-for": forwarded },
       });
-      assert.deepEqual((await response.json()).proxyDiagnostic, {
+      assert.deepEqual(originalComparisons((await response.json()).proxyDiagnostic), {
         matchesExpectedClient: false, matchesExpectedClientNormalized: matches, matchesSyntheticForwarded: false,
       });
     }
@@ -154,7 +165,7 @@ test("synthetic forwarded input is reported only as comparisons", async () => {
       headers: { authorization: `Bearer ${token}`, "x-forwarded-for": syntheticIp },
     });
     const body = await response.json();
-    assert.deepEqual(body.proxyDiagnostic, {
+    assert.deepEqual(originalComparisons(body.proxyDiagnostic), {
       matchesExpectedClient: false, matchesExpectedClientNormalized: false, matchesSyntheticForwarded: true,
     });
     assert.doesNotMatch(JSON.stringify(body), /192\.0\.2\.10|198\.51\.100\.25|Bearer/);
@@ -170,7 +181,7 @@ test("one-hop Express trust selects the rightmost address in a multi-address for
       const response = await fetch(url, {
         headers: { authorization: `Bearer ${token}`, "x-forwarded-for": forwarded },
       });
-      assert.deepEqual((await response.json()).proxyDiagnostic, expected);
+      assert.deepEqual(originalComparisons((await response.json()).proxyDiagnostic), expected);
     }
   });
 });
@@ -181,7 +192,7 @@ test("a forged expected address yields equality, not independent proof", async (
       headers: { authorization: `Bearer ${token}`, "x-forwarded-for": `${syntheticIp}, ${expectedIp}` },
     });
     const body = await response.json();
-    assert.deepEqual(body.proxyDiagnostic, {
+    assert.deepEqual(originalComparisons(body.proxyDiagnostic), {
       matchesExpectedClient: true, matchesExpectedClientNormalized: true, matchesSyntheticForwarded: false,
     });
     assert.equal(Object.hasOwn(body.proxyDiagnostic, "conclusive"), false);
@@ -195,11 +206,127 @@ test("a forged mapped address can match after normalization without proving prox
       headers: { authorization: `Bearer ${token}`, "x-forwarded-for": `${syntheticIp}, ::ffff:198.51.100.25` },
     });
     const body = await response.json();
-    assert.deepEqual(body.proxyDiagnostic, {
+    assert.deepEqual(originalComparisons(body.proxyDiagnostic), {
       matchesExpectedClient: false, matchesExpectedClientNormalized: true, matchesSyntheticForwarded: false,
     });
     assert.equal(Object.hasOwn(body.proxyDiagnostic, "conclusive"), false);
     assert.doesNotMatch(JSON.stringify(body), /192\.0\.2\.10|198\.51\.100\.25|Bearer/);
+  });
+});
+
+test("normal multi-hop forwarding identifies chain presence and the selected rightmost hop", async () => {
+  await withHealth(enabled, async (url) => {
+    const response = await fetch(url, { headers: {
+      authorization: `Bearer ${token}`,
+      "x-forwarded-for": `${expectedIp}, 192.0.2.20`,
+    } });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.deepEqual((await response.json()).proxyDiagnostic, {
+      matchesExpectedClient: false,
+      matchesExpectedClientNormalized: false,
+      matchesSyntheticForwarded: false,
+      matchesControlledSyntheticForwarded: false,
+      matchesSocketPeer: false,
+      forwardedChainInspected: true,
+      expectedClientInForwardedChain: true,
+      controlledSyntheticInForwardedChain: false,
+      selectedForwardedPosition: "rightmost",
+    });
+  });
+});
+
+test("authorized diagnostic responses contain exactly the approved fields and no sensitive values", async () => {
+  await withHealth(enabled, async (url) => {
+    const response = await fetch(url, { headers: {
+      authorization: `Bearer ${token}`,
+      "x-forwarded-for": `${controlledIp}, ${expectedIp}`,
+    } });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.deepEqual(Object.keys(body).sort(), ["proxyDiagnostic", "status"]);
+    assert.deepEqual(Object.keys(body.proxyDiagnostic).sort(), [
+      "controlledSyntheticInForwardedChain",
+      "expectedClientInForwardedChain",
+      "forwardedChainInspected",
+      "matchesControlledSyntheticForwarded",
+      "matchesExpectedClient",
+      "matchesExpectedClientNormalized",
+      "matchesSocketPeer",
+      "matchesSyntheticForwarded",
+      "selectedForwardedPosition",
+    ]);
+    const serialized = JSON.stringify(body);
+    assert.equal(serialized.includes(token), false);
+    assert.doesNotMatch(serialized, /(?:\d{1,3}\.){3}\d{1,3}|x-forwarded-for|authorization|Bearer/i);
+  });
+});
+
+test("controlled forged input is visible in the chain without becoming Express req.ip", async () => {
+  await withHealth(enabled, async (url) => {
+    const response = await fetch(url, { headers: {
+      authorization: `Bearer ${token}`,
+      "x-forwarded-for": `${controlledIp}, ${expectedIp}, 192.0.2.20`,
+    } });
+    const body = await response.json();
+    assert.equal(body.proxyDiagnostic.controlledSyntheticInForwardedChain, true);
+    assert.equal(body.proxyDiagnostic.matchesControlledSyntheticForwarded, false);
+    assert.equal(body.proxyDiagnostic.expectedClientInForwardedChain, true);
+    assert.equal(body.proxyDiagnostic.selectedForwardedPosition, "rightmost");
+    assert.doesNotMatch(JSON.stringify(body), /203\.0\.113\.77|198\.51\.100\.25|192\.0\.2\.20|Bearer/);
+  });
+});
+
+test("a forged rightmost address can become req.ip under one-hop trust", async () => {
+  await withHealth(enabled, async (url) => {
+    const response = await fetch(url, { headers: {
+      authorization: `Bearer ${token}`,
+      "x-forwarded-for": `${expectedIp}, 192.0.2.20, ${controlledIp}`,
+    } });
+    const diagnostic = (await response.json()).proxyDiagnostic;
+    assert.equal(diagnostic.matchesControlledSyntheticForwarded, true);
+    assert.equal(diagnostic.controlledSyntheticInForwardedChain, true);
+    assert.equal(diagnostic.selectedForwardedPosition, "rightmost");
+  });
+});
+
+test("socket selection and repeated forwarded positions remain categorical", async () => {
+  await withHealth({ ...enabled, PROXY_DIAGNOSTIC_EXPECTED_CLIENT_IP: "127.0.0.1" }, async (url) => {
+    const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+    const diagnostic = (await response.json()).proxyDiagnostic;
+    assert.equal(diagnostic.matchesSocketPeer, true);
+    assert.equal(diagnostic.forwardedChainInspected, true);
+    assert.equal(diagnostic.selectedForwardedPosition, "none");
+  });
+  await withHealth(enabled, async (url) => {
+    const response = await fetch(url, { headers: {
+      authorization: `Bearer ${token}`,
+      "x-forwarded-for": `${controlledIp}, ${controlledIp}`,
+    } });
+    assert.equal((await response.json()).proxyDiagnostic.selectedForwardedPosition, "multiple");
+  });
+});
+
+test("malformed forwarding input is not classified as an inspected chain", async () => {
+  await withHealth(enabled, async (url) => {
+    for (const forwarded of [
+      `${expectedIp}, not-an-ip`,
+      Array(17).fill(controlledIp).join(", "),
+      Array(170).fill(controlledIp).join(","),
+    ]) {
+      const response = await fetch(url, { headers: {
+        authorization: `Bearer ${token}`, "x-forwarded-for": forwarded,
+      } });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      const diagnostic = body.proxyDiagnostic;
+      assert.equal(diagnostic.forwardedChainInspected, false);
+      assert.equal(diagnostic.expectedClientInForwardedChain, false);
+      assert.equal(diagnostic.selectedForwardedPosition, "unavailable");
+      const serialized = JSON.stringify(body);
+      assert.equal(serialized.includes(token), false);
+      assert.doesNotMatch(serialized, /(?:\d{1,3}\.){3}\d{1,3}|x-forwarded-for|authorization|Bearer/i);
+    }
   });
 });
 
@@ -214,7 +341,9 @@ test("missing, invalid, or expired independent client evidence disables diagnost
   ];
   for (const config of invalid) {
     await withHealth(config, async (url) => {
-      const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+      const response = await fetch(url, { headers: {
+        authorization: `Bearer ${token}`, "x-forwarded-for": `${controlledIp}, ${expectedIp}`,
+      } });
       assert.deepEqual(await response.json(), { status: "ok" });
     });
   }
