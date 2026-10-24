@@ -3,8 +3,11 @@ const net = require("node:net");
 const mongoose = require("mongoose");
 
 const SYNTHETIC_FORWARDED_IP = "192.0.2.10";
+const CONTROLLED_FORWARDED_IP = "203.0.113.77";
 const MAX_LIFETIME_MS = 60 * 60 * 1000;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const MAX_FORWARDED_HEADER_LENGTH = 2048;
+const MAX_FORWARDED_HOPS = 16;
 
 function normalizedIp(value) {
   const family = net.isIP(value);
@@ -25,6 +28,37 @@ function normalizedIp(value) {
   } catch {
     return null;
   }
+}
+
+function inspectForwardedChain(header, selectedIp, expectedIp) {
+  if (header === undefined) {
+    return { forwardedChainInspected: true, expectedClientInForwardedChain: false,
+      controlledSyntheticInForwardedChain: false, selectedForwardedPosition: "none" };
+  }
+  if (typeof header !== "string" || header.length > MAX_FORWARDED_HEADER_LENGTH) {
+    return { forwardedChainInspected: false, expectedClientInForwardedChain: false,
+      controlledSyntheticInForwardedChain: false, selectedForwardedPosition: "unavailable" };
+  }
+
+  const parts = header.split(",");
+  const chain = parts.length <= MAX_FORWARDED_HOPS
+    ? parts.map((part) => normalizedIp(part.trim())) : [];
+  if (chain.length === 0 || chain.some((ip) => ip === null)) {
+    return { forwardedChainInspected: false, expectedClientInForwardedChain: false,
+      controlledSyntheticInForwardedChain: false, selectedForwardedPosition: "unavailable" };
+  }
+
+  const selectedPositions = selectedIp === null ? []
+    : chain.flatMap((ip, index) => ip === selectedIp ? [index] : []);
+  const selectedForwardedPosition = selectedPositions.length > 1 ? "multiple"
+    : selectedPositions.length === 0 ? "none"
+      : selectedPositions[0] === chain.length - 1 ? "rightmost" : "earlier";
+  return {
+    forwardedChainInspected: true,
+    expectedClientInForwardedChain: chain.includes(expectedIp),
+    controlledSyntheticInForwardedChain: chain.includes(normalizedIp(CONTROLLED_FORWARDED_IP)),
+    selectedForwardedPosition,
+  };
 }
 
 // Temporary, default-off diagnostic. The expected address must come from an
@@ -54,11 +88,17 @@ function createProxyDiagnostic({ env = process.env, now = Date.now,
 
     const clientIp = normalizedIp(req.ip);
     const expectedClientIp = normalizedIp(expectedIp);
+    const socketIp = normalizedIp(req.socket.remoteAddress);
+    const chain = inspectForwardedChain(req.headers["x-forwarded-for"], clientIp, expectedClientIp);
     res.set("Cache-Control", "no-store");
     return res.status(200).json({ status: "ok", proxyDiagnostic: {
       matchesExpectedClient: req.ip === expectedIp,
       matchesExpectedClientNormalized: clientIp !== null && clientIp === expectedClientIp,
       matchesSyntheticForwarded: req.ip === SYNTHETIC_FORWARDED_IP,
+      matchesControlledSyntheticForwarded: clientIp !== null
+        && clientIp === normalizedIp(CONTROLLED_FORWARDED_IP),
+      matchesSocketPeer: clientIp !== null && clientIp === socketIp,
+      ...chain,
     } });
   };
 }
