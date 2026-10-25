@@ -17,13 +17,10 @@ const deferred = () => {
 }
 
 function Pathname() { return <output data-testid="path">{useLocation().pathname}</output> }
-function renderCatalog(path = "/practice/general") {
+function renderCatalog(path = "/app/practice/general") {
   return render(<MemoryRouter initialEntries={[path]}><Pathname /><Routes>
-    <Route path="/practice/general" element={<GeneralPracticeList publicView />} />
     <Route path="/app/practice/general" element={<GeneralPracticeList />} />
-    <Route path="/practice/general/sets/:setId" element={<p>Public Quiz Set details</p>} />
     <Route path="/app/practice/general/sets/:setId" element={<p>Student Quiz Set details</p>} />
-    <Route path="/practice/general/:quizId" element={<p>Existing public quiz details</p>} />
     <Route path="/app/practice/general/:quizId" element={<p>Existing student quiz details</p>} />
     <Route path="/app/practice/general/:quizId/take" element={<p>Existing quiz taking</p>} />
   </Routes></MemoryRouter>)
@@ -35,7 +32,8 @@ beforeEach(() => {
 })
 
 describe("General Practice Quiz Set catalog", () => {
-  it.each(["/practice/general", "/app/practice/general"])("loads Active Set cards at %s", async (path) => {
+  it("loads Active Set cards for signed-in students", async () => {
+    const path = "/app/practice/general"
     renderCatalog(path)
     expect(screen.getByText("Loading Quiz Sets...")).toBeTruthy()
     const card = (await screen.findByRole("heading", { name: set.name })).closest("article")
@@ -44,11 +42,11 @@ describe("General Practice Quiz Set catalog", () => {
     expect(within(card).getByText("Beginner")).toBeTruthy()
     expect(within(card).getByRole("img", { name: "Thai greetings cover image" })).toBeTruthy()
     expect(fetchGeneralPracticeSets).toHaveBeenCalledWith({ name: "", difficulty: "" })
-    expect(screen.getByRole("link", { name: path.startsWith("/app") ? "Back to Practice Overview" : "Back to Home" })).toBeTruthy()
+    expect(screen.getByRole("link", { name: "Back to Practice Overview" })).toBeTruthy()
     const action = within(card).getByRole("link", { name: `View Quiz Set ${set.name}` })
     await userEvent.setup().click(action)
     expect(screen.getByTestId("path").textContent).toBe(`${path}/sets/${set.id}`)
-    expect(screen.getByText(path.startsWith("/app") ? "Student Quiz Set details" : "Public Quiz Set details")).toBeTruthy()
+    expect(screen.getByText("Student Quiz Set details")).toBeTruthy()
   })
 
   it("uses a stable branded fallback for missing and failed cover images", async () => {
@@ -158,8 +156,8 @@ describe("General Practice Quiz Set catalog", () => {
   })
 
   it("preserves direct quiz-detail and taking URLs", () => {
-    const view = renderCatalog("/practice/general/quiz-1")
-    expect(screen.getByText("Existing public quiz details")).toBeTruthy()
+    const view = renderCatalog("/app/practice/general/quiz-1")
+    expect(screen.getByText("Existing student quiz details")).toBeTruthy()
     view.unmount()
     renderCatalog("/app/practice/general/quiz-1/take")
     expect(screen.getByText("Existing quiz taking")).toBeTruthy()

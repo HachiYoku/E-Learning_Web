@@ -48,7 +48,7 @@ function GeneralPracticeList() {
                 return <article key={quiz.id} className="flex min-w-0 flex-col rounded-2xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)]">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyles[quiz.status] || 'bg-slate-100 text-slate-600'}`}>{quiz.status || 'Unknown'}</span>
-                    <span className="rounded-full bg-[#FFF1CE] px-2.5 py-1 text-xs font-semibold text-[#9A5816]">{content.standaloneAccess === 'students' ? 'Students Only' : content.standaloneAccess === 'public' ? 'Public' : 'Visibility not set'}{!quiz.published && quiz.draft ? ' (draft)' : ''}</span>
+                    <span className="rounded-full bg-[#FFF1CE] px-2.5 py-1 text-xs font-semibold text-[#9A5816]">Signed-in students{!quiz.published && quiz.draft ? ' (draft)' : ''}</span>
                   </div>
                   <h2 className="mt-4 break-words text-lg font-bold text-[#2D2E30]">{titleOf(quiz)}</h2>
                   {quiz.draft && quiz.published && quiz.draft.title !== quiz.published.title ? <p className="mt-1 text-sm text-[#765F55]">Unpublished draft: {quiz.draft.title}</p> : null}

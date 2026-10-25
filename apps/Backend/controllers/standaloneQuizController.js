@@ -80,10 +80,9 @@ const remove = async (req, res) => {
 
 const listPublished = async (req, res) => {
   try {
-    const access = req.user ? { $in: ["public", "students"] } : "public";
     const activeSetIds = await QuizSet.distinct("_id", { status: "active" });
     const quizzes = await Quiz.find({ contextType: "standalone", status: "published", publishedRevision: { $type: "number" },
-      standaloneAccess: access, $or: [{ quizSet: null }, { quizSet: { $in: activeSetIds } }] })
+      standaloneAccess: { $in: ["public", "students"] }, $or: [{ quizSet: null }, { quizSet: { $in: activeSetIds } }] })
       .select("title description category difficulty standaloneAccess publishedRevision")
       .sort({ createdAt: -1 }).limit(100).lean();
     return res.json({ quizzes: quizzes.map(publicSummary) });
@@ -93,9 +92,8 @@ const listPublished = async (req, res) => {
 const getPublished = async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.quizId)) return res.status(404).json({ message: "Quiz is unavailable." });
-    const access = req.user ? { $in: ["public", "students"] } : "public";
     const quiz = await Quiz.findOne({ _id: req.params.quizId, contextType: "standalone", status: "published",
-      publishedRevision: { $type: "number" }, standaloneAccess: access })
+      publishedRevision: { $type: "number" }, standaloneAccess: { $in: ["public", "students"] } })
       .select("title description category difficulty standaloneAccess publishedRevision quizSet").lean();
     if (!quiz) return res.status(404).json({ message: "Quiz is unavailable." });
     if (quiz.quizSet && !await QuizSet.exists({ _id: quiz.quizSet, status: "active" })) {

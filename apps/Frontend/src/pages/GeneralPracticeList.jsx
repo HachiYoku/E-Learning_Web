@@ -26,7 +26,7 @@ function SetCover({ set }) {
   </div>
 }
 
-function GeneralPracticeList({ publicView = false }) {
+function GeneralPracticeList() {
   const [search, setSearch] = useState("")
   const [difficulty, setDifficulty] = useState("")
   const [filters, setFilters] = useState({ name: "", difficulty: "" })
@@ -58,12 +58,12 @@ function GeneralPracticeList({ publicView = false }) {
       })
       .catch((requestError) => {
         if (currentRequest !== requestId.current) return
-        setError(!publicView && requestError.status === 401
+        setError(requestError.status === 401
           ? "Your session has expired. Please sign in again."
           : "We couldn't load Quiz Sets. Please try again.")
       })
       .finally(() => { if (currentRequest === requestId.current) setLoading(false) })
-  }, [filters, publicView, retryKey])
+  }, [filters, retryKey])
 
   const resetResults = () => {
     requestId.current += 1
@@ -128,7 +128,7 @@ function GeneralPracticeList({ publicView = false }) {
   }
 
   return <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
-    <Link to={publicView ? "/" : "/app/practice"} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{publicView ? "Back to Home" : "Back to Practice Overview"}</Link>
+    <Link to="/app/practice" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to Practice Overview</Link>
     <header className="mt-3">
       <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">General Practice</h1>
       <p className="mt-1 text-sm text-[#765F55]">Browse Quiz Sets and find a topic to practice.</p>
@@ -149,7 +149,7 @@ function GeneralPracticeList({ publicView = false }) {
             <SetCover set={set} />
             <div className="mt-4 min-w-0 flex-1"><h2 className="break-words text-lg font-bold">{set.name}</h2>{set.description ? <p className="mt-2 line-clamp-3 break-words text-sm leading-relaxed text-[#765F55]">{set.description}</p> : null}</div>
             {set.difficulty ? <div className="mt-4"><span className="inline-flex rounded-full bg-[#FFF1D0] px-2.5 py-1 text-sm font-semibold text-[#8C4500]">{set.difficulty}</span></div> : null}
-            <Link to={`${publicView ? "/practice/general" : "/app/practice/general"}/sets/${encodeURIComponent(set.id)}`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:w-auto" aria-label={`View Quiz Set ${set.name}`}>View Quiz Set</Link>
+            <Link to={`/app/practice/general/sets/${encodeURIComponent(set.id)}`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:w-auto" aria-label={`View Quiz Set ${set.name}`}>View Quiz Set</Link>
           </article>)}
         </div>
         {pageError ? <p role="alert" className="mt-5 text-sm font-semibold text-[#A84646]">{pageError}</p> : null}

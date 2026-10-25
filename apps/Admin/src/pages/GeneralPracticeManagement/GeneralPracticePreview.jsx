@@ -6,7 +6,7 @@ function GeneralPracticePreview({ content, kind }) {
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">{isDraft ? 'Draft Preview' : 'Published Preview'}</p>
       <h2 className="mt-2 break-words text-2xl font-bold text-[#2D2E30]">{content.title}</h2>
       {content.description ? <p className="mt-2 whitespace-pre-wrap break-words text-sm text-[#765F55]">{content.description}</p> : null}
-      <p className="mt-3 text-xs font-semibold text-[#765F55]">{content.category} · {content.difficulty} · {content.standaloneAccess === 'students' ? 'Students Only' : 'Public'} · {isDraft ? `Draft version ${content.version}` : `Published revision ${content.revision}`}</p>
+      <p className="mt-3 text-xs font-semibold text-[#765F55]">{content.category} · {content.difficulty} · Signed-in students · {isDraft ? `Draft version ${content.version}` : `Published revision ${content.revision}`}</p>
     </div>
     <ol className="mt-5 space-y-5">{(content.questions || []).map((question, index) => <li key={question._id || index} className="rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-4 sm:p-5">
       <h3 className="text-base font-bold text-[#2D2E30]">Question {index + 1}</h3>

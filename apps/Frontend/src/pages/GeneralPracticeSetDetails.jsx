@@ -1,29 +1,19 @@
 import { useEffect, useState } from "react"
-import { ArrowLeft, BookOpenText, Globe, LockKeyhole, LogIn, RefreshCw } from "lucide-react"
+import { ArrowLeft, BookOpenText, LockKeyhole, RefreshCw } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 import LoadingSpinner from "../components/LoadingSpinner"
-import { useAuth } from "../contexts/AuthContext"
 import { fetchGeneralPracticeSet } from "../services/generalPracticeService"
 
-function QuizAction({ quiz, setId, publicView }) {
-  const { isAuthenticated, isBootstrapping, user } = useAuth()
+function QuizAction({ quiz, setId }) {
   const context = `?setId=${encodeURIComponent(setId)}`
   const studentDestination = `/app/practice/general/${encodeURIComponent(quiz.id)}${context}`
-  const publicDestination = `/practice/general/${encodeURIComponent(quiz.id)}${context}`
   const className = "mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] transition hover:bg-[#E58C1A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:w-auto"
-  if (!publicView) return <Link className={className} to={studentDestination} aria-label={`View details for ${quiz.title}`}>View Quiz</Link>
-  if (isBootstrapping) return <p role="status" className="mt-4 text-sm text-[#765F55]">Checking your account...</p>
-  if (quiz.standaloneAccess === "students") {
-    if (isAuthenticated && user?.role === "user") return <Link className={className} to={studentDestination} aria-label={`View details for ${quiz.title}`}>View Quiz</Link>
-    if (isAuthenticated) return <p className="mt-4 text-sm text-[#765F55]">Use a student account to view this quiz.</p>
-    return <Link className={className} to="/login" state={{ from: { pathname: studentDestination } }} aria-label={`Log in to view ${quiz.title}`}><LogIn className="h-4 w-4" aria-hidden="true" />Log in to view quiz</Link>
-  }
-  return <Link className={className} to={publicDestination} aria-label={`View details for ${quiz.title}`}>View Quiz</Link>
+  return <Link className={className} to={studentDestination} aria-label={`View details for ${quiz.title}`}>View Quiz</Link>
 }
 
-function GeneralPracticeSetDetails({ publicView = false }) {
+function GeneralPracticeSetDetails() {
   const { setId } = useParams()
-  const catalog = publicView ? "/practice/general" : "/app/practice/general"
+  const catalog = "/app/practice/general"
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -50,12 +40,12 @@ function GeneralPracticeSetDetails({ publicView = false }) {
       .catch((requestError) => {
         if (!active) return
         setUnavailable(requestError.status === 404)
-        setError(requestError.status === 404 ? "This Quiz Set is no longer available." : !publicView && requestError.status === 401
+        setError(requestError.status === 404 ? "This Quiz Set is no longer available." : requestError.status === 401
           ? "Your session has expired. Please sign in again." : "We couldn't load this Quiz Set. Please try again.")
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [publicView, retryKey, setId])
+  }, [retryKey, setId])
 
   return <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
     <Link to={catalog} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to General Practice</Link>
@@ -74,8 +64,8 @@ function GeneralPracticeSetDetails({ publicView = false }) {
             <div className="min-w-0 flex-1"><h3 className="break-words text-lg font-bold">{quiz.title}</h3>
               {quiz.description ? <p className="mt-2 break-words text-sm leading-relaxed text-[#765F55]">{quiz.description}</p> : null}</div>
             <div className="mt-4 flex flex-wrap items-center gap-2">{quiz.category ? <span className="inline-flex rounded-full border border-[#2D2E30]/10 bg-[#F6F3EE] px-2.5 py-1 text-sm font-semibold text-[#514A43]">{quiz.category}</span> : null}{quiz.difficulty ? <span className="inline-flex rounded-full border border-[#EFD9A7] bg-[#FFF6DE] px-2.5 py-1 text-sm font-semibold text-[#8C4500]">{quiz.difficulty}</span> : null}
-            {quiz.standaloneAccess === "public" ? <span className="inline-flex items-center gap-1.5 rounded-full border border-[#CDE8D3] bg-[#EDF8EE] px-2.5 py-1 text-sm font-semibold text-[#246B35]"><Globe className="h-3.5 w-3.5" aria-hidden="true" />Public</span> : quiz.standaloneAccess === "students" ? <span className="inline-flex items-center gap-1.5 rounded-full border border-[#2D2E30]/15 bg-[#F6F3EE] px-2.5 py-1 text-sm font-semibold text-[#514A43]"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />Students Only</span> : <span className="text-sm text-[#765F55]">Access unavailable</span>}</div>
-            {quiz.standaloneAccess === "public" || quiz.standaloneAccess === "students" ? <QuizAction quiz={quiz} setId={setId} publicView={publicView} /> : null}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#2D2E30]/15 bg-[#F6F3EE] px-2.5 py-1 text-sm font-semibold text-[#514A43]"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />Signed-in students</span></div>
+            <QuizAction quiz={quiz} setId={setId} />
           </article>)}</div>}
         </section>
       </> : null}

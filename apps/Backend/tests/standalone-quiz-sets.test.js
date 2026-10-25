@@ -29,12 +29,17 @@ const { REQUIRED, inspect } = require("../scripts/preflightQuizSetIndexes");
 const id = () => new mongoose.Types.ObjectId();
 const creationId = () => require("node:crypto").randomUUID();
 const learner = () => ({ id: id(), role: "user" });
+async function studentToken() {
+  const student = await User.create({ name: "Learner", email: "learner@example.test", password: "local-only",
+    role: "user", isVerified: true, isActive: true });
+  return jwt.sign({ id: String(student._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+}
 const coverEnv = { QUIZ_SET_COVER_ENV: "testing", NODE_ENV: "test",
   MONGO_DB: "mongodb+srv://example:example@englishkafe.xhqpzdd.mongodb.net/english_kafe",
   STANDALONE_QUIZ_EXPECTED_DB: "english_kafe", CLOUDINARY_CLOUD_NAME: "du6lhdq8t",
   CLOUDINARY_API_KEY: "mock-key", CLOUDINARY_API_SECRET: "mock-secret" };
 const draft = () => ({ title: "Thai greetings", category: "Vocabulary", difficulty: "Beginner",
-  standaloneAccess: "public", questions: [{ prompt: "Hello?", options: ["Sawasdee", "Bye"], correctAnswer: 0,
+  standaloneAccess: "students", questions: [{ prompt: "Hello?", options: ["Sawasdee", "Bye"], correctAnswer: 0,
     explanation: "Sawasdee means hello." }] });
 const freePort = () => new Promise((resolve, reject) => {
   const socket = net.createServer(); socket.once("error", reject);
@@ -131,29 +136,44 @@ test("model validates required metadata and starts Disabled", async () => {
   await assert.rejects(sets.createSet({ name: "x", difficulty: "Expert" }), /Invalid difficulty/);
 });
 
-test("public catalog includes empty active sets and excludes disabled/archived sets", async () => {
+test("every General Practice discovery and attempt endpoint denies anonymous requests", async () => {
+  const quizId = id();
+  const attemptId = id();
+  const setId = id();
+  for (const route of ["/standalone", "/standalone/sets", `/standalone/sets/${setId}`,
+    `/standalone/${quizId}`, `/standalone/${quizId}/attempts`, `/standalone/attempts/${attemptId}`]) {
+    assert.equal((await request(route)).status, 401, route);
+  }
+  for (const route of [`/standalone/${quizId}/sessions`, `/standalone/${quizId}/submit`]) {
+    assert.equal((await request(route, { method: "POST", body: {} })).status, 401, route);
+  }
+});
+
+test("authenticated catalog includes empty active sets and excludes disabled/archived sets", async () => {
   const active = await activeSet();
   await sets.createSet({ name: "Hidden Set" });
-  const result = await request("/standalone/sets");
+  const token = await studentToken();
+  const result = await request("/standalone/sets", { token });
   assert.equal(result.status, 200); assert.equal(result.body.sets.length, 1);
   assert.equal(result.body.sets[0].id, String(active._id));
   assert.equal("status" in result.body.sets[0], false);
-  const detail = await request(`/standalone/sets/${active._id}`);
+  const detail = await request(`/standalone/sets/${active._id}`, { token });
   assert.equal(detail.status, 200); assert.deepEqual(detail.body.quizzes, []);
 });
 
 test("catalog paginates deterministically and filters name and difficulty", async () => {
+  const token = await studentToken();
   for (const name of ["Thai A", "Thai B", "Thai C"]) {
     const set = await sets.createSet({ name, difficulty: "Beginner", displayOrder: 1 });
     await sets.transitionSet(set._id, 1, "activate");
   }
-  const first = await request("/standalone/sets?limit=2&name=Thai&difficulty=Beginner");
+  const first = await request("/standalone/sets?limit=2&name=Thai&difficulty=Beginner", { token });
   assert.equal(first.status, 200); assert.equal(first.body.sets.length, 2);
   assert.ok(first.body.nextCursor);
-  const second = await request(`/standalone/sets?limit=2&after=${encodeURIComponent(first.body.nextCursor)}`);
+  const second = await request(`/standalone/sets?limit=2&after=${encodeURIComponent(first.body.nextCursor)}`, { token });
   assert.equal(second.status, 200); assert.equal(second.body.sets.length, 1);
   assert.equal(new Set([...first.body.sets, ...second.body.sets].map((set) => set.id)).size, 3);
-  assert.equal((await request("/standalone/sets?after=invalid")).status, 400);
+  assert.equal((await request("/standalone/sets?after=invalid", { token })).status, 400);
 });
 
 test("Admin-only APIs require authentication and new drafts require Set assignment", async () => {
@@ -717,28 +737,28 @@ test("malformed Set draft questions return structured HTTP 400", async () => {
   assert.equal(await Quiz.countDocuments(), 0);
 });
 
-test("new Set quiz starts Draft, cannot move Sets, and public data excludes answers", async () => {
+test("new Set quiz starts Draft, cannot move Sets, and student catalog excludes answers", async () => {
   const set = await activeSet(); const other = await activeSet();
+  const token = await studentToken();
   const created = await sets.createSetDraft(set._id, draft());
   assert.equal(created.status, "draft"); assert.equal(String(created.quizSet), String(set._id));
-  assert.equal((await request(`/standalone/sets/${set._id}`)).body.quizzes.length, 0);
+  assert.equal((await request(`/standalone/sets/${set._id}`, { token })).body.quizzes.length, 0);
   created.quizSet = other._id;
   await created.save();
   assert.equal(String((await Quiz.findById(created._id)).quizSet), String(set._id));
   await revisions.publishDraft(created._id, 1);
-  const response = await request(`/standalone/sets/${set._id}`);
+  const response = await request(`/standalone/sets/${set._id}`, { token });
   assert.equal(response.body.quizzes.length, 1);
   assert.equal(JSON.stringify(response.body).includes("correctAnswer"), false);
   assert.equal(JSON.stringify(response.body).includes("explanation"), false);
 });
 
-test("guest Set discovery shows ordered safe Public and Students Only summaries without granting protected access", async () => {
+test("Set discovery requires authentication and safely includes legacy Public records", async () => {
   const set = await activeSet();
-  const student = await User.create({ name: "Learner", email: "learner@example.test", password: "local-only",
-    role: "user", isVerified: true, isActive: true });
-  const token = jwt.sign({ id: String(student._id), sessionVersion: 0 }, process.env.JWT_SECRET);
-  const publicDraft = await sets.createSetDraft(set._id, { ...draft(), title: "Public greetings" });
+  const token = await studentToken();
+  const publicDraft = await sets.createSetDraft(set._id, { ...draft(), title: "Legacy greetings" });
   const publicQuiz = await revisions.publishDraft(publicDraft._id, 1);
+  await Quiz.updateOne({ _id: publicQuiz._id }, { $set: { standaloneAccess: "public" } });
   const studentsDraft = await sets.createSetDraft(set._id,
     { ...draft(), title: "Student greetings", standaloneAccess: "students" });
   const studentsQuiz = await revisions.publishDraft(studentsDraft._id, 1);
@@ -753,8 +773,9 @@ test("guest Set discovery shows ordered safe Public and Students Only summaries 
   await sets.orderQuiz(set._id, studentsQuiz._id, publicOrder.setVersion, 2);
 
   const guest = await request(`/standalone/sets/${set._id}`);
+  assert.equal(guest.status, 401);
   const signedIn = await request(`/standalone/sets/${set._id}`, { token });
-  for (const response of [guest, signedIn]) {
+  for (const response of [signedIn]) {
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.quizzes.map((quiz) => quiz.id),
       [String(studentsQuiz._id), String(publicQuiz._id)]);
@@ -769,23 +790,28 @@ test("guest Set discovery shows ordered safe Public and Students Only summaries 
       assert.equal(serialized.includes(protectedText), false);
     }
   }
-  assert.equal((await request(`/standalone/${publicQuiz._id}`)).status, 200);
-  assert.equal((await request(`/standalone/${studentsQuiz._id}`)).status, 404);
+  assert.equal((await request(`/standalone/${publicQuiz._id}`)).status, 401);
+  assert.equal((await request(`/standalone/${studentsQuiz._id}`)).status, 401);
+  assert.equal((await request(`/standalone/${publicQuiz._id}`, { token })).status, 200);
   assert.equal((await request(`/standalone/${studentsQuiz._id}`, { token })).status, 200);
   assert.equal((await request(`/standalone/${studentsQuiz._id}/sessions`, { method: "POST", body: {} })).status, 401);
   assert.equal((await request(`/standalone/${studentsQuiz._id}/sessions`, { method: "POST", token: "invalid", body: {} })).status, 401);
-  assert.equal((await request("/standalone")).body.quizzes.some((quiz) => quiz.id === String(studentsQuiz._id)), false);
+  assert.equal((await request("/standalone")).status, 401);
+  assert.equal((await request("/standalone/sets")).status, 401);
+  assert.equal((await fetch(`${base}/quizzes/standalone/guest/attempts/${id()}`)).status, 404);
+  assert.equal((await fetch(`${base}/quizzes/standalone/${publicQuiz._id}/guest/sessions`, { method: "POST" })).status, 404);
 });
 
-test("disabled and archived Sets hide guest discovery and direct quiz details", async () => {
+test("disabled and archived Sets hide authenticated discovery and direct quiz details", async () => {
   const set = await activeSet();
   const quiz = await published(set._id);
+  const token = await studentToken();
   const disabled = await sets.transitionSet(set._id, set.version, "disable");
-  assert.equal((await request(`/standalone/sets/${set._id}`)).status, 404);
-  assert.equal((await request(`/standalone/${quiz._id}`)).status, 404);
+  assert.equal((await request(`/standalone/sets/${set._id}`, { token })).status, 404);
+  assert.equal((await request(`/standalone/${quiz._id}`, { token })).status, 404);
   await sets.transitionSet(set._id, disabled.version, "archive");
-  assert.equal((await request(`/standalone/sets/${set._id}`)).status, 404);
-  assert.equal((await request(`/standalone/${quiz._id}`)).status, 404);
+  assert.equal((await request(`/standalone/sets/${set._id}`, { token })).status, 404);
+  assert.equal((await request(`/standalone/${quiz._id}`, { token })).status, 404);
 });
 
 test("Set lifecycle uses CAS and rejects invalid transitions", async () => {

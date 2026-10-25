@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
-const { RESULT_MS } = require("../services/guestQuizSecurity");
+// Legacy records remain readable for safe lifecycle and media cleanup.
+const RESULT_MS = 24 * 60 * 60 * 1000;
 
 // Temporary, immutable result. The snapshot is authoritative for answer review;
 // TTL is storage cleanup only, while reads must enforce expiresAt explicitly.

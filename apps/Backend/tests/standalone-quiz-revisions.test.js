@@ -12,7 +12,7 @@ let processHandle; let directory; let Quiz; let QuizMedia; let QuizAttempt; let 
 let revisions; let controller; let oldController; let buildQuizSubmissionSnapshot;
 const id = () => new mongoose.Types.ObjectId();
 const question = (prompt = "First question") => ({ prompt, options: ["A", "B"], correctAnswer: 0, explanation: "Because A is correct." });
-const draft = (title = "General Practice") => ({ title, description: "Practice description", category: "Vocabulary", difficulty: "Beginner", standaloneAccess: "public", questions: [question()] });
+const draft = (title = "General Practice") => ({ title, description: "Practice description", category: "Vocabulary", difficulty: "Beginner", standaloneAccess: "students", questions: [question()] });
 const response = () => ({ statusCode: 200, body: null, status(value) { this.statusCode = value; return this; }, json(value) { this.body = value; return this; } });
 const ownedImage = async (quiz, questionId) => {
   const publicId = `arun_thai/quiz_media/images/${id()}`;
@@ -70,6 +70,7 @@ after(async () => {
 });
 
 test("new standalone draft is valid, unpublished, and hidden from public responses", async () => {
+  await assert.rejects(revisions.createDraft({ ...draft(), standaloneAccess: "public" }), /student access/);
   const quiz = await revisions.createDraft(draft());
   assert.equal(quiz.status, "draft");
   assert.equal(quiz.publishedRevision, null);
@@ -221,23 +222,20 @@ test("restore rejects invalid states and permits only one concurrent transition"
     (error) => error.status === 404 && error.code === "quiz_unavailable");
 });
 
-test("public responses expose only published metadata, with Students Only requiring authentication", async () => {
+test("published summaries omit answers and include legacy Public records for authenticated routes", async () => {
   const publicQuiz = await revisions.createDraft(draft());
   await revisions.publishDraft(publicQuiz._id, 1);
+  await Quiz.updateOne({ _id: publicQuiz._id }, { $set: { standaloneAccess: "public" } });
   const studentQuiz = await revisions.createDraft({ ...draft("Student practice"), standaloneAccess: "students" });
   await revisions.publishDraft(studentQuiz._id, 1);
-  const anonymous = response();
-  await controller.listPublished({}, anonymous);
-  assert.equal(anonymous.body.quizzes.length, 1);
-  assert.equal(anonymous.body.quizzes[0].title, "General Practice");
-  assert.equal("questions" in anonymous.body.quizzes[0], false);
-  assert.equal("draft" in anonymous.body.quizzes[0], false);
   const authenticated = response();
   await controller.listPublished({ user: { id: id(), role: "user" } }, authenticated);
   assert.equal(authenticated.body.quizzes.length, 2);
+  assert.equal("questions" in authenticated.body.quizzes[0], false);
+  assert.equal("draft" in authenticated.body.quizzes[0], false);
   const privateDetail = response();
-  await controller.getPublished({ params: { quizId: String(studentQuiz._id) } }, privateDetail);
-  assert.equal(privateDetail.statusCode, 404);
+  await controller.getPublished({ user: { id: id(), role: "user" }, params: { quizId: String(studentQuiz._id) } }, privateDetail);
+  assert.equal(privateDetail.statusCode, 200);
 });
 
 test("explanations are snapshotted for standalone only and old attempts remain readable", async () => {
