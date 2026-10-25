@@ -26,6 +26,9 @@ function draftFields(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new StandaloneQuizError(400, "Invalid draft.", "invalid_quiz_draft");
   const allowed = new Set(["title", "description", "category", "difficulty", "standaloneAccess", "questions"]);
   if (Object.keys(input).some((key) => !allowed.has(key))) throw new StandaloneQuizError(400, "Invalid draft field.", "invalid_quiz_draft");
+  if (input.standaloneAccess !== undefined && input.standaloneAccess !== "students") {
+    throw new StandaloneQuizError(400, "General Practice requires student access.", "invalid_quiz_draft");
+  }
   return Object.fromEntries(Object.entries(input).filter(([key]) => allowed.has(key)));
 }
 
@@ -35,7 +38,7 @@ function draftFromPublished(quiz) {
     description: quiz.description || "",
     category: quiz.category,
     difficulty: quiz.difficulty,
-    standaloneAccess: quiz.standaloneAccess,
+    standaloneAccess: "students",
     questions: quiz.questions.map((question) => question.toObject()),
     version: 0,
     basePublishedRevision: quiz.publishedRevision,
@@ -61,6 +64,9 @@ async function validateOwnedMedia(quiz, questions, previousQuestions = []) {
 }
 
 async function validateDraft(quiz, data, previousQuestions = []) {
+  if (data.standaloneAccess !== "students") {
+    throw new StandaloneQuizError(400, "General Practice requires student access.", "invalid_quiz_draft");
+  }
   if (!Array.isArray(data.questions) || data.questions.length < 1 || data.questions.length > 10) {
     throw new StandaloneQuizError(400, "Add between 1 and 10 questions.", "invalid_quiz_draft");
   }
@@ -153,6 +159,9 @@ async function publishDraft(quizId, expectedVersion) {
   if (quiz.status === "archived") throw new StandaloneQuizError(409, "Archived quizzes cannot be published.", "quiz_archived");
   if (!quiz.draft || quiz.draft.version !== expectedVersion || quiz.draft.basePublishedRevision !== quiz.publishedRevision) throw conflict();
   const draft = quiz.draft.toObject();
+  if (draft.standaloneAccess !== "students") {
+    throw new StandaloneQuizError(409, "Save this draft with student access before publishing.", "student_access_required");
+  }
   const nextRevision = quiz.publishedRevision === null ? 1 : quiz.publishedRevision + 1;
   const live = {
     title: draft.title, description: draft.description, category: draft.category,
@@ -221,8 +230,7 @@ async function invalidateStandaloneSessions(quizId, reason, session) {
     { quiz: quizId, contextType: "standalone", activeSlot: true },
     { $set: { activeSlot: false } }, { session }
   );
-  // The guest collection is introduced separately from its HTTP rollout.
-  // Avoid an implicit collection-creation write in transactions before rollout.
+  // Preserve existing legacy guest records without implicitly creating their collection.
   if (await GuestQuizSession.exists({ quiz: quizId }).session(session)) {
     await GuestQuizSession.updateMany(
       { quiz: quizId, invalidatedAt: null, expiresAt: { $gt: now } },

@@ -11,9 +11,6 @@ const { REQUIRED_INDEXES } = require("../services/standaloneQuizRuntimeReadiness
 const QuizSet = require("../models/quizSetModel");
 const Quiz = require("../models/quizModel");
 const QuizCreationRequest = require("../models/quizCreationRequestModel");
-const GuestSession = require("../models/guestQuizSessionModel");
-const GuestAttempt = require("../models/guestQuizAttemptModel");
-const GuestRateWindow = require("../models/guestQuizRateWindowModel");
 const CoverAsset = require("../models/quizSetCoverAssetModel");
 const { assertProductionTarget, assertConnectedProductionTarget } = require("./productionQuizTarget");
 
@@ -33,9 +30,6 @@ const REQUIRED = Object.freeze({
   quizsets: schemaSpecs(QuizSet),
   quizzes: schemaSpecs(Quiz).filter((spec) => Object.hasOwn(spec.key, "quizSet")),
   quizcreationrequests: schemaSpecs(QuizCreationRequest),
-  guestquizsessions: schemaSpecs(GuestSession),
-  guestquizattempts: schemaSpecs(GuestAttempt),
-  guestquizratewindows: schemaSpecs(GuestRateWindow),
   quizsetcoverassets: schemaSpecs(CoverAsset), // Currently only MongoDB's default _id_ index.
 });
 

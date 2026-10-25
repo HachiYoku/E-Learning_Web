@@ -72,10 +72,10 @@ describe("General Practice discovery", () => {
     expect(await screen.findByRole("heading", { name: "Thai greetings" })).toBeTruthy()
     expect(screen.getByRole("link", { name: "Back to General Practice" }).getAttribute("href")).toBe("/app/practice/general")
     const accessHeading = screen.getByText("Access")
-    const badge = screen.getByText("Students Only")
+    const badge = screen.getByText("Signed-in students")
     expect(accessHeading.tagName).toBe("DT")
     expect(accessHeading.querySelector(".lucide-shield-check")).toBeTruthy()
-    for (const value of ["Vocabulary", "Beginner", "Students Only"]) {
+    for (const value of ["Vocabulary", "Beginner", "Signed-in students"]) {
       expect(screen.getByText(value).closest("dd").className).toContain("mt-1 flex min-h-9 items-center")
     }
     expect(badge.querySelector(".lucide-lock-keyhole")).toBeTruthy()
@@ -86,19 +86,19 @@ describe("General Practice discovery", () => {
     expect(fetchGeneralPracticeQuiz).toHaveBeenCalledWith(quiz.id)
   })
 
-  it("uses a light-green globe badge for Public quiz access", async () => {
+  it("treats a legacy Public quiz as signed-in only", async () => {
     fetchGeneralPracticeQuiz.mockResolvedValue({ ...quiz, standaloneAccess: "public" })
     renderRoutes(`/app/practice/general/${quiz.id}`)
-    const badge = await screen.findByText("Public")
+    const badge = await screen.findByText("Signed-in students")
     expect(screen.getByText("Access").tagName).toBe("DT")
-    expect(badge.querySelector(".lucide-globe")).toBeTruthy()
-    expect(badge.className).toContain("bg-[#EDF8EE]")
+    expect(badge.querySelector(".lucide-lock-keyhole")).toBeTruthy()
+    expect(badge.className).toContain("bg-[#F6F3EE]")
   })
 
-  it("does not label unexpected access metadata as Public", async () => {
+  it("does not label unexpected access metadata as public", async () => {
     fetchGeneralPracticeQuiz.mockResolvedValue({ ...quiz, standaloneAccess: undefined })
     renderRoutes(`/app/practice/general/${quiz.id}`)
-    expect(await screen.findByText("Access unavailable")).toBeTruthy()
+    expect(await screen.findByText("Signed-in students")).toBeTruthy()
     expect(screen.queryByText("Public")).toBeNull()
   })
 

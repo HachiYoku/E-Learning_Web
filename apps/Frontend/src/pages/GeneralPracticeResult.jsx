@@ -2,8 +2,7 @@ import { useRef, useState } from "react"
 import { CheckCircle2, RotateCcw, XCircle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { startGeneralPracticeSession } from "../services/generalPracticeService"
-import { startGuestGeneralPracticeSession } from "../services/guestGeneralPracticeService"
-import { generalPracticeErrorMessage, guestGeneralPracticeErrorMessage } from "../utils/generalPracticeErrors"
+import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
 
 function ReviewQuestion({ question, index }) {
   const selectedIndex = Number.isInteger(question.selectedAnswer) ? question.selectedAnswer : null
@@ -31,7 +30,7 @@ function ReviewQuestion({ question, index }) {
   </li>
 }
 
-function GeneralPracticeResult({ result, quizId, guest = false }) {
+function GeneralPracticeResult({ result, quizId }) {
   const navigate = useNavigate()
   const startInFlight = useRef(false)
   const [starting, setStarting] = useState(false)
@@ -44,10 +43,10 @@ function GeneralPracticeResult({ result, quizId, guest = false }) {
     setStarting(true)
     setStartError("")
     try {
-      const session = await (guest ? startGuestGeneralPracticeSession(quizId) : startGeneralPracticeSession(quizId))
-      navigate(guest ? `/practice/general/${encodeURIComponent(quizId)}/guest/sessions/${encodeURIComponent(session.sessionId)}` : `/app/practice/general/${encodeURIComponent(quizId)}/take`, { state: { quizId, session } })
+      const session = await startGeneralPracticeSession(quizId)
+      navigate(`/app/practice/general/${encodeURIComponent(quizId)}/take`, { state: { quizId, session } })
     } catch (requestError) {
-      setStartError(guest ? guestGeneralPracticeErrorMessage(requestError) : generalPracticeErrorMessage(requestError))
+      setStartError(generalPracticeErrorMessage(requestError))
     } finally {
       startInFlight.current = false
       setStarting(false)
@@ -62,7 +61,6 @@ function GeneralPracticeResult({ result, quizId, guest = false }) {
     {Number.isFinite(result.percentage) ? <p className="mt-1 text-sm text-[#765F55]">{Math.round(result.percentage)}% correct</p> : null}
     {Number.isInteger(result.correctCount) ? <p className="mt-2 text-sm text-[#765F55]">{result.correctCount} correct out of {result.total} questions</p> : null}
     {result.completedAt && !Number.isNaN(Date.parse(result.completedAt)) ? <p className="mt-2 text-sm text-[#765F55]">Completed {new Date(result.completedAt).toLocaleString()}</p> : null}
-    {guest ? <p className="mt-3 text-sm text-[#765F55]">This temporary result is available for 24 hours after submission in this browser. It is not saved to a Student account.</p> : null}
     <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
       <button type="button" onClick={tryAgain} disabled={starting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><RotateCcw className="h-4 w-4" aria-hidden="true" />{starting ? "Opening quiz..." : "Try Again"}</button>
     </div>
