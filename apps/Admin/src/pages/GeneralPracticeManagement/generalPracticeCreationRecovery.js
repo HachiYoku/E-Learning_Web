@@ -15,11 +15,16 @@ export function readCreation(storage, key) {
   if (raw === null) return { state: 'empty' }
   try {
     const operation = JSON.parse(raw)
-    if (operation?.version !== 1 || operation.adminId !== key.split(':')[2]
+    if (![1, 2].includes(operation?.version) || operation.adminId !== key.split(':')[2]
       || operation.setId !== key.split(':')[3] || !uuidV4.test(operation.creationRequestId || '')
-      || !['pending', 'uncertain', 'conflict'].includes(operation.status)
-      || !operation.draft || typeof operation.draft !== 'object' || Array.isArray(operation.draft)
-      || !Array.isArray(operation.draft.questions) || validateDraft(operation.draft).length) {
+      || !['pending', 'uncertain', 'conflict', ...(operation.version === 2 ? ['failed'] : [])].includes(operation.status)
+      || (operation.version === 2 && operation.status === 'failed'
+        && !['complete', 'unverified', 'retry_required'].includes(operation.mediaCleanup))
+      || (operation.version === 2 && operation.mediaCleanup !== undefined
+        && !['complete', 'unverified', 'retry_required'].includes(operation.mediaCleanup))
+      || (operation.version === 1 && (!operation.draft || typeof operation.draft !== 'object'
+        || Array.isArray(operation.draft) || !Array.isArray(operation.draft.questions)
+        || validateDraft(operation.draft).length))) {
       return { state: 'corrupt' }
     }
     return { state: 'recovered', operation }
@@ -32,7 +37,13 @@ export function browserCreationStorage() {
 
 export function writeCreation(storage, key, operation) {
   try {
-    storage.setItem(key, JSON.stringify(operation))
+    const stored = operation.version === 2
+      ? { version: 2, adminId: operation.adminId, setId: operation.setId,
+        creationRequestId: operation.creationRequestId, status: operation.status,
+        ...(['complete', 'unverified', 'retry_required'].includes(operation.mediaCleanup)
+          ? { mediaCleanup: operation.mediaCleanup } : {}) }
+      : operation
+    storage.setItem(key, JSON.stringify(stored))
     return true
   } catch { return false }
 }
