@@ -57,8 +57,57 @@ function GeneralPracticeEditor() {
     if (previous?.startsWith('blob:')) { URL.revokeObjectURL(previous); previewUrls.current.delete(previous) }
     const preview = URL.createObjectURL(file)
     previewUrls.current.add(preview)
-    changeQuestion(index, { [`${type}File`]: file, [`${type}Preview`]: preview })
+    changeQuestion(index, { [`${type}File`]: file, [`${type}Preview`]: preview, [`${type}Action`]: 'replace' })
     setError('')
+  }
+
+  const clearPreview = (question, type) => {
+    const preview = question?.[`${type}Preview`]
+    if (preview?.startsWith('blob:')) { URL.revokeObjectURL(preview); previewUrls.current.delete(preview) }
+  }
+
+  const removeMedia = (index, type) => {
+    const question = form.questions[index]
+    const original = (quiz?.draft || quiz?.published)?.questions?.find((item) => item._id === question?._id)
+    clearPreview(question, type)
+    changeQuestion(index, { [type]: '', [`${type}PublicId`]: '', [`${type}ResourceType`]: '',
+      [`${type}Format`]: '', [`${type}File`]: null, [`${type}Preview`]: '',
+      [`${type}Action`]: original?.[type] ? 'remove' : 'keep',
+      ...(type === 'image' ? { imageAlt: '', imageDecorative: false } : { audioLabel: '' }) })
+  }
+
+  const keepMedia = (index, type) => {
+    const question = form.questions[index]
+    const original = (quiz?.draft || quiz?.published)?.questions?.find((item) => item._id === question?._id)
+    clearPreview(question, type)
+    changeQuestion(index, { [type]: original?.[type] || '',
+      [`${type}PublicId`]: original?.[`${type}PublicId`] || '',
+      [`${type}ResourceType`]: original?.[`${type}ResourceType`] || '',
+      [`${type}Format`]: original?.[`${type}Format`] || '',
+      [`${type}File`]: null, [`${type}Preview`]: '', [`${type}Action`]: 'keep',
+      ...(type === 'image' ? { imageAlt: original?.imageAlt || '', imageDecorative: Boolean(original?.imageDecorative) }
+        : { audioLabel: original?.audioLabel || '' }) })
+  }
+
+  const mediaControl = (question, index, type) => {
+    const image = type === 'image'
+    const label = image ? 'image' : 'audio'
+    const action = question[`${type}Action`] || 'keep'
+    const original = (quiz?.draft || quiz?.published)?.questions?.find((item) => item._id === question._id)?.[type]
+    const source = action === 'replace' ? question[`${type}Preview`] : question[type]
+    return <div key={type} className="rounded-xl border border-[#E58C1A]/20 bg-[#FFF9EA] p-3">
+      <p className="text-xs font-bold uppercase tracking-wide text-[#9A5816]">Question {index + 1} {label}: {action === 'replace' ? 'Replace selected' : action === 'remove' ? 'Remove on save' : original ? 'Keep current' : 'No attachment'}</p>
+      {source ? image ? <img src={source} alt={`Question ${index + 1} preview`} className="mt-3 max-h-56 w-full rounded-xl object-contain" />
+        : <audio controls preload="none" src={source} aria-label={`Question ${index + 1} audio preview`}>Audio playback is unavailable.</audio> : null}
+      <label className="mt-3 block text-sm font-bold text-[#2D2E30]">{creating ? 'Question' : original ? 'Replace' : 'Add'} {label} ({image ? 'JPG, PNG, WebP; up to 5 MB' : 'MP3, M4A; up to 10 MB'})
+        <input type="file" accept={image ? 'image/jpeg,image/png,image/webp' : 'audio/mpeg,audio/mp4,audio/x-m4a,.mp3,.m4a'}
+          onChange={(event) => { selectMedia(index, type, event.target.files?.[0]); event.target.value = '' }} className={inputClass} />
+      </label>
+      {source || action === 'remove' ? <div className="mt-3 flex flex-wrap gap-2">
+        {source ? <button type="button" onClick={() => removeMedia(index, type)} className={secondaryClass}>Remove {label}</button> : null}
+        {original && action !== 'keep' ? <button type="button" onClick={() => keepMedia(index, type)} className={secondaryClass}>Keep original {label}</button> : null}
+      </div> : null}
+    </div>
   }
 
   const selectedFiles = () => form.questions.flatMap((question, index) => [
@@ -342,7 +391,10 @@ function GeneralPracticeEditor() {
     setError('')
     const expectedVersion = quiz?.draft?.version ?? 0
     try {
-      const result = await updateGeneralPracticeDraft(quizId, expectedVersion, draftPayload(form))
+      const files = selectedFiles()
+      const result = files.length
+        ? await updateGeneralPracticeDraft(quizId, expectedVersion, draftPayload(form), files)
+        : await updateGeneralPracticeDraft(quizId, expectedVersion, draftPayload(form))
       const samePublishedRevision = (result?.published?.revision ?? null) === (quiz?.published?.revision ?? null)
       const confirmed = result?.contextType === 'standalone' && result.id === quizId && result.draft?.version === expectedVersion + 1 && samePublishedRevision
       if (!confirmed) {
@@ -351,6 +403,8 @@ function GeneralPracticeEditor() {
         return
       }
       const loaded = draftFromQuiz(result)
+      for (const url of previewUrls.current) URL.revokeObjectURL(url)
+      previewUrls.current.clear()
       setQuiz(result)
       setForm(loaded)
       setBaseline(JSON.stringify(loaded))
@@ -416,12 +470,7 @@ function GeneralPracticeEditor() {
       <section aria-label="Questions" className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold text-[#2D2E30]">Questions ({form.questions.length}/10)</h2><button type="button" disabled={form.questions.length >= 10} onClick={() => setForm((current) => ({ ...current, questions: [...current.questions, newQuestion()] }))} className={`${secondaryClass} disabled:cursor-not-allowed disabled:opacity-50`}><Plus size={18} aria-hidden="true" /> Add question</button></div>
         {form.questions.map((question, index) => <section key={question.localId} aria-label={`Question ${index + 1}`} className="rounded-2xl border border-[#2D2E30]/10 bg-white p-5 shadow-[0_12px_30px_-24px_rgba(45,46,48,0.45)] sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-bold text-[#2D2E30]">Question {index + 1}</h3><div className="flex gap-2"><button type="button" disabled={index === 0} onClick={() => moveQuestion(index, -1)} className={`${secondaryClass} disabled:opacity-50`} aria-label={`Move question ${index + 1} up`}><ArrowUp size={16} aria-hidden="true" /></button><button type="button" disabled={index === form.questions.length - 1} onClick={() => moveQuestion(index, 1)} className={`${secondaryClass} disabled:opacity-50`} aria-label={`Move question ${index + 1} down`}><ArrowDown size={16} aria-hidden="true" /></button><button type="button" disabled={form.questions.length === 1} onClick={() => setForm((current) => ({ ...current, questions: current.questions.filter((_, position) => position !== index) }))} className={`${secondaryClass} disabled:opacity-50`} aria-label={`Remove question ${index + 1}`}><Trash2 size={16} aria-hidden="true" /></button></div></div>
           <label className="mt-5 block text-sm font-bold text-[#2D2E30]">Question text<input value={question.prompt || ''} maxLength={280} onChange={(event) => changeQuestion(index, { prompt: event.target.value })} className={inputClass} /></label>
-          {creating ? <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-bold text-[#2D2E30]">Question image (JPG, PNG, WebP; up to 5 MB)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectMedia(index, 'image', event.target.files?.[0])} className={inputClass} /></label>
-            <label className="text-sm font-bold text-[#2D2E30]">Question audio (MP3, M4A; up to 10 MB)<input type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,.mp3,.m4a" onChange={(event) => selectMedia(index, 'audio', event.target.files?.[0])} className={inputClass} /></label>
-            {question.imagePreview ? <img src={question.imagePreview} alt={`Question ${index + 1} preview`} className="max-h-56 w-full rounded-xl object-contain" /> : null}
-            {question.audioPreview ? <audio controls preload="none" src={question.audioPreview} aria-label={`Question ${index + 1} audio preview`}>Audio playback is unavailable.</audio> : null}
-          </div> : (question.image || question.audio) ? <p className="mt-3 text-xs text-[#765F55]">Existing {question.image ? 'image' : ''}{question.image && question.audio ? ' and ' : ''}{question.audio ? 'audio' : ''} references will be preserved. Media changes are not available here.</p> : null}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">{['image', 'audio'].map((type) => mediaControl(question, index, type))}</div>
           <fieldset className="mt-5"><legend className="text-sm font-bold text-[#2D2E30]">Answer options and correct answer</legend><div className="mt-3 space-y-3">{question.options.map((option, optionIndex) => <div key={optionIndex} className="flex flex-wrap items-center gap-2 rounded-xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-3"><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-[#2D2E30]"><input type="radio" name={`correct-${question.localId}`} checked={question.correctAnswer === optionIndex} onChange={() => changeQuestion(index, { correctAnswer: optionIndex })} className="h-4 w-4 accent-[#E58C1A]" /> Correct</label><label className="min-w-40 flex-1 text-sm font-semibold text-[#2D2E30]">Option {optionIndex + 1}<input value={option} onChange={(event) => changeQuestion(index, { options: question.options.map((value, position) => position === optionIndex ? event.target.value : value) })} className={inputClass} /></label><button type="button" disabled={question.options.length <= 2} onClick={() => removeOption(index, optionIndex)} className={`${secondaryClass} disabled:opacity-50`} aria-label={`Remove option ${optionIndex + 1} from question ${index + 1}`}><Trash2 size={16} aria-hidden="true" /></button></div>)}</div><button type="button" disabled={question.options.length >= 6} onClick={() => changeQuestion(index, { options: [...question.options, ''] })} className={`${secondaryClass} mt-3 disabled:opacity-50`}><Plus size={16} aria-hidden="true" /> Add option</button></fieldset>
           <label className="mt-5 block text-sm font-bold text-[#2D2E30]">Explanation (optional)<textarea value={question.explanation || ''} maxLength={2000} rows={3} onChange={(event) => changeQuestion(index, { explanation: event.target.value })} className={inputClass} /></label>
         </section>)}

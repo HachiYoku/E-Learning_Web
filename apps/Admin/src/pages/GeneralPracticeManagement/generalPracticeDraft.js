@@ -18,7 +18,9 @@ export function draftFromQuiz(quiz) {
   return {
     title: source.title || '', description: source.description || '', category: source.category || '',
     difficulty: source.difficulty || '',
-    questions: (source.questions || []).map((question) => ({ ...question, localId: question._id || newQuestion().localId, options: [...(question.options || [])] })),
+    questions: (source.questions || []).map((question) => ({ ...question, localId: question._id || newQuestion().localId,
+      options: [...(question.options || [])], imageFile: null, audioFile: null, imagePreview: '', audioPreview: '',
+      imageAction: 'keep', audioAction: 'keep' })),
   }
 }
 
@@ -46,7 +48,7 @@ export function draftPayload(form) {
   return {
     title: form.title.trim(), description: form.description.trim(), category: form.category,
     difficulty: form.difficulty, standaloneAccess: 'students',
-    questions: form.questions.map(({ localId, imageFile, audioFile, imagePreview, audioPreview, ...question }) => ({
+    questions: form.questions.map(({ localId, imageFile, audioFile, imagePreview, audioPreview, imageAction, audioAction, ...question }) => ({
       ...question, prompt: (question.prompt || '').trim(), explanation: (question.explanation || '').trim(),
       options: question.options.map((option) => option.trim()),
     })),

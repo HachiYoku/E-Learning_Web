@@ -3,7 +3,7 @@ const QuizMedia = require("../models/quizMediaModel");
 const { uploadStream } = require("./uploadStream");
 const { resolveQuestionMediaEnvironment, publicIdFor, ownedMediaUrl } = require("./quizQuestionMediaEnvironment");
 
-async function uploadOwnedQuestionMedia({ quizId, questionId, mediaType, buffer }) {
+async function uploadOwnedQuestionMedia({ quizId, questionId, mediaType, buffer, holdForRevision = false }) {
   const identity = resolveQuestionMediaEnvironment();
   const recordId = new mongoose.Types.ObjectId();
   const resourceType = mediaType === "image" ? "image" : "video";
@@ -21,7 +21,7 @@ async function uploadOwnedQuestionMedia({ quizId, questionId, mediaType, buffer 
   }
   const updated = await QuizMedia.findOneAndUpdate({ _id: recordId, publicId, environment: identity.mode,
     cleanupState: "reserved" }, { $set: { url: result.secure_url, format: result.format || "",
-      cleanupState: "pending_cleanup" } }, { returnDocument: "after" });
+      cleanupState: holdForRevision ? "reserved" : "pending_cleanup" } }, { returnDocument: "after" });
   if (!updated) throw new Error("Question media ownership could not be recorded.");
   return updated;
 }

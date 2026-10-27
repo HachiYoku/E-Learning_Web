@@ -5,7 +5,7 @@ const { startOrResumeStandaloneQuizSession } = require("../services/standaloneQu
 const { submitStandaloneQuiz, getStandaloneAttemptResult, getStandaloneAttemptHistoryPage } =
   require("../services/standaloneQuizSubmissionService");
 const {
-  StandaloneQuizError, saveDraft, publishDraft, changeAvailability,
+  StandaloneQuizError, saveDraft, saveDraftWithMedia, publishDraft, changeAvailability,
   deleteDraftOrQuiz, loadStandalone, publicSummary, retryMediaReconciliation,
 } = require("../services/standaloneQuizRevisions");
 
@@ -54,7 +54,21 @@ const listAdmin = async (_req, res) => {
 };
 
 const editDraft = async (req, res) => {
-  try { return res.json(adminProjection(await saveDraft(req.params.quizId, req.body?.expectedVersion, req.body?.draft))); }
+  try {
+    const multipart = Boolean(req.is?.("multipart/form-data"));
+    let draft = req.body?.draft;
+    if (multipart) {
+      try { draft = JSON.parse(draft); }
+      catch { throw new StandaloneQuizError(400, "Invalid draft.", "invalid_quiz_draft"); }
+    }
+    const expectedVersion = multipart && /^\d+$/.test(req.body?.expectedVersion || "")
+      ? Number(req.body.expectedVersion) : multipart ? NaN : req.body?.expectedVersion;
+    const files = req.files || [];
+    const updated = files.length
+      ? await saveDraftWithMedia(req.params.quizId, expectedVersion, draft, files)
+      : await saveDraft(req.params.quizId, expectedVersion, draft);
+    return res.json(adminProjection(updated));
+  }
   catch (error) { return respondError(res, error); }
 };
 

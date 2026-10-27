@@ -51,7 +51,8 @@ router.delete("/admin/standalone/sets/:setId", validateToken, requireAdmin, stan
 router.post("/admin/standalone", validateToken, requireAdmin, standalone.create);
 router.get("/admin/standalone", validateToken, requireAdmin, standalone.listAdmin);
 router.get("/admin/standalone/:quizId", validateToken, requireAdmin, standalone.getAdmin);
-router.put("/admin/standalone/:quizId/draft", validateToken, requireAdmin, standalone.editDraft);
+router.put("/admin/standalone/:quizId/draft", validateToken, requireAdmin,
+  upload.any(), validateQuizMediaContent, validateQuizImageFields, standalone.editDraft);
 router.post("/admin/standalone/:quizId/publish", validateToken, requireAdmin, standalone.publish);
 router.post("/admin/standalone/:quizId/media/retry", validateToken, requireAdmin, standalone.retryMedia);
 router.post("/admin/standalone/:quizId/disable", validateToken, requireAdmin, standalone.lifecycle("disable"));
