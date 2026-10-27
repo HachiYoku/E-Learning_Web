@@ -7,8 +7,8 @@ import GeneralPracticeEditor from './GeneralPracticeEditor'
 const auth = vi.hoisted(() => ({ user: { id: '507f1f77bcf86cd799439099', role: 'admin' } }))
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: auth.user }) }))
 
-vi.mock('../../services/generalPracticeAdminService', () => ({ fetchGeneralPracticeQuiz: vi.fn(), fetchGeneralPracticeSet: vi.fn(), createGeneralPracticeDraft: vi.fn(), createGeneralPracticeSetDraft: vi.fn(), updateGeneralPracticeDraft: vi.fn() }))
-import { createGeneralPracticeDraft, createGeneralPracticeSetDraft, fetchGeneralPracticeQuiz, fetchGeneralPracticeSet, updateGeneralPracticeDraft } from '../../services/generalPracticeAdminService'
+vi.mock('../../services/generalPracticeAdminService', () => ({ fetchGeneralPracticeQuiz: vi.fn(), fetchGeneralPracticeSet: vi.fn(), createGeneralPracticeDraft: vi.fn(), createGeneralPracticeSetDraft: vi.fn(), fetchGeneralPracticeCreationOutcome: vi.fn(), abandonFailedGeneralPracticeCreation: vi.fn(), updateGeneralPracticeDraft: vi.fn() }))
+import { abandonFailedGeneralPracticeCreation, createGeneralPracticeDraft, createGeneralPracticeSetDraft, fetchGeneralPracticeCreationOutcome, fetchGeneralPracticeQuiz, fetchGeneralPracticeSet, updateGeneralPracticeDraft } from '../../services/generalPracticeAdminService'
 
 const setId = '507f1f77bcf86cd799439011'
 const createdId = '507f1f77bcf86cd799439012'
@@ -36,7 +36,178 @@ async function fillNewDraft(user) {
 }
 
 describe('General Practice draft editor', () => {
-  beforeEach(() => { vi.resetAllMocks(); window.sessionStorage.clear(); auth.user = { id: '507f1f77bcf86cd799439099', role: 'admin' }; vi.spyOn(window, 'confirm').mockReturnValue(true); vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(requestId); fetchGeneralPracticeQuiz.mockResolvedValue(saved); fetchGeneralPracticeSet.mockResolvedValue({ set: parentSet, quizzes: [] }) })
+  beforeEach(() => { vi.resetAllMocks(); window.sessionStorage.clear(); auth.user = { id: '507f1f77bcf86cd799439099', role: 'admin' }; vi.spyOn(window, 'confirm').mockReturnValue(true); vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(requestId); fetchGeneralPracticeQuiz.mockResolvedValue(saved); fetchGeneralPracticeSet.mockResolvedValue({ set: parentSet, quizzes: [] }); fetchGeneralPracticeCreationOutcome.mockResolvedValue({ status: 'unresolved' }); abandonFailedGeneralPracticeCreation.mockResolvedValue({ status: 'abandoned' }); URL.createObjectURL = vi.fn(() => 'blob:question-preview'); URL.revokeObjectURL = vi.fn() })
+
+  it('selects media locally and submits it with one draft creation request', async () => {
+    const user = userEvent.setup()
+    createGeneralPracticeSetDraft.mockResolvedValue({ id: createdId, quizSetId: setId, status: 'draft', sortOrder: 1, draft: { version: 1, questions: [{}] } })
+    renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+    await screen.findByText(/Quiz Set:/)
+    await fillNewDraft(user)
+    const image = new File(['image'], 'prompt.png', { type: 'image/png' })
+    const audio = new File(['audio'], 'prompt.mp3', { type: 'audio/mpeg' })
+    await user.upload(screen.getByLabelText(/Question image/), image)
+    await user.upload(screen.getByLabelText(/Question audio/), audio)
+    expect(createGeneralPracticeSetDraft).not.toHaveBeenCalled()
+    expect(screen.getByAltText('Question 1 preview')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await screen.findByText('Created quiz details')
+    const [, , payload, files] = createGeneralPracticeSetDraft.mock.calls[0]
+    expect(payload.questions[0].imageFile).toBeUndefined()
+    expect(files).toEqual([{ field: 'questionImage_0', file: image }, { field: 'questionAudio_0', file: audio }])
+    expect(window.sessionStorage.length).toBe(0)
+  })
+
+  it.each([
+    ['image', 'image/png', 'prompt.png', 'questionImage_0'],
+    ['audio', 'audio/mpeg', 'prompt.mp3', 'questionAudio_0'],
+  ])('allows a %s-only question on the initial Save', async (kind, type, name, field) => {
+    const user = userEvent.setup()
+    createGeneralPracticeSetDraft.mockResolvedValue({ id: createdId, quizSetId: setId, status: 'draft', sortOrder: 1, draft: { version: 1, questions: [{}] } })
+    renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+    await screen.findByText(/Quiz Set:/)
+    await fillNewDraft(user)
+    await user.clear(screen.getByRole('textbox', { name: 'Question text' }))
+    await user.upload(screen.getByLabelText(new RegExp(`Question ${kind}`)), new File(['sample'], name, { type }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await screen.findByText('Created quiz details')
+    const [, , payload, files] = createGeneralPracticeSetDraft.mock.calls[0]
+    expect(payload.questions[0].prompt).toBe('')
+    expect(files.map((item) => item.field)).toEqual([field])
+  })
+
+  it('keeps an uncertain media request blocked across refresh without storing files or reuploading', async () => {
+    const user = userEvent.setup()
+    createGeneralPracticeSetDraft.mockRejectedValue(new Error('Connection lost'))
+    const first = renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+    await screen.findByText(/Quiz Set:/)
+    await fillNewDraft(user)
+    await user.upload(screen.getByLabelText(/Question image/), new File(['image'], 'prompt.png', { type: 'image/png' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await screen.findByRole('button', { name: 'Check original request' })
+    expect(screen.queryByRole('button', { name: 'Retry same request' })).toBeNull()
+    expect(window.sessionStorage.getItem(window.sessionStorage.key(0))).not.toMatch(/imageFile|imagePreview|prompt\.png/)
+    first.unmount()
+    renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+    await screen.findByRole('button', { name: 'Check original request' })
+    expect(fetchGeneralPracticeCreationOutcome).toHaveBeenCalled()
+    expect(createGeneralPracticeSetDraft).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Save draft' }).disabled).toBe(true)
+  })
+
+  it('opens a committed media draft after refresh without restoring a File or posting again', async () => {
+    window.sessionStorage.setItem(`general-practice-creation:v1:${auth.user.id}:${setId}`,
+      JSON.stringify({ version: 2, adminId: auth.user.id, setId, creationRequestId: requestId, status: 'uncertain' }))
+    fetchGeneralPracticeCreationOutcome.mockResolvedValue({ status: 'committed', quiz: { id: createdId } })
+    renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+    expect(await screen.findByText('Created quiz details')).toBeTruthy()
+    expect(createGeneralPracticeSetDraft).not.toHaveBeenCalled()
+    expect(window.sessionStorage.length).toBe(0)
+  })
+
+  it('manually retries a confirmed pre-commit media failure with the frozen request', async () => {
+    const user = userEvent.setup()
+    const failure = Object.assign(new Error('Upload failed'), { status: 503,
+      code: 'quiz_creation_precommit_failed', data: { mediaCleanup: 'complete' } })
+    createGeneralPracticeSetDraft.mockRejectedValueOnce(failure).mockResolvedValueOnce({
+      id: createdId, quizSetId: setId, status: 'draft', sortOrder: 1, draft: { version: 1, questions: [{}] },
+    })
+    renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+    await screen.findByText(/Quiz Set:/)
+    await fillNewDraft(user)
+    const image = new File(['image'], 'prompt.png', { type: 'image/png' })
+    await user.upload(screen.getByLabelText(/Question image/), image)
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    const retry = await screen.findByRole('button', { name: 'Retry same request' })
+    const original = createGeneralPracticeSetDraft.mock.calls[0]
+    expect(screen.getByRole('textbox', { name: 'Title' }).closest('fieldset').disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Abandon failed request' })).toBeTruthy()
+    expect(window.sessionStorage.getItem(window.sessionStorage.key(0))).not.toMatch(/prompt\.png|imageFile|imagePreview/)
+    await user.click(retry)
+    expect(await screen.findByText('Created quiz details')).toBeTruthy()
+    expect(createGeneralPracticeSetDraft.mock.calls[1]).toEqual(original)
+    expect(original[3]).toEqual([{ field: 'questionImage_0', file: image }])
+    expect(globalThis.crypto.randomUUID).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry media after refresh; a verified failed request may be abandoned before starting again', async () => {
+    const user = userEvent.setup()
+    const nextId = '550e8400-e29b-41d4-a716-446655440001'
+    globalThis.crypto.randomUUID.mockReturnValueOnce(requestId).mockReturnValueOnce(nextId)
+    const failure = Object.assign(new Error('Upload failed'), { status: 503,
+      code: 'quiz_creation_precommit_failed', data: { mediaCleanup: 'retry_required' } })
+    createGeneralPracticeSetDraft.mockRejectedValueOnce(failure).mockResolvedValueOnce({
+      id: createdId, quizSetId: setId, status: 'draft', sortOrder: 1, draft: { version: 1, questions: [{}] },
+    })
+    const first = renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+    await screen.findByText(/Quiz Set:/)
+    await fillNewDraft(user)
+    await user.upload(screen.getByLabelText(/Question image/), new File(['image'], 'original.png', { type: 'image/png' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await screen.findByRole('button', { name: 'Abandon failed request' })
+    expect(screen.getByRole('alert').textContent).toMatch(/cleanup still requires attention/)
+    first.unmount()
+    renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+    await screen.findByRole('button', { name: 'Abandon failed request' })
+    expect(screen.queryByRole('button', { name: 'Retry same request' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save draft' }).disabled).toBe(true)
+    expect(createGeneralPracticeSetDraft).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: 'Abandon failed request' }))
+    await waitFor(() => expect(window.sessionStorage.length).toBe(0))
+    expect(abandonFailedGeneralPracticeCreation).toHaveBeenCalledWith(setId, requestId)
+    expect(screen.getByRole('textbox', { name: 'Title' }).value).toBe('')
+    await fillNewDraft(user)
+    const replacement = new File(['new image'], 'replacement.png', { type: 'image/png' })
+    await user.upload(screen.getByLabelText(/Question image/), replacement)
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    expect(await screen.findByText('Created quiz details')).toBeTruthy()
+    expect(createGeneralPracticeSetDraft.mock.calls.map((call) => call[1])).toEqual([requestId, nextId])
+    expect(createGeneralPracticeSetDraft.mock.calls[1][3]).toEqual([{ field: 'questionImage_0', file: replacement }])
+  })
+
+  it('keeps a generic media server failure uncertain with no retry or abandon action', async () => {
+    const user = userEvent.setup()
+    createGeneralPracticeSetDraft.mockRejectedValue(Object.assign(new Error('Server error'), { status: 500 }))
+    renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+    await screen.findByText(/Quiz Set:/)
+    await fillNewDraft(user)
+    await user.upload(screen.getByLabelText(/Question image/), new File(['image'], 'prompt.png', { type: 'image/png' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await screen.findByRole('button', { name: 'Check original request' })
+    expect(screen.queryByRole('button', { name: 'Retry same request' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Abandon failed request' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save draft' }).disabled).toBe(true)
+  })
+
+  it('blocks manual recovery when confirmed-failure metadata cannot be updated in browser storage', async () => {
+    const user = userEvent.setup()
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'sessionStorage')
+    const records = new Map()
+    let writes = 0
+    Object.defineProperty(window, 'sessionStorage', { configurable: true, value: {
+      getItem: (key) => records.get(key) ?? null,
+      setItem: (key, value) => {
+        writes += 1
+        if (writes > 1) throw new Error('Storage unavailable')
+        records.set(key, value)
+      },
+      removeItem: (key) => records.delete(key),
+    } })
+    try {
+      createGeneralPracticeSetDraft.mockRejectedValue(Object.assign(new Error('Upload failed'), { status: 503,
+        code: 'quiz_creation_precommit_failed', data: { mediaCleanup: 'complete' } }))
+      renderEditor(`/general-practice/sets/${setId}/quizzes/new`)
+      await screen.findByText(/Quiz Set:/)
+      await fillNewDraft(user)
+      await user.upload(screen.getByLabelText(/Question image/), new File(['image'], 'prompt.png', { type: 'image/png' }))
+      await user.click(screen.getByRole('button', { name: 'Save draft' }))
+      expect((await screen.findByRole('button', { name: 'Retry same request' })).disabled).toBe(true)
+      expect(screen.getByRole('button', { name: 'Abandon failed request' }).disabled).toBe(true)
+      expect(createGeneralPracticeSetDraft).toHaveBeenCalledTimes(1)
+      expect(globalThis.crypto.randomUUID).toHaveBeenCalledTimes(1)
+      expect([...records.values()].join('')).not.toMatch(/prompt\.png|imageFile|imagePreview/)
+    } finally { Object.defineProperty(window, 'sessionStorage', descriptor) }
+  })
 
   it('rejects invalid edits before calling the API', async () => {
     renderEditor('/general-practice/quiz-1/edit')

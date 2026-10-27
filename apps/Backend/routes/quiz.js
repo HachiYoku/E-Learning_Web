@@ -40,7 +40,12 @@ router.post("/admin/standalone/sets/:setId/activate", validateToken, requireAdmi
 router.post("/admin/standalone/sets/:setId/disable", validateToken, requireAdmin, standaloneSets.lifecycle("disable"));
 router.post("/admin/standalone/sets/:setId/archive", validateToken, requireAdmin, standaloneSets.lifecycle("archive"));
 router.post("/admin/standalone/sets/:setId/restore", validateToken, requireAdmin, standaloneSets.lifecycle("restore"));
-router.post("/admin/standalone/sets/:setId/quizzes", validateToken, requireAdmin, standaloneSets.createDraft);
+router.post("/admin/standalone/sets/:setId/quizzes", validateToken, requireAdmin,
+  upload.any(), validateQuizMediaContent, validateQuizImageFields, standaloneSets.createDraft);
+router.get("/admin/standalone/sets/:setId/quizzes/creation/:creationRequestId", validateToken, requireAdmin,
+  standaloneSets.creationOutcome);
+router.post("/admin/standalone/sets/:setId/quizzes/creation/:creationRequestId/abandon", validateToken, requireAdmin,
+  standaloneSets.abandonFailedCreation);
 router.put("/admin/standalone/sets/:setId/quizzes/:quizId/order", validateToken, requireAdmin, standaloneSets.orderQuiz);
 router.delete("/admin/standalone/sets/:setId", validateToken, requireAdmin, standaloneSets.remove);
 router.post("/admin/standalone", validateToken, requireAdmin, standalone.create);

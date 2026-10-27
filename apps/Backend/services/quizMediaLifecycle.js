@@ -22,7 +22,7 @@ async function registerQuizMedia(quiz, { existingOnly = false } = {}) {
         const result = await QuizMedia.updateOne(
           { quiz: quiz._id, questionId: question._id, publicId: media.publicId,
             mediaType: media.mediaType, cleanupState: { $ne: "deleted" } },
-          { $set: { quiz: quiz._id } }
+          { $set: { quiz: quiz._id, cleanupState: "active", cleanupError: "" } }
         );
         if (!result.matchedCount) throw new Error("Standalone quiz media ownership requires recovery");
         continue;
