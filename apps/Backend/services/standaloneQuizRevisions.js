@@ -57,7 +57,8 @@ async function validateOwnedMedia(quiz, questions, previousQuestions = []) {
         if (!publicId && previous?.[type] === url && !previous?.[`${type}PublicId`]) continue;
         throw new StandaloneQuizError(400, "Use an owned Quiz media asset.", "invalid_quiz_media");
       }
-      const owned = await QuizMedia.exists({ quiz: quiz._id, questionId: question._id, mediaType: type, publicId, url, cleanupState: { $ne: "deleted" } });
+      const owned = await QuizMedia.exists({ quiz: quiz._id, questionId: question._id, mediaType: type,
+        publicId, url, cleanupState: { $nin: ["deleted", "cleanup_processing"] } });
       if (!owned) throw new StandaloneQuizError(400, "Use an owned Quiz media asset.", "invalid_quiz_media");
     }
   }
