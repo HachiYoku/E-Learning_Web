@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -490,10 +490,89 @@ describe('General Practice draft editor', () => {
     updateGeneralPracticeDraft.mockResolvedValue({ ...publishedOnly, draft: { ...publishedOnly.published, version: 1 } })
     renderEditor('/general-practice/quiz-1/edit')
     expect(await screen.findByDisplayValue('Draft title')).toBeTruthy()
-    expect(screen.getByText(/Existing image/)).toBeTruthy()
+    expect(screen.getByText(/Question 1 image: Keep current/)).toBeTruthy()
     await user.type(screen.getByRole('textbox', { name: 'Explanation (optional)' }), 'A greeting')
     await user.click(screen.getByRole('button', { name: 'Save draft' }))
     await waitFor(() => expect(updateGeneralPracticeDraft).toHaveBeenCalledWith('quiz-1', 0, expect.objectContaining({ questions: [expect.objectContaining({ image: 'owned-url', imagePublicId: 'owned-id', explanation: 'A greeting' })] })))
+  })
+
+  it.each([['image', 'image/png', 'replacement.png', 'questionImage_0'],
+    ['audio', 'audio/mpeg', 'replacement.mp3', 'questionAudio_0']])('replaces only the selected %s in an existing draft', async (kind, mime, name, field) => {
+    const user = userEvent.setup()
+    const question = { ...saved.draft.questions[0], image: 'old-image', imagePublicId: 'old-image-id',
+      audio: 'old-audio', audioPublicId: 'old-audio-id' }
+    fetchGeneralPracticeQuiz.mockResolvedValue({ ...saved, draft: { ...saved.draft, questions: [question] } })
+    updateGeneralPracticeDraft.mockResolvedValue({ ...saved, draft: { ...saved.draft, version: 4, questions: [question] } })
+    renderEditor('/general-practice/quiz-1/edit')
+    expect(await screen.findByText(/Question 1 image: Keep current/)).toBeTruthy()
+    expect(screen.getByText(/Question 1 audio: Keep current/)).toBeTruthy()
+    const file = new File(['media'], name, { type: mime })
+    await user.upload(screen.getByLabelText(new RegExp(`Replace ${kind}`)), file)
+    expect(screen.getByText(new RegExp(`Question 1 ${kind}: Replace selected`))).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await waitFor(() => expect(updateGeneralPracticeDraft).toHaveBeenCalled())
+    const [, version, payload, files] = updateGeneralPracticeDraft.mock.calls[0]
+    expect(version).toBe(3)
+    expect(files).toEqual([{ field, file }])
+    const other = kind === 'image' ? 'audio' : 'image'
+    expect(payload.questions[0][other]).toBe(question[other])
+    expect(payload.questions[0][`${other}PublicId`]).toBe(question[`${other}PublicId`])
+    expect(payload.questions[0][`${kind}Action`]).toBeUndefined()
+  })
+
+  it.each(['image', 'audio'])('explicitly removes %s while preserving the other attachment', async (kind) => {
+    const user = userEvent.setup()
+    const question = { ...saved.draft.questions[0], image: 'old-image', imagePublicId: 'old-image-id',
+      audio: 'old-audio', audioPublicId: 'old-audio-id' }
+    fetchGeneralPracticeQuiz.mockResolvedValue({ ...saved, draft: { ...saved.draft, questions: [question] } })
+    updateGeneralPracticeDraft.mockResolvedValue({ ...saved, draft: { ...saved.draft, version: 4, questions: [question] } })
+    renderEditor('/general-practice/quiz-1/edit')
+    await screen.findByText(/Question 1 image: Keep current/)
+    await user.click(screen.getByRole('button', { name: `Remove ${kind}` }))
+    expect(screen.getByText(new RegExp(`Question 1 ${kind}: Remove on save`))).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await waitFor(() => expect(updateGeneralPracticeDraft).toHaveBeenCalled())
+    const payload = updateGeneralPracticeDraft.mock.calls[0][2]
+    expect(payload.questions[0][kind]).toBe('')
+    expect(payload.questions[0][`${kind}PublicId`]).toBe('')
+    const other = kind === 'image' ? 'audio' : 'image'
+    expect(payload.questions[0][other]).toBe(question[other])
+    expect(updateGeneralPracticeDraft.mock.calls[0]).toHaveLength(3)
+  })
+
+  it('rejects unsupported and oversized replacement files before draft submission', async () => {
+    fetchGeneralPracticeQuiz.mockResolvedValue({ ...saved, draft: { ...saved.draft,
+      questions: [{ ...saved.draft.questions[0], image: 'old-image', imagePublicId: 'old-id' }] } })
+    renderEditor('/general-practice/quiz-1/edit')
+    await screen.findByText(/Question 1 image: Keep current/)
+    fireEvent.change(screen.getByLabelText(/Replace image/), { target: {
+      files: [new File(['plain'], 'bad.txt', { type: 'text/plain' })],
+    } })
+    expect(screen.getByRole('alert').textContent).toMatch(/Question image must/)
+    fireEvent.change(screen.getByLabelText(/Replace image/), { target: {
+      files: [new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'large.png', { type: 'image/png' })],
+    } })
+    expect(screen.getByRole('alert').textContent).toMatch(/up to 5 MB/)
+    expect(updateGeneralPracticeDraft).not.toHaveBeenCalled()
+  })
+
+  it('can cancel a pending media removal and keep the original attachment', async () => {
+    const user = userEvent.setup()
+    fetchGeneralPracticeQuiz.mockResolvedValue({ ...saved, draft: { ...saved.draft,
+      questions: [{ ...saved.draft.questions[0], image: 'old-image', imagePublicId: 'old-id', imageAlt: 'Greeting' }] } })
+    updateGeneralPracticeDraft.mockResolvedValue({ ...saved, draft: { ...saved.draft, version: 4 } })
+    renderEditor('/general-practice/quiz-1/edit')
+    await screen.findByText(/Question 1 image: Keep current/)
+    await user.click(screen.getByRole('button', { name: 'Remove image' }))
+    await user.click(screen.getByRole('button', { name: 'Keep original image' }))
+    expect(screen.getByText(/Question 1 image: Keep current/)).toBeTruthy()
+    await user.type(screen.getByRole('textbox', { name: 'Explanation (optional)' }), 'Updated')
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await waitFor(() => expect(updateGeneralPracticeDraft).toHaveBeenCalled())
+    const question = updateGeneralPracticeDraft.mock.calls[0][2].questions[0]
+    expect(question.image).toBe('old-image')
+    expect(question.imagePublicId).toBe('old-id')
+    expect(question.imageAlt).toBe('Greeting')
   })
 
   it('preserves edits on a stale-version conflict and reloads only after confirmation', async () => {

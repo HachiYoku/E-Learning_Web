@@ -149,8 +149,14 @@ export async function abandonFailedGeneralPracticeCreation(setId, creationReques
   return apiClient.post(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/quizzes/creation/${encodeURIComponent(creationRequestId)}/abandon`)
 }
 
-export async function updateGeneralPracticeDraft(quizId, expectedVersion, draft) {
-  return apiClient.put(`/quizzes/admin/standalone/${encodeURIComponent(quizId)}/draft`, { expectedVersion, draft })
+export async function updateGeneralPracticeDraft(quizId, expectedVersion, draft, files = []) {
+  const url = `/quizzes/admin/standalone/${encodeURIComponent(quizId)}/draft`
+  if (!files.length) return apiClient.put(url, { expectedVersion, draft })
+  const body = new FormData()
+  body.append('expectedVersion', String(expectedVersion))
+  body.append('draft', JSON.stringify(draft))
+  files.forEach(({ field, file }) => body.append(field, file))
+  return apiClient.put(url, body)
 }
 
 export async function publishGeneralPracticeDraft(quizId, expectedVersion) {
