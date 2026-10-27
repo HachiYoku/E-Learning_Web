@@ -8,16 +8,18 @@ const path = require("node:path");
 const mongoose = require("mongoose");
 const { initiateReplicaSet } = require("./helpers/replicaSet");
 
-let processHandle; let directory; let Quiz; let QuizMedia; let QuizAttempt; let QuizSession;
+let processHandle; let directory; let Quiz; let QuizMedia; let QuizAttempt; let QuizSession; let oldMediaEnv; let oldCloudConfig;
 let revisions; let controller; let oldController; let buildQuizSubmissionSnapshot;
 const id = () => new mongoose.Types.ObjectId();
 const question = (prompt = "First question") => ({ prompt, options: ["A", "B"], correctAnswer: 0, explanation: "Because A is correct." });
 const draft = (title = "General Practice") => ({ title, description: "Practice description", category: "Vocabulary", difficulty: "Beginner", standaloneAccess: "students", questions: [question()] });
 const response = () => ({ statusCode: 200, body: null, status(value) { this.statusCode = value; return this; }, json(value) { this.body = value; return this; } });
 const ownedImage = async (quiz, questionId) => {
-  const publicId = `arun_thai/quiz_media/images/${id()}`;
-  const url = `https://res.cloudinary.com/example/image/upload/${publicId}.webp`;
-  const record = await QuizMedia.create({ quiz: quiz._id, questionId, mediaType: "image", publicId, resourceType: "image", url });
+  const recordId = id();
+  const publicId = `arun_thai/testing/quiz_media/images/${recordId}`;
+  const url = `https://res.cloudinary.com/du6lhdq8t/image/upload/${publicId}.webp`;
+  const record = await QuizMedia.create({ _id: recordId, quiz: quiz._id, questionId, mediaType: "image",
+    environment: "testing", publicId, resourceType: "image", url });
   return { record, fields: { image: url, imagePublicId: publicId } };
 };
 async function withReplacement(object, key, replacement, operation) {
@@ -45,6 +47,17 @@ before(async () => {
   });
   await initiateReplicaSet(port);
   await mongoose.connect(`mongodb://127.0.0.1:${port}/quiz_package_one?replicaSet=paymentTests`);
+  oldMediaEnv = Object.fromEntries(["QUIZ_QUESTION_MEDIA_ENV", "NODE_ENV", "MONGO_DB", "STANDALONE_QUIZ_EXPECTED_DB",
+    "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET", "CLOUDINARY_URL"]
+    .map((key) => [key, process.env[key]]));
+  Object.assign(process.env, { QUIZ_QUESTION_MEDIA_ENV: "testing", NODE_ENV: "test",
+    MONGO_DB: "mongodb+srv://englishkafe.xhqpzdd.mongodb.net/english_kafe",
+    STANDALONE_QUIZ_EXPECTED_DB: "english_kafe", CLOUDINARY_CLOUD_NAME: "du6lhdq8t",
+    CLOUDINARY_API_KEY: "x", CLOUDINARY_API_SECRET: "x" });
+  delete process.env.CLOUDINARY_URL;
+  const cloudinary = require("../config/cloudinary");
+  oldCloudConfig = cloudinary.config;
+  cloudinary.config = () => ({ cloud_name: "du6lhdq8t" });
   Quiz = require("../models/quizModel");
   QuizMedia = require("../models/quizMediaModel");
   QuizAttempt = require("../models/quizAttemptModel");
@@ -62,6 +75,10 @@ beforeEach(async () => {
 });
 
 after(async () => {
+  require("../config/cloudinary").config = oldCloudConfig;
+  for (const [key, value] of Object.entries(oldMediaEnv || {})) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
   await mongoose.disconnect();
   if (processHandle && processHandle.exitCode === null) {
     await new Promise((resolve) => { processHandle.once("exit", resolve); processHandle.kill("SIGTERM"); });
@@ -422,6 +439,20 @@ test("cleanup failure is retryable and never reports a completed media pass", as
     () => revisions.retryMediaReconciliation(quiz._id));
   assert.equal(recovered.mediaReconciliationToken, undefined);
   assert.equal((await QuizMedia.findById(record._id)).cleanupState, "deleted");
+});
+
+test("legacy media remains readable and does not hold an unrelated draft save open", async () => {
+  const quiz = await revisions.createDraft(draft());
+  const questionId = quiz.draft.questions[0]._id;
+  const publicId = `arun_thai/quiz_media/images/${id()}`;
+  const url = `https://res.cloudinary.com/example/image/upload/${publicId}.webp`;
+  const legacy = await QuizMedia.create({ quiz: quiz._id, questionId, mediaType: "image",
+    publicId, resourceType: "image", url });
+  await revisions.saveDraft(quiz._id, 1, { questions: [{ ...question(), _id: questionId,
+    image: url, imagePublicId: publicId }] });
+  const saved = await revisions.saveDraft(quiz._id, 2, { questions: [{ ...question(), _id: questionId }] });
+  assert.equal(saved.mediaReconciliationToken, undefined);
+  assert.equal((await QuizMedia.findById(legacy._id)).cleanupError, "legacy_media_unverified");
 });
 
 test("media retry is a separate POST behind authentication and Admin authorization", async () => {

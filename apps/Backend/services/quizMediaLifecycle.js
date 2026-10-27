@@ -4,6 +4,7 @@ const QuizSession = require("../models/quizSessionModel");
 const Quiz = require("../models/quizModel");
 const { guestMediaIsProtected } = require("./guestQuizDependencies");
 const cloudinary = require("../config/cloudinary");
+const { resolveQuestionMediaEnvironment, publicIdFor, ownedMediaUrl } = require("./quizQuestionMediaEnvironment");
 
 function mediaValues(question) {
   return [
@@ -21,14 +22,14 @@ async function registerQuizMedia(quiz, { existingOnly = false } = {}) {
         // has already marked for cleanup (or already deleted).
         const result = await QuizMedia.updateOne(
           { quiz: quiz._id, questionId: question._id, publicId: media.publicId,
-            mediaType: media.mediaType, cleanupState: { $ne: "deleted" } },
+          mediaType: media.mediaType, cleanupState: { $nin: ["deleted", "cleanup_processing"] } },
           { $set: { quiz: quiz._id, cleanupState: "active", cleanupError: "" } }
         );
         if (!result.matchedCount) throw new Error("Standalone quiz media ownership requires recovery");
         continue;
       }
       await QuizMedia.updateOne(
-        { publicId: media.publicId },
+        { publicId: media.publicId, cleanupState: { $nin: ["deleted", "cleanup_processing"] } },
         { $setOnInsert: { quiz: quiz._id, questionId: question._id, ...media }, $set: { cleanupState: "active", cleanupError: "" } },
         { upsert: true }
       );
@@ -46,22 +47,56 @@ async function isHistoricallyReferenced(publicId) {
 }
 
 async function cleanupQuizMedia(record) {
-  if (!record || record.cleanupState === "deleted" || await isHistoricallyReferenced(record.publicId)
+  if (!record || ["deleted", "reserved"].includes(record.cleanupState)) return false;
+  if (await isHistoricallyReferenced(record.publicId)
     || await guestMediaIsProtected(record.publicId)) return false;
   if (await Quiz.exists({ $or: [
     { "questions.imagePublicId": record.publicId }, { "questions.audioPublicId": record.publicId },
     { "draft.questions.imagePublicId": record.publicId }, { "draft.questions.audioPublicId": record.publicId },
   ] })) return false;
   if (await QuizSession.exists({ invalidatedAt: null, expiresAt: { $gt: new Date() }, $or: [{ "snapshot.questions.imagePublicId": record.publicId }, { "snapshot.questions.audioPublicId": record.publicId }] })) {
-    await QuizMedia.updateOne({ _id: record._id }, { $set: { cleanupState: "pending_cleanup" } });
+    await QuizMedia.updateOne({ _id: record._id, cleanupState: { $ne: "cleanup_processing" } },
+      { $set: { cleanupState: "pending_cleanup" } });
     return false;
   }
+  let identity;
+  try { identity = resolveQuestionMediaEnvironment(); } catch { /* Fail closed. */ }
+  const owned = identity && ["image", "audio"].includes(record.mediaType)
+    && record.environment === identity.mode
+    && record.resourceType === (record.mediaType === "image" ? "image" : "video")
+    && record.publicId === publicIdFor(identity, record.mediaType, record._id)
+    && ownedMediaUrl(record.url, identity, record.publicId, record.resourceType)
+    && await QuizMedia.exists({ _id: record._id, quiz: record.quiz, questionId: record.questionId,
+      environment: identity.mode, mediaType: record.mediaType, publicId: record.publicId,
+      resourceType: record.resourceType, url: record.url, cleanupState: { $nin: ["deleted", "reserved"] } });
+  if (!owned) {
+    // Legacy and uncertain assets stay available for reading. A local record
+    // cannot authorize deletion of a shared-account asset without ownership.
+    const reason = !identity ? "environment_unconfigured"
+      : !record.environment ? "legacy_media_unverified" : "ownership_mismatch";
+    await QuizMedia.updateOne({ _id: record._id, publicId: record.publicId,
+      cleanupState: { $nin: ["deleted", "reserved", "cleanup_processing"] } },
+    { $set: { cleanupState: "cleanup_failed", cleanupError: reason } });
+    return false;
+  }
+  const startedAt = new Date();
+  const stale = new Date(startedAt.getTime() - 24 * 60 * 60 * 1000);
+  const claim = await QuizMedia.findOneAndUpdate({ _id: record._id, environment: identity.mode,
+    publicId: record.publicId, url: record.url, $or: [
+      { cleanupState: { $in: ["active", "pending_cleanup", "cleanup_failed"] } },
+      { cleanupState: "cleanup_processing", cleanupStartedAt: { $lt: stale } },
+    ] }, { $set: { cleanupState: "cleanup_processing", cleanupStartedAt: startedAt } },
+  { returnDocument: "after" });
+  if (!claim) return false;
   try {
-    await cloudinary.uploader.destroy(record.publicId, { resource_type: record.resourceType, type: "upload", invalidate: true });
-    await QuizMedia.updateOne({ _id: record._id }, { $set: { cleanupState: "deleted", cleanupError: "" } });
+    const result = await cloudinary.uploader.destroy(record.publicId, { resource_type: record.resourceType, type: "upload", invalidate: true });
+    if (!["ok", "not found"].includes(result?.result)) throw new Error("provider_delete_unconfirmed");
+    await QuizMedia.updateOne({ _id: record._id, cleanupState: "cleanup_processing", cleanupStartedAt: startedAt },
+      { $set: { cleanupState: "deleted", cleanupError: "" } });
     return true;
   } catch (error) {
-    await QuizMedia.updateOne({ _id: record._id }, { $set: { cleanupState: "cleanup_failed", cleanupError: error?.name || "cleanup_failed" } });
+    await QuizMedia.updateOne({ _id: record._id, cleanupState: "cleanup_processing", cleanupStartedAt: startedAt },
+      { $set: { cleanupState: "cleanup_failed", cleanupError: error?.name || "cleanup_failed" } });
     return false;
   }
 }
@@ -83,10 +118,12 @@ async function reconcileStandaloneQuizMedia(quiz) {
   const records = await QuizMedia.find({ quiz: quiz._id, cleanupState: { $ne: "deleted" } });
   let pending = false;
   for (const record of records) {
+    if (record.cleanupError === "legacy_media_unverified") continue;
     const removed = await cleanupQuizMedia(record);
     if (removed) continue;
-    const current = await QuizMedia.findById(record._id).select("cleanupState").lean();
-    if (current && ["pending_cleanup", "cleanup_failed"].includes(current.cleanupState)) pending = true;
+    const current = await QuizMedia.findById(record._id).select("cleanupState cleanupError").lean();
+    if (current && ["pending_cleanup", "cleanup_failed"].includes(current.cleanupState)
+      && current.cleanupError !== "legacy_media_unverified") pending = true;
   }
   return !pending;
 }

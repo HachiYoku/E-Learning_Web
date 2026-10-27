@@ -4,7 +4,7 @@ const QuizSet = require("../models/quizSetModel");
 const Quiz = require("../models/quizModel");
 const QuizCreationRequest = require("../models/quizCreationRequestModel");
 const QuizMedia = require("../models/quizMediaModel");
-const { uploadStream } = require("./uploadStream");
+const { uploadOwnedQuestionMedia } = require("./quizQuestionMediaUpload");
 const { cleanupQuizMedia } = require("./quizMediaLifecycle");
 const { draftFields, validateDraft } = require("./standaloneQuizRevisions");
 const { runStandaloneTransaction, StandaloneTransactionConflict,
@@ -393,18 +393,16 @@ async function createIdempotentSetDraftWithMedia(setId, adminId, creationRequest
   }
   try {
     for (const { file, index, type } of assignments) {
-      const resourceType = type === "image" ? "image" : "video";
-      let result;
+      let record;
       try {
-        result = await uploadStream(file.buffer, `arun_thai/quiz_media/${type === "image" ? "images" : "audio"}`,
-          { resource_type: resourceType });
+        record = await uploadOwnedQuestionMedia({ quizId, questionId: prepared.questions[index]._id,
+          mediaType: type, buffer: file.buffer });
       } catch (error) { uploadOutcomeUnknown = true; throw error; }
       const item = { quiz: quizId, questionId: prepared.questions[index]._id, mediaType: type,
-        publicId: result.public_id, resourceType: result.resource_type || resourceType,
-        url: result.secure_url, format: result.format || "", bytes: file.buffer.length,
-        cleanupState: "pending_cleanup" };
+        publicId: record.publicId, resourceType: record.resourceType,
+        url: record.url, format: record.format || "", bytes: file.buffer.length,
+        cleanupState: "pending_cleanup", record };
       uploaded.push(item);
-      item.record = await QuizMedia.create(item);
       const question = prepared.questions[index];
       question[type] = item.url;
       question[`${type}PublicId`] = item.publicId;
@@ -503,8 +501,11 @@ async function abandonFailedCreation(setId, adminId, creationRequestId) {
 // decide whether a Cloudinary deletion is safe.
 async function retryAbandonedCreationMedia() {
   const olderThan = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const pending = await QuizMedia.find({ cleanupState: { $in: ["pending_cleanup", "cleanup_failed"] },
-    createdAt: { $lt: olderThan } })
+  const pending = await QuizMedia.find({ $or: [
+    { cleanupState: { $in: ["pending_cleanup", "cleanup_failed"] },
+      cleanupError: { $ne: "legacy_media_unverified" }, createdAt: { $lt: olderThan } },
+    { cleanupState: "cleanup_processing", cleanupStartedAt: { $lt: olderThan } },
+  ] })
     .sort({ createdAt: 1 }).limit(20);
   for (const record of pending) {
     if (!await Quiz.exists({ _id: record.quiz })) await cleanupQuizMedia(record);

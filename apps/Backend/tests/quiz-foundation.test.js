@@ -24,7 +24,7 @@ const stop = (child) => new Promise((resolve) => {
   child.kill("SIGTERM");
 });
 
-let mongo; let directory;
+let mongo; let directory; let oldMediaEnv; let oldCloudConfig;
 let Quiz; let Course; let Lesson; let HomeworkSet; let HomeworkSetAssignment;
 let QuizAttempt; let QuizUnlock; let QuizAttemptGrant; let QuizGoalAchievement;
 let buildQuizSubmissionSnapshot; let hasQuizHistoryFor; let quizController;
@@ -62,6 +62,17 @@ before(async () => {
   });
   await initiateReplicaSet(port);
   await mongoose.connect(`mongodb://127.0.0.1:${port}/quiz_foundation?replicaSet=paymentTests`);
+  oldMediaEnv = Object.fromEntries(["QUIZ_QUESTION_MEDIA_ENV", "NODE_ENV", "MONGO_DB", "STANDALONE_QUIZ_EXPECTED_DB",
+    "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET", "CLOUDINARY_URL"]
+    .map((key) => [key, process.env[key]]));
+  Object.assign(process.env, { QUIZ_QUESTION_MEDIA_ENV: "testing", NODE_ENV: "test",
+    MONGO_DB: "mongodb+srv://englishkafe.xhqpzdd.mongodb.net/english_kafe",
+    STANDALONE_QUIZ_EXPECTED_DB: "english_kafe", CLOUDINARY_CLOUD_NAME: "du6lhdq8t",
+    CLOUDINARY_API_KEY: "x", CLOUDINARY_API_SECRET: "x" });
+  delete process.env.CLOUDINARY_URL;
+  const cloudinary = require("../config/cloudinary");
+  oldCloudConfig = cloudinary.config;
+  cloudinary.config = () => ({ cloud_name: "du6lhdq8t" });
   Quiz = require("../models/quizModel"); Course = require("../models/courseModel"); Lesson = require("../models/lessonModel");
   HomeworkSet = require("../models/homeworkSetModel"); HomeworkSetAssignment = require("../models/homeworkSetAssignmentModel");
   QuizAttempt = require("../models/quizAttemptModel"); QuizUnlock = require("../models/quizUnlockModel");
@@ -77,6 +88,10 @@ beforeEach(async () => {
 });
 
 after(async () => {
+  require("../config/cloudinary").config = oldCloudConfig;
+  for (const [key, value] of Object.entries(oldMediaEnv || {})) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
   await mongoose.disconnect();
   await stop(mongo);
   if (directory) await fs.rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
@@ -372,8 +387,12 @@ for (const cleanupFails of [false, true]) {
     const { course, lesson } = await courseAndLesson();
     const quiz = await Quiz.create({ course: course._id, lesson: lesson._id, title: "Persistence regression", questions: [question()] });
     const before = await Quiz.findById(quiz._id).lean();
-    const publicId = `arun_thai/quiz_media/images/${unique("new-upload")}`;
-    t.mock.method(cloudinary.uploader, "upload_stream", (_options, callback) => new Writable({ write(_chunk, _encoding, done) { done(); }, final(done) { done(); callback(null, { public_id: publicId, secure_url: "https://example.test/new.jpg", resource_type: "image" }); } }));
+    let publicId;
+    t.mock.method(cloudinary.uploader, "upload_stream", (options, callback) => new Writable({ write(_chunk, _encoding, done) { done(); }, final(done) {
+      publicId = `${options.folder}/${options.public_id}`;
+      done(); callback(null, { public_id: publicId,
+        secure_url: `https://res.cloudinary.com/du6lhdq8t/image/upload/${publicId}.jpg`, resource_type: "image" });
+    } }));
     const destroy = t.mock.method(cloudinary.uploader, "destroy", async () => { if (cleanupFails) throw new Error("provider unavailable"); return { result: "ok" }; });
     t.mock.method(Quiz.prototype, "save", async () => { throw new Error("simulated persistence error"); });
     const response = responseRecorder();
@@ -399,7 +418,11 @@ test("history and scoring confirmation precede replacement uploads, then confirm
   const quiz = await Quiz.create({ course: course._id, lesson: lesson._id, title: "Confirmed change", status: "published", questions: [question()] });
   const active = await QuizSession.create({ user: id(), quiz: quiz._id, revision: 1, contextType: "course_lesson", snapshot: {}, expiresAt: new Date(Date.now() + 86400000) });
   await QuizAttempt.create({ quiz: quiz._id, user: id(), attemptNumber: 1, answers: [0], score: 1, total: 1, submissionSnapshot: { questions: [{ questionId: quiz.questions[0]._id, selectedAnswer: 0, correctAnswer: 0, isCorrect: true }] } });
-  const upload = t.mock.method(cloudinary.uploader, "upload_stream", (_options, callback) => new Writable({ write(_chunk, _encoding, done) { done(); }, final(done) { done(); callback(null, { public_id: `arun_thai/quiz_media/images/${unique("confirmed")}`, secure_url: "https://example.test/new.jpg", resource_type: "image" }); } }));
+  const upload = t.mock.method(cloudinary.uploader, "upload_stream", (options, callback) => new Writable({ write(_chunk, _encoding, done) { done(); }, final(done) {
+    const publicId = `${options.folder}/${options.public_id}`;
+    done(); callback(null, { public_id: publicId,
+      secure_url: `https://res.cloudinary.com/du6lhdq8t/image/upload/${publicId}.jpg`, resource_type: "image" });
+  } }));
   const req = { params: { quizId: quiz._id, questionId: quiz.questions[0]._id }, body: { question: { ...quiz.questions[0].toObject(), correctAnswer: 1 } }, files: [{ fieldname: "questionImage_0", buffer: Buffer.from("fixture") }] };
   const history = responseRecorder(); await quizController.updateQuizQuestion(req, history);
   assert.equal(history.body.code, "question_history_requires_confirmation"); assert.equal(upload.mock.calls.length, 0);

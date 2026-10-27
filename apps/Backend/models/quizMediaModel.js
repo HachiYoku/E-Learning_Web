@@ -7,13 +7,15 @@ const quizMediaSchema = new mongoose.Schema({
   quiz: { type: mongoose.Schema.Types.ObjectId, ref: "Quiz", required: true, index: true, immutable: true },
   questionId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true, immutable: true },
   mediaType: { type: String, enum: ["image", "audio"], required: true, immutable: true },
+  environment: { type: String, enum: ["testing", "production"], immutable: true },
   publicId: { type: String, required: true, unique: true, immutable: true },
   resourceType: { type: String, required: true, immutable: true },
-  url: { type: String, required: true, immutable: true },
-  format: { type: String, default: "", immutable: true },
+  url: { type: String, default: "" },
+  format: { type: String, default: "" },
   bytes: { type: Number, default: 0, immutable: true },
-  cleanupState: { type: String, enum: ["active", "pending_cleanup", "cleanup_failed", "deleted"], default: "active", index: true },
+  cleanupState: { type: String, enum: ["reserved", "active", "pending_cleanup", "cleanup_processing", "cleanup_failed", "deleted"], default: "active", index: true },
   cleanupError: { type: String, default: "" },
+  cleanupStartedAt: { type: Date },
 }, { timestamps: true });
 
 quizMediaSchema.index({ quiz: 1, questionId: 1, mediaType: 1 });

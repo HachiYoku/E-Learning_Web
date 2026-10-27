@@ -14,12 +14,18 @@ const freePort = () => new Promise((resolve, reject) => {
   server.listen(0, "127.0.0.1", () => { const { port } = server.address(); server.close((error) => error ? reject(error) : resolve(port)); });
 });
 const stop = (child) => new Promise((resolve) => { if (!child || child.exitCode !== null) return resolve(); child.once("exit", resolve); child.kill("SIGTERM"); });
-let mongo; let directory; let Quiz; let Course; let Lesson; let Enrollment; let QuizAttempt; let QuizAttemptGrant; let QuizAttemptRequest; let QuizGoalAchievement; let QuizSession; let QuizMedia; let Notification; let User;
+let mongo; let directory; let Quiz; let Course; let Lesson; let Enrollment; let QuizAttempt; let QuizAttemptGrant; let QuizAttemptRequest; let QuizGoalAchievement; let QuizSession; let QuizMedia; let Notification; let User; let oldMediaEnv; let oldCloudConfig;
 let submitQuiz; let submitQuizRuntime; let startQuizSession; let studentQuizProjection; let studentQuizHistory; let courseFinalProgress; let quizController; let attemptRequestService; let cleanupQuizMedia;
 let sequence = 0;
 const id = () => new mongoose.Types.ObjectId();
 const unique = (value) => `${value}-${++sequence}`;
 const question = (overrides = {}) => ({ prompt: "Question", image: "https://example.test/question.webp", options: ["A", "B"], correctAnswer: 0, ...overrides });
+const managedMedia = (mediaType, recordId = id()) => {
+  const resourceType = mediaType === "image" ? "image" : "video";
+  const publicId = `arun_thai/testing/quiz_media/${mediaType === "image" ? "images" : "audio"}/${recordId}`;
+  return { _id: recordId, mediaType, environment: "testing", publicId, resourceType,
+    url: `https://res.cloudinary.com/du6lhdq8t/${resourceType}/upload/${publicId}.${mediaType === "image" ? "webp" : "mp3"}` };
+};
 const responseRecorder = () => ({
   statusCode: 200,
   body: null,
@@ -50,6 +56,17 @@ before(async () => {
   await new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("mongod startup timed out")), 15000); mongo.stdout.on("data", (data) => { if (data.toString().includes("Waiting for connections")) { clearTimeout(timer); resolve(); } }); mongo.once("error", reject); });
   await initiateReplicaSet(port);
   await mongoose.connect(`mongodb://127.0.0.1:${port}/quiz_runtime?replicaSet=paymentTests`);
+  oldMediaEnv = Object.fromEntries(["QUIZ_QUESTION_MEDIA_ENV", "NODE_ENV", "MONGO_DB", "STANDALONE_QUIZ_EXPECTED_DB",
+    "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET", "CLOUDINARY_URL"]
+    .map((key) => [key, process.env[key]]));
+  Object.assign(process.env, { QUIZ_QUESTION_MEDIA_ENV: "testing", NODE_ENV: "test",
+    MONGO_DB: "mongodb+srv://englishkafe.xhqpzdd.mongodb.net/english_kafe",
+    STANDALONE_QUIZ_EXPECTED_DB: "english_kafe", CLOUDINARY_CLOUD_NAME: "du6lhdq8t",
+    CLOUDINARY_API_KEY: "x", CLOUDINARY_API_SECRET: "x" });
+  delete process.env.CLOUDINARY_URL;
+  const cloudinary = require("../config/cloudinary");
+  oldCloudConfig = cloudinary.config;
+  cloudinary.config = () => ({ cloud_name: "du6lhdq8t" });
   Quiz = require("../models/quizModel"); Course = require("../models/courseModel"); Lesson = require("../models/lessonModel"); Enrollment = require("../models/enrollmentModel"); QuizAttempt = require("../models/quizAttemptModel"); QuizAttemptGrant = require("../models/quizAttemptGrantModel"); QuizAttemptRequest = require("../models/quizAttemptRequestModel"); QuizGoalAchievement = require("../models/quizGoalAchievementModel"); QuizSession = require("../models/quizSessionModel"); QuizMedia = require("../models/quizMediaModel"); Notification = require("../models/notificationModel"); User = require("../models/userModel");
   ({ submitQuiz: submitQuizRuntime, studentQuizProjection, studentQuizHistory } = require("../services/quizRuntime"));
   ({ startQuizSession } = require("../services/quizSessionService"));
@@ -67,7 +84,14 @@ beforeEach(async () => {
   await mongoose.connection.db.dropDatabase();
   await Promise.all([Quiz, QuizAttempt, QuizAttemptGrant, QuizAttemptRequest, QuizGoalAchievement, QuizSession, QuizMedia, Notification, User].map((Model) => Model.syncIndexes()));
 });
-after(async () => { await mongoose.disconnect(); await stop(mongo); if (directory) await fs.rm(directory, { recursive: true, force: true }); });
+after(async () => {
+  require("../config/cloudinary").config = oldCloudConfig;
+  for (const [key, value] of Object.entries(oldMediaEnv || {})) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
+  await mongoose.disconnect(); await stop(mongo);
+  if (directory) await fs.rm(directory, { recursive: true, force: true });
+});
 
 test("student projection enforces enrollment/status and never includes correct answers", async () => {
   const { course, quiz } = await setupQuiz();
@@ -624,9 +648,11 @@ test("Draft may publish, while Archived cannot bypass Restore to Disabled", asyn
 test("historical attempt media is never physically deleted while unreferenced owned media is cleaned up", async () => {
   const { quiz } = await setupQuiz();
   const historicalPublicId = `arun_thai/quiz_media/images/${unique("historic")}`;
-  const unusedPublicId = `arun_thai/quiz_media/audio/${unique("unused")}`;
+  const unused = managedMedia("audio");
+  const unusedPublicId = unused.publicId;
   const historicMedia = await QuizMedia.create({ quiz: quiz._id, questionId: quiz.questions[0]._id, mediaType: "image", publicId: historicalPublicId, resourceType: "image", url: "https://res.cloudinary.com/example/image/upload/historic.webp", format: "webp" });
-  const unusedMedia = await QuizMedia.create({ quiz: quiz._id, questionId: quiz.questions[0]._id, mediaType: "audio", publicId: unusedPublicId, resourceType: "video", url: "https://res.cloudinary.com/example/video/upload/unused.mp3", format: "mp3" });
+  const unusedMedia = await QuizMedia.create({ quiz: quiz._id, questionId: quiz.questions[0]._id,
+    ...unused, format: "mp3" });
   await QuizAttempt.create({
     quiz: quiz._id,
     user: id(),
@@ -658,7 +684,8 @@ test("historical attempt media is never physically deleted while unreferenced ow
 
 test("quiz deletion preserves history, archives safely, and only cleans history-free owned media", async () => {
   const { quiz: disposableQuiz } = await setupQuiz();
-  const disposableMedia = await QuizMedia.create({ quiz: disposableQuiz._id, questionId: disposableQuiz.questions[0]._id, mediaType: "image", publicId: `arun_thai/quiz_media/images/${unique("disposable")}`, resourceType: "image", url: "https://res.cloudinary.com/example/image/upload/disposable.webp", format: "webp" });
+  const disposableMedia = await QuizMedia.create({ quiz: disposableQuiz._id, questionId: disposableQuiz.questions[0]._id,
+    ...managedMedia("image"), format: "webp" });
   const cloudinary = require("../config/cloudinary");
   const originalDestroy = cloudinary.uploader.destroy;
   const destroyed = [];
@@ -716,7 +743,8 @@ test("quiz deletion preserves history, archives safely, and only cleans history-
 
 test("failed physical media cleanup is retained as a recoverable lifecycle record", async () => {
   const { quiz } = await setupQuiz();
-  const media = await QuizMedia.create({ quiz: quiz._id, questionId: quiz.questions[0]._id, mediaType: "image", publicId: `arun_thai/quiz_media/images/${unique("cleanup-failure")}`, resourceType: "image", url: "https://res.cloudinary.com/example/image/upload/cleanup-failure.webp", format: "webp" });
+  const media = await QuizMedia.create({ quiz: quiz._id, questionId: quiz.questions[0]._id,
+    ...managedMedia("image"), format: "webp" });
   const cloudinary = require("../config/cloudinary");
   const originalDestroy = cloudinary.uploader.destroy;
   cloudinary.uploader.destroy = async () => { throw new Error("temporary provider failure"); };

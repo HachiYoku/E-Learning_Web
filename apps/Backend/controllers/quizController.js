@@ -8,7 +8,7 @@ const QuizGoalAchievement = require("../models/quizGoalAchievementModel");
 const Enrollment = require("../models/enrollmentModel");
 const User = require("../models/userModel");
 const { writeAuditLog } = require("../services/auditLogger");
-const { uploadStream } = require("../services/uploadStream");
+const { uploadOwnedQuestionMedia } = require("../services/quizQuestionMediaUpload");
 const { submitQuiz: submitQuizRuntime, studentQuizHistory, studentQuizProjection, statusForError } = require("../services/quizRuntime");
 const { courseFinalProgress } = require("../services/courseFinalProgress");
 const { createRequest, listStudentRequests, cancelRequest, reviewRequest, QuizAttemptRequestError } = require("../services/quizAttemptRequestService");
@@ -94,13 +94,12 @@ async function uploadQuestionMedia(questions, quizId, uploadedMedia) {
     for (const mediaType of ["image", "audio"]) {
       const file = question[`${mediaType}File`];
       if (!file) continue;
-      const resourceType = mediaType === "image" ? "image" : "video";
-      const upload = await uploadStream(file.buffer, `arun_thai/quiz_media/${mediaType === "image" ? "images" : "audio"}`, { resource_type: resourceType });
-      const data = { quiz: quizId, questionId: question._id, mediaType, publicId: upload.public_id, resourceType: upload.resource_type || resourceType, url: upload.secure_url, format: upload.format || "", cleanupState: "pending_cleanup" };
-      // Keep ownership/recovery information before attempting Quiz persistence.
+      const record = await uploadOwnedQuestionMedia({ quizId, questionId: question._id,
+        mediaType, buffer: file.buffer });
+      const data = record;
+      // The ownership reservation exists before upload; confirmed media is
+      // tracked here for rollback after a later Quiz persistence failure.
       uploadedMedia.push(data);
-      const record = await QuizMedia.create(data);
-      data._id = record._id;
       question[mediaType] = data.url;
       question[`${mediaType}PublicId`] = data.publicId;
       question[`${mediaType}ResourceType`] = data.resourceType;

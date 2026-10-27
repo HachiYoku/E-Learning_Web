@@ -20,6 +20,8 @@ const QuizCreationRequest = require("../models/quizCreationRequestModel");
 const CoverAsset = require("../models/quizSetCoverAssetModel");
 const cloudinary = require("../config/cloudinary");
 const covers = require("../services/quizSetCoverService");
+const { cleanupQuizMedia, registerQuizMedia } = require("../services/quizMediaLifecycle");
+const { uploadOwnedQuestionMedia } = require("../services/quizQuestionMediaUpload");
 const { TESTING_FOLDER } = require("../services/quizSetCoverEnvironment");
 const User = require("../models/userModel");
 const sets = require("../services/standaloneQuizSets");
@@ -69,7 +71,7 @@ async function pauseNextSetFence(run) {
   try { return await run({ entered: entered.promise, release: release.resolve }); }
   finally { release.resolve(); QuizSet.findOneAndUpdate = original; }
 }
-let mongo; let directory; let server; let base; let oldSecret; let mongoUri; let configuredCloud;
+let mongo; let directory; let server; let base; let oldSecret; let mongoUri; let configuredCloud; let oldMediaEnv;
 
 async function activeSet() {
   const set = await sets.createSet({ name: "UAT Set", difficulty: "Beginner" });
@@ -117,9 +119,9 @@ function mockMediaCloud({ failAt = 0, failDestroy = false } = {}) {
     final(done) {
       uploads += 1;
       if (uploads === failAt) { callback(new Error("Simulated upload failure")); done(); return; }
-      const publicId = `arun_thai/quiz_media/${options.resource_type}/${new mongoose.Types.ObjectId()}`;
+      const publicId = `${options.folder}/${options.public_id}`;
       callback(null, { public_id: publicId, resource_type: options.resource_type,
-        secure_url: `https://res.cloudinary.com/example/${options.resource_type}/upload/${publicId}`,
+        secure_url: `https://res.cloudinary.com/du6lhdq8t/${options.resource_type}/upload/${publicId}.${options.resource_type === "image" ? "png" : "mp3"}`,
         format: options.resource_type === "image" ? "png" : "mp3" });
       done();
     },
@@ -130,6 +132,19 @@ function mockMediaCloud({ failAt = 0, failDestroy = false } = {}) {
   });
   return { get uploads() { return uploads; }, upload, destroy,
     restore() { upload.mock.restore(); destroy.mock.restore(); } };
+}
+
+async function managedMedia({ environment = "testing", mediaType = "image", legacy = false,
+  wrongId = false, state = "pending_cleanup" } = {}) {
+  const recordId = id();
+  const resourceType = mediaType === "image" ? "image" : "video";
+  const folder = `arun_thai/${environment}/quiz_media/${mediaType === "image" ? "images" : "audio"}`;
+  const publicId = legacy ? `arun_thai/quiz_media/images/${recordId}`
+    : `${folder}/${wrongId ? id() : recordId}`;
+  return QuizMedia.create({ _id: recordId, quiz: id(), questionId: id(), mediaType,
+    ...(legacy ? {} : { environment }), publicId, resourceType,
+    url: `https://res.cloudinary.com/du6lhdq8t/${resourceType}/upload/${publicId}.${mediaType === "image" ? "png" : "mp3"}`,
+    cleanupState: state });
 }
 
 before(async () => {
@@ -148,6 +163,12 @@ before(async () => {
   await mongoose.connect(mongoUri,
     { autoIndex: false, autoCreate: false });
   oldSecret = process.env.JWT_SECRET; process.env.JWT_SECRET = "isolated-quiz-set-test-secret";
+  oldMediaEnv = Object.fromEntries(["QUIZ_QUESTION_MEDIA_ENV", "NODE_ENV", "MONGO_DB", "STANDALONE_QUIZ_EXPECTED_DB",
+    "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET", "CLOUDINARY_URL"]
+    .map((key) => [key, process.env[key]]));
+  for (const [key, value] of Object.entries(coverEnv)) process.env[key] = value;
+  process.env.QUIZ_QUESTION_MEDIA_ENV = "testing";
+  delete process.env.CLOUDINARY_URL;
   const app = express(); app.use(express.json()); app.use("/quizzes", require("../routes/quiz"));
   app.use(errorHandler);
   server = app.listen(apiPort, "127.0.0.1"); base = `http://127.0.0.1:${apiPort}`;
@@ -162,6 +183,9 @@ after(async () => {
   configuredCloud?.mock.restore();
   if (server) await new Promise((resolve) => server.close(resolve));
   if (oldSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = oldSecret;
+  for (const [key, value] of Object.entries(oldMediaEnv || {})) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
   await mongoose.disconnect();
   if (mongo && mongo.exitCode === null) await new Promise((resolve) => { mongo.once("exit", resolve); mongo.kill("SIGTERM"); });
   if (directory) await fs.rm(directory, { recursive: true, force: true });
@@ -333,9 +357,13 @@ test("one multipart Save creates a Set draft with owned image and audio; replay 
     assert.equal(first.body.draft.version, 1);
     assert.equal(first.body.quizSetId, String(set._id));
     assert.equal(cloud.uploads, 2);
+    assert.ok(cloud.upload.mock.calls.every(({ arguments: [options] }) =>
+      options.overwrite === false && options.unique_filename === false
+      && options.folder.startsWith("arun_thai/testing/quiz_media/")));
     const owned = await QuizMedia.find({ quiz: first.body.id });
     assert.equal(owned.length, 2);
     assert.ok(owned.every((item) => item.cleanupState === "active"));
+    assert.deepEqual(new Set(owned.map((item) => item.format)), new Set(["png", "mp3"]));
     assert.equal(String(owned[0].questionId), String(first.body.draft.questions[0]._id));
     const replay = await mediaRequest(route, token, mediaBody(key, content, media));
     assert.equal(replay.status, 201);
@@ -349,6 +377,155 @@ test("one multipart Save creates a Set draft with owned image and audio; replay 
     const published = await revisions.publishDraft(first.body.id, 1);
     assert.equal(published.publishedRevision, 1);
     assert.equal(published.questions[0].imagePublicId, first.body.draft.questions[0].imagePublicId);
+  } finally { cloud.restore(); }
+});
+
+test("a production-mode upload reserves a production-owned ID before provider upload", async () => {
+  const cloud = mockMediaCloud();
+  const previous = { NODE_ENV: process.env.NODE_ENV, QUIZ_QUESTION_MEDIA_ENV: process.env.QUIZ_QUESTION_MEDIA_ENV,
+    MONGO_DB: process.env.MONGO_DB, STANDALONE_QUIZ_EXPECTED_DB: process.env.STANDALONE_QUIZ_EXPECTED_DB };
+  try {
+    Object.assign(process.env, { NODE_ENV: "production", QUIZ_QUESTION_MEDIA_ENV: "production",
+      MONGO_DB: "mongodb+srv://production.example.test/app_data", STANDALONE_QUIZ_EXPECTED_DB: "app_data" });
+    const record = await uploadOwnedQuestionMedia({ quizId: id(), questionId: id(),
+      mediaType: "audio", buffer: audioBytes });
+    assert.equal(record.environment, "production");
+    assert.equal(record.publicId, `arun_thai/production/quiz_media/audio/${record._id}`);
+    assert.equal(cloud.upload.mock.calls[0].arguments[0].overwrite, false);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+    cloud.restore();
+  }
+});
+
+test("question-media ownership reservation exists before the upload stream completes", async () => {
+  let observedState;
+  const upload = mock.method(cloudinary.uploader, "upload_stream", (options, callback) => new Writable({
+    write(_chunk, _encoding, done) { done(); },
+    final(done) {
+      const publicId = `${options.folder}/${options.public_id}`;
+      QuizMedia.findOne({ publicId }).then((record) => {
+        observedState = record?.cleanupState;
+        callback(null, { public_id: publicId, resource_type: "image",
+          secure_url: `https://res.cloudinary.com/du6lhdq8t/image/upload/${publicId}.png`, format: "png" });
+        done();
+      }, done);
+    },
+  }));
+  try {
+    const record = await uploadOwnedQuestionMedia({ quizId: id(), questionId: id(),
+      mediaType: "image", buffer: imageBytes });
+    assert.equal(observedState, "reserved");
+    assert.equal(record.cleanupState, "pending_cleanup");
+  } finally { upload.mock.restore(); }
+});
+
+test("missing or invalid question-media environment blocks upload before ownership or provider calls", async () => {
+  const cloud = mockMediaCloud();
+  const previous = process.env.QUIZ_QUESTION_MEDIA_ENV;
+  try {
+    for (const value of [undefined, "staging"]) {
+      if (value === undefined) delete process.env.QUIZ_QUESTION_MEDIA_ENV;
+      else process.env.QUIZ_QUESTION_MEDIA_ENV = value;
+      await assert.rejects(uploadOwnedQuestionMedia({ quizId: id(), questionId: id(),
+        mediaType: "image", buffer: imageBytes }), /environment is not configured/);
+    }
+    assert.equal(await QuizMedia.countDocuments(), 0);
+    assert.equal(cloud.upload.mock.callCount(), 0);
+  } finally {
+    if (previous === undefined) delete process.env.QUIZ_QUESTION_MEDIA_ENV;
+    else process.env.QUIZ_QUESTION_MEDIA_ENV = previous;
+    cloud.restore();
+  }
+});
+
+test("question-media cleanup refuses other environments, legacy IDs, and mismatched ownership", async () => {
+  const cloud = mockMediaCloud();
+  try {
+    for (const options of [{ environment: "production" }, { legacy: true }, { wrongId: true }]) {
+      const record = await managedMedia(options);
+      assert.equal(await cleanupQuizMedia(record), false);
+      assert.equal((await QuizMedia.findById(record._id)).cleanupError,
+        options.legacy ? "legacy_media_unverified" : "ownership_mismatch");
+    }
+    assert.equal(cloud.destroy.mock.callCount(), 0);
+    const valid = await managedMedia({ mediaType: "audio" });
+    assert.equal(await cleanupQuizMedia(valid), true);
+    assert.equal(cloud.destroy.mock.callCount(), 1);
+    assert.equal((await QuizMedia.findById(valid._id)).cleanupState, "deleted");
+  } finally { cloud.restore(); }
+});
+
+test("concurrent cleanup claims one owned asset once", async () => {
+  const record = await managedMedia();
+  const entered = deferred();
+  const release = deferred();
+  let calls = 0;
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => {
+    calls += 1;
+    entered.resolve();
+    await release.promise;
+    return { result: "ok" };
+  });
+  try {
+    const first = cleanupQuizMedia(record);
+    await entered.promise;
+    assert.equal(await cleanupQuizMedia(record), false);
+    release.resolve();
+    assert.equal(await first, true);
+    assert.equal(calls, 1);
+    assert.equal((await QuizMedia.findById(record._id)).cleanupState, "deleted");
+  } finally { release.resolve(); destroy.mock.restore(); }
+});
+
+test("reconciliation cannot reactivate question media while deletion is claimed", async () => {
+  const record = await managedMedia();
+  const entered = deferred();
+  const release = deferred();
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => {
+    entered.resolve();
+    await release.promise;
+    return { result: "ok" };
+  });
+  const quiz = { _id: record.quiz, questions: [{ _id: record.questionId,
+    image: record.url, imagePublicId: record.publicId }] };
+  try {
+    const cleanup = cleanupQuizMedia(record);
+    await entered.promise;
+    assert.equal((await QuizMedia.findById(record._id)).cleanupState, "cleanup_processing");
+    await assert.rejects(registerQuizMedia(quiz, { existingOnly: true }), /requires recovery/);
+    await assert.rejects(registerQuizMedia(quiz));
+    assert.equal((await QuizMedia.findById(record._id)).cleanupState, "cleanup_processing");
+    release.resolve();
+    assert.equal(await cleanup, true);
+    assert.equal((await QuizMedia.findById(record._id)).cleanupState, "deleted");
+  } finally { release.resolve(); destroy.mock.restore(); }
+});
+
+test("unknown upload outcomes retain reservations and pending retry cannot delete legacy media", async () => {
+  const cloud = mockMediaCloud({ failAt: 1 });
+  try {
+    await assert.rejects(uploadOwnedQuestionMedia({ quizId: id(), questionId: id(), mediaType: "image",
+      buffer: imageBytes }), /Simulated upload failure/);
+    const reservation = await QuizMedia.findOne({ cleanupState: "reserved" });
+    assert.ok(reservation);
+    assert.equal(reservation.url, "");
+    assert.equal(await cleanupQuizMedia(reservation), false);
+    const legacy = await managedMedia({ legacy: true });
+    await QuizMedia.collection.updateOne({ _id: legacy._id },
+      { $set: { createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) } });
+    const set = await activeSet();
+    const admin = await User.create({ name: "Admin", email: "media-guard@example.test", password: String(id()),
+      role: "admin", isVerified: true, isActive: true });
+    const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const response = await mediaRequest(`/admin/standalone/sets/${set._id}/quizzes`, token,
+      mediaBody(creationId(), draft(), [{ field: "questionImage_0", bytes: imageBytes, type: "image/png", name: "safe.png" }]));
+    assert.equal(response.status, 201);
+    assert.equal(cloud.destroy.mock.callCount(), 0);
+    assert.equal((await QuizMedia.findById(reservation._id)).cleanupState, "reserved");
+    assert.equal((await QuizMedia.findById(legacy._id)).cleanupError, "legacy_media_unverified");
   } finally { cloud.restore(); }
 });
 
