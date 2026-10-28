@@ -1,6 +1,6 @@
-﻿import { useContext, useEffect, useRef, useState } from "react";
+﻿import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, UNSAFE_NavigationContext, useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, Maximize2, Volume2, X } from "lucide-react";
+import { ChevronDown, History, Maximize2, Volume2, X } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -71,7 +71,7 @@ function QuestionAudio({ src, label, onFailure, onReady }) {
   return <div className="mt-5 flex justify-center"><audio ref={audioRef} preload="metadata" src={src} onLoadedData={onReady} onCanPlay={onReady} onPlay={(event) => { if (activeQuizAudio && activeQuizAudio !== event.currentTarget) { activeQuizAudio.pause(); activeQuizAudio.currentTime = 0; } activeQuizAudio = event.currentTarget; setPlaying(true); }} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} onError={onFailure} /><button type="button" onClick={playFromBeginning} aria-label={label ? `Play question audio: ${label}` : "Play question audio"} className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20 ${playing ? "border-[#E58C1A] bg-[#E58C1A] text-white" : "border-[#E58C1A]/25 bg-[#FFF1D0] text-[#C97112] hover:bg-[#F8C56A] hover:text-[#2D2E30]"}`}><Volume2 className={`h-5 w-5 ${playing ? "animate-pulse motion-reduce:animate-none" : ""}`} aria-hidden="true" /><span>Tap to listen</span></button></div>;
 }
 
-function FinalAnswerReview({ questions, review, allowCorrectAnswers = true }) {
+function FinalAnswerReview({ questions, review, allowCorrectAnswers = true, historical = false, onEnlargeImage }) {
   return (
     <div className="mt-8 space-y-5 text-left">
       {questions.map((item, index) => {
@@ -81,21 +81,49 @@ function FinalAnswerReview({ questions, review, allowCorrectAnswers = true }) {
         const hasCorrectAnswer = Number.isInteger(correctAnswerIndex);
 
         return (
-          <article key={item._id || item.id || index} className={`overflow-hidden rounded-2xl border ${isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
-            {item.image ? <img src={item.image} alt={item.imageDecorative ? "" : item.imageAlt || `Question ${index + 1}`} className="h-48 w-full object-contain sm:h-64" /> : null}
+          <article key={item._id || item.id || index} className={`overflow-hidden rounded-2xl border ${historical ? "border-[#2D2E30]/10 bg-[#FFFDF8]" : isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+            {item.image ? historical ? <div className="mx-auto mt-5 max-w-xl rounded-[1.5rem] bg-[#FFF9EA] p-2 shadow-inner sm:p-3 lg:max-w-lg">
+              <button type="button" onClick={(event) => onEnlargeImage(event.currentTarget, item, index)} aria-label={`View question ${index + 1} image larger`} className="group relative block w-full cursor-zoom-in rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/30">
+                <img src={item.image} alt={item.imageDecorative ? "" : item.imageAlt || `Question ${index + 1}`} className="mx-auto max-h-64 max-w-full rounded-2xl object-contain shadow-md" />
+                <span aria-hidden="true" className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 rounded-full bg-[#2D2E30]/85 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition group-hover:bg-[#2D2E30]"><Maximize2 size={14} />View larger</span>
+              </button>
+            </div> : <img src={item.image} alt={item.imageDecorative ? "" : item.imageAlt || `Question ${index + 1}`} className="h-48 w-full object-contain sm:h-64" /> : null}
             <div className="p-4 sm:p-5">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Question {index + 1}</p>
               <h3 className="mt-1 text-lg font-bold text-[#2D2E30]">{item.prompt || "Question"}</h3>
               {item.audio ? <QuestionAudio src={item.audio} label={item.audioLabel} /> : null}
+              {historical ? <>
+                <p className="mt-4 text-sm font-bold text-[#2D2E30]">Status: {review[index]?.isCorrect === true ? "Correct" : review[index]?.isCorrect === false ? "Incorrect" : "Unavailable"}</p>
+                <ol className="mt-4 grid gap-3 sm:grid-cols-2" aria-label={`Saved answer options for question ${index + 1}`}>
+                  {item.options.map((option, optionIndex) => {
+                    const selected = answerIndex === optionIndex;
+                    const correct = allowCorrectAnswers && hasCorrectAnswer && correctAnswerIndex === optionIndex;
+                    const incorrectSelected = selected && review[index]?.isCorrect === false;
+                    const label = selected && correct ? "Your answer · Correct" : correct ? "Correct answer" : incorrectSelected ? "Your answer · Incorrect" : selected ? "Your answer" : "";
+                    return <li key={optionIndex} className={`flex min-h-14 items-start gap-3 rounded-xl border-2 px-4 py-4 text-sm font-semibold leading-relaxed shadow-sm ${correct ? "border-[#2F7A49] bg-[#E9F4EA]" : incorrectSelected ? "border-[#B5443C] bg-[#FFF0EE]" : selected ? "border-[#E58C1A] bg-[#FFF4D8]" : "border-[#2D2E30]/10 bg-white"}`}>
+                      <span aria-hidden="true" className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${selected ? "bg-[#E58C1A] text-white" : "bg-[#F0E7DC] text-[#765F55]"}`}>{String.fromCharCode(65 + optionIndex)}</span>
+                      <span className="min-w-0 flex-1 break-words">{option}{label ? <span className="mt-1 block text-xs font-bold">{label}</span> : null}</span>
+                    </li>;
+                  })}
+                </ol>
+              </> : <>
               <p className={`mt-4 rounded-xl bg-white/80 px-3 py-2.5 text-sm ${isCorrect ? "text-[#4D7C57]" : "text-[#A84646]"}`}><span className="font-bold">Your answer:</span> {item.options[answerIndex] ?? "Answer unavailable"}</p>
               <p className={`mt-2 rounded-xl bg-white/80 px-3 py-2.5 text-sm ${isCorrect ? "text-[#4D7C57]" : "text-[#A84646]"}`}><span className="font-bold">{isCorrect ? "Right" : "Wrong"}</span></p>
               {allowCorrectAnswers && hasCorrectAnswer ? <p className="mt-2 rounded-xl bg-white/80 px-3 py-2.5 text-sm text-[#4D7C57]"><span className="font-bold">Correct answer:</span> {item.options[correctAnswerIndex] ?? "Answer unavailable"}</p> : null}
+              </>}
             </div>
           </article>
         );
       })}
     </div>
   );
+}
+
+function hasCompleteHistoricalReview(attempt) {
+  const questions = attempt?.snapshot?.questions;
+  return Array.isArray(questions) && questions.length > 0 && questions.length === attempt.total &&
+    Array.isArray(attempt.review) && attempt.review.length === questions.length &&
+    questions.every((question) => Array.isArray(question.options) && question.options.length >= 2 && question.options.every((option) => typeof option === "string" && option.trim()));
 }
 
 function QuizStateCard({ kind, onRestart, backPath }) {
@@ -143,6 +171,9 @@ function Quiz() {
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState(null);
   const [selectedAttemptId, setSelectedAttemptId] = useState(null);
+  const [historyScrollRequest, setHistoryScrollRequest] = useState(0);
+  const pendingHistoryScroll = useRef(null);
+  const historicalResultRef = useRef(null);
   const [quizSession, setQuizSession] = useState(null);
   const [sessionState, setSessionState] = useState("idle");
   const [sessionEpoch, setSessionEpoch] = useState(0);
@@ -165,6 +196,22 @@ function Quiz() {
   const [lightboxImage, setLightboxImage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useLayoutEffect(() => {
+    if (!pendingHistoryScroll.current || pendingHistoryScroll.current !== selectedAttemptId || !historicalResultRef.current) return;
+    pendingHistoryScroll.current = null;
+    historicalResultRef.current.scrollIntoView?.({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+      block: "start",
+    });
+  }, [selectedAttemptId, historyScrollRequest]);
+
+  const reviewHistoricalAttempt = (attempt) => {
+    const attemptId = String(attempt._id || attempt.attemptNumber);
+    pendingHistoryScroll.current = attemptId;
+    setSelectedAttemptId(attemptId);
+    setHistoryScrollRequest((count) => count + 1);
+  };
 
   const quiz = quizzes[quizIndex];
   const question = quiz?.questions?.[questionIndex];
@@ -473,19 +520,20 @@ function Quiz() {
   const currentMaxAttempts = result?.maxAttempts !== undefined ? result.maxAttempts : history?.maxAttempts !== undefined ? history.maxAttempts : quiz?.maxAttempts;
   const currentAttemptsUsed = result?.attemptsUsed ?? history?.attemptsUsed ?? quiz?.attemptsUsed ?? 0;
   const canRetake = currentMaxAttempts == null || currentAttemptsUsed < currentMaxAttempts;
+  const isTakingQuiz = !selectedHistoricalAttempt && !result && !isQuizLocked;
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FFFDF8]">
       <Navbar />
       <div className="bg-[#FFF9EA] px-4 pt-6 sm:px-6 sm:pt-8 md:px-10">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-7xl lg:max-w-[1200px]">
           <button onClick={() => navigate(backPath)} className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]">
             ← Back to {isCourseQuiz ? "course" : "lesson"}
           </button>
         </div>
       </div>
       <main className="flex-1 bg-[#FFF9EA] px-4 pb-8 pt-2 sm:px-6 sm:pb-10 sm:pt-2 md:px-10 md:pb-14">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-7xl lg:max-w-[1200px]">
         {pageState ? (
           <QuizStateCard kind={pageState} onRestart={retryQuiz} backPath={backPath} />
         ) : !quiz ? (
@@ -506,7 +554,7 @@ function Quiz() {
           </div>
         ) : (
           <>
-            {quiz.lessonContext?.title ? <div className="-mx-4 mb-4 border-y border-[#E58C1A]/15 bg-[#FFF9EA]/95 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6 md:-mx-10 md:px-10"><p className="mx-auto max-w-7xl text-sm font-bold text-[#2D2E30]">{`Lesson Quiz — ${quiz.lessonContext.title}`}</p></div> : null}
+            {quiz.lessonContext?.title ? <div className="-mx-4 mb-4 border-y border-[#E58C1A]/15 bg-[#FFF9EA]/95 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6 md:-mx-10 md:px-10"><p className="mx-auto max-w-7xl text-sm font-bold text-[#2D2E30] lg:max-w-[1200px]">{`Lesson Quiz — ${quiz.lessonContext.title}`}</p></div> : null}
             {quizzes.length > 1 && (
               <div className="mb-5 flex flex-wrap gap-2">
                 {quizzes.map((item, index) => (
@@ -523,47 +571,50 @@ function Quiz() {
               </div>
             )}
 
-            <div className="grid items-start gap-6 lg:grid-cols-5 lg:gap-8">
-              <aside className="lg:col-span-2">
-                <div className="rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-5 shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] sm:p-6 ">
-              <div className="flex flex-col gap-3 rounded-2xl bg-[#2D2E30] p-4 text-white sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#F8C56A]">{quiz.courseContext?.title || (isCourseQuiz ? "Course Quiz" : "Lesson Quiz")}</p><h2 className="mt-1 text-xl font-bold tracking-tight sm:text-2xl">{quiz.title}</h2></div>
-                <span className="w-fit rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80">{quiz.maxAttempts ? `${attemptsRemaining} of ${quiz.maxAttempts} attempts left` : 'Unlimited attempts'}</span>
+            <div className="grid items-start gap-6 lg:grid-cols-1 lg:gap-4">
+              <aside>
+                <div className={`overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-white shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] ${isTakingQuiz ? 'lg:rounded-2xl' : 'lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none'}`}>
+              <div className={`flex flex-col gap-3 bg-white p-5 text-[#2D2E30] sm:flex-row sm:items-center sm:justify-between sm:p-6 ${isTakingQuiz ? 'lg:p-5' : 'lg:rounded-2xl lg:border lg:border-[#2D2E30]/10 lg:p-7'}`}>
+                <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C97112]">{quiz.courseContext?.title || (isCourseQuiz ? "Course Quiz" : "Lesson Quiz")}</p><h2 className={`mt-1 break-words text-xl font-bold tracking-tight sm:text-2xl ${isTakingQuiz ? 'lg:text-2xl' : 'lg:text-3xl'}`}>{quiz.title}</h2></div>
+                <span className="w-fit rounded-full border border-[#E58C1A]/25 bg-[#FFF9EA] px-3 py-1.5 text-xs font-semibold text-[#765F55]">{quiz.maxAttempts ? `${attemptsRemaining} of ${quiz.maxAttempts} attempts left` : 'Unlimited attempts'}</span>
               </div>
 
               {history ? (
-                <section className="mt-6 overflow-hidden rounded-2xl border border-[#2D2E30]/10 bg-white text-left shadow-[0_14px_28px_-24px_rgba(80,48,19,0.45)]">
-                  <div className="flex flex-wrap items-start justify-between gap-3 bg-[#2D2E30] p-4 sm:p-5">
-                    <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#F8C56A]">Quiz record</p><h3 className="mt-1 font-bold text-white">Your progress</h3><p className="mt-1 text-xs text-white/80">Your previous attempts at a glance.</p></div>
+                <section className={`border-t border-[#2D2E30]/10 bg-white text-left ${isTakingQuiz ? '' : 'lg:mt-3 lg:min-w-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[#2D2E30]/10 lg:shadow-[0_14px_28px_-24px_rgba(80,48,19,0.45)]'}`}>
+                  <div className={`flex flex-wrap items-start justify-between gap-3 bg-white px-5 pb-2 pt-5 sm:px-6 sm:pt-6 ${isTakingQuiz ? 'lg:px-5 lg:pb-3 lg:pt-4' : 'lg:p-5'}`}>
+                    <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C97112]">Quiz record</p><h3 className="mt-1 font-bold text-[#2D2E30]">Your progress</h3><p className="mt-1 text-xs text-[#765F55]">Your previous attempts at a glance.</p></div>
                     {bestAttempt ? (
-                      <div className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-right">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-white/85">Best score</p>
-                        <p className="text-lg font-bold text-[#F8C56A]">{Math.round((bestAttempt.score / bestAttempt.total) * 100)}%</p>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-[#765F55]">Best score</p>
+                        <p className="text-lg font-bold text-[#C97112]">{Math.round((bestAttempt.score / bestAttempt.total) * 100)}%</p>
                       </div>
                     ) : (
-                      <p className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white/75">No attempts yet</p>
+                      <p className="rounded-xl border border-[#E58C1A]/20 bg-white px-3 py-2 text-xs font-semibold text-[#765F55]">No attempts yet</p>
                     )}
                   </div>
 
                   {history.attempts.length > 0 ? (
                     <div>
+                      <div className="px-5 pb-5 pt-3 sm:px-6 sm:pb-6 lg:px-5 lg:pb-4 lg:pt-0">
                       <button
                         type="button"
                         onClick={() => setIsAttemptHistoryOpen((current) => !current)}
                         aria-expanded={isAttemptHistoryOpen}
-                        className="flex w-full items-center justify-between border-t border-[#2D2E30]/10 px-4 py-3 text-left text-xs font-bold text-[#765F55] transition hover:bg-[#FFF9EA] hover:text-[#C97112] sm:px-5"
+                        aria-controls="quiz-attempt-history"
+                        className="inline-flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-[#E58C1A]/25 bg-[#FFF9EA] px-4 py-2.5 text-sm font-bold text-[#765F55] transition hover:border-[#E58C1A]/50 hover:bg-[#FFF1CE] hover:text-[#9A5816] active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] lg:w-auto"
                       >
-                        <span>View {history.attempts.length} previous {history.attempts.length === 1 ? 'attempt' : 'attempts'}</span>
+                        <span className="inline-flex items-center gap-2">{isAttemptHistoryOpen ? <X className="h-4 w-4" aria-hidden="true" /> : <History className="h-4 w-4" aria-hidden="true" />}{isAttemptHistoryOpen ? "Close" : "View previous attempts"}</span>
                         <ChevronDown className={`h-4 w-4 transition-transform ${isAttemptHistoryOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
                       </button>
-                      {isAttemptHistoryOpen ? <div className="space-y-2 border-t border-[#2D2E30]/10 p-4 sm:p-5">
+                      </div>
+                      <div id="quiz-attempt-history" hidden={!isAttemptHistoryOpen} className="space-y-2 border-t border-[#2D2E30]/10 p-4 sm:p-5">
                       {history.attempts.map((attempt) => (
-                        <button key={attempt._id || attempt.attemptNumber} type="button" onClick={() => setSelectedAttemptId(String(attempt._id || attempt.attemptNumber))} className="flex w-full items-center justify-between rounded-xl bg-[#FFF9EA] px-3 py-2.5 text-left text-sm text-[#2D2E30] transition hover:bg-[#FFF1CE] focus:outline-none focus:ring-2 focus:ring-[#E58C1A]" aria-label={`Review attempt ${attempt.attemptNumber}`}>
+                        <button key={attempt._id || attempt.attemptNumber} type="button" onClick={() => reviewHistoricalAttempt(attempt)} className="flex w-full items-center justify-between rounded-xl bg-[#FFF9EA] px-3 py-2.5 text-left text-sm text-[#2D2E30] transition hover:bg-[#FFF1CE] focus:outline-none focus:ring-2 focus:ring-[#E58C1A]" aria-label={`Review attempt ${attempt.attemptNumber}`}>
                           <span className="flex items-center gap-2 font-bold"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs text-[#C97112]">{attempt.attemptNumber}</span>Attempt {attempt.attemptNumber}</span>
                           <span className="font-bold text-[#B96128]">{attempt.score} / {attempt.total} <span className="text-xs">· {Math.round((attempt.score / attempt.total) * 100)}%</span></span>
                         </button>
                       ))}
-                      </div> : null}
+                      </div>
                     </div>
                   ) : null}
                 </section>
@@ -572,14 +623,14 @@ function Quiz() {
                 </div>
               </aside>
 
-              <section className="rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-5 shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] sm:p-8 md:p-10 lg:col-span-3">
+              <section ref={selectedHistoricalAttempt ? historicalResultRef : null} className={`scroll-mt-24 rounded-[1.75rem] border border-[#2D2E30]/10 bg-white p-5 shadow-[0_22px_55px_-40px_rgba(80,48,19,0.45)] sm:p-8 md:p-10 lg:rounded-2xl ${isTakingQuiz ? 'lg:p-6' : 'lg:p-8'}`}>
 
               {selectedHistoricalAttempt ? (
                 <div className="py-8 text-center">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">Previous result</p>
                   <h2 className="mt-2 text-2xl font-bold text-[#2D2E30]">Attempt {selectedHistoricalAttempt.attemptNumber}</h2>
                   <ResultSummary score={selectedHistoricalAttempt.score} total={selectedHistoricalAttempt.total} canRetake={canRetake} />
-                  {selectedHistoricalAttempt.snapshot?.questions?.length && selectedHistoricalAttempt.review ? <FinalAnswerReview questions={selectedHistoricalAttempt.snapshot.questions} review={selectedHistoricalAttempt.review} allowCorrectAnswers={!isCourseQuiz} /> : <p className="mt-6 text-sm text-[#765F55]">Detailed review is unavailable for this older attempt.</p>}
+                  {hasCompleteHistoricalReview(selectedHistoricalAttempt) ? <FinalAnswerReview questions={selectedHistoricalAttempt.snapshot.questions} review={selectedHistoricalAttempt.review} allowCorrectAnswers={!isCourseQuiz} historical onEnlargeImage={(origin, item, index) => { lightboxOrigin.current = origin; setLightboxImage({ src: item.image, alt: item.imageDecorative ? "" : item.imageAlt || `Question ${index + 1}` }); }} /> : <p className="mt-6 text-sm text-[#765F55]">Detailed review is unavailable for this older attempt.</p>}
                   <button type="button" onClick={() => setSelectedAttemptId(null)} className="mt-8 rounded-xl bg-[#F8C56A] px-5 py-3 font-bold text-[#2D2E30] hover:bg-[#E58C1A]">Back to current quiz</button>
                 </div>
               ) : result ? (
@@ -637,8 +688,8 @@ function Quiz() {
                     <p className="text-center text-xs font-bold uppercase tracking-[0.18em] text-[#C97112]">Final attempt</p>
                     <h2 className="mt-2 text-center text-2xl font-bold text-[#2D2E30]">Your last answers</h2>
                     <p className="mt-3 text-center text-sm text-[#765F55]">You have used all available attempts. Here is what you selected on your final attempt.</p>
-                    {lastAttempt?.snapshot?.questions?.length && Array.isArray(lastAttempt?.review) ? (
-                      <FinalAnswerReview questions={lastAttempt.snapshot.questions} review={lastAttempt.review} allowCorrectAnswers={!isCourseQuiz} />
+                    {hasCompleteHistoricalReview(lastAttempt) ? (
+                      <FinalAnswerReview questions={lastAttempt.snapshot.questions} review={lastAttempt.review} allowCorrectAnswers={!isCourseQuiz} historical onEnlargeImage={(origin, item, index) => { lightboxOrigin.current = origin; setLightboxImage({ src: item.image, alt: item.imageDecorative ? "" : item.imageAlt || `Question ${index + 1}` }); }} />
                     ) : (
                       <p className="mt-6 rounded-xl bg-white p-4 text-center text-sm text-[#765F55]">Your final answers are not available for attempts submitted before answer review was added.</p>
                     )}
@@ -671,11 +722,13 @@ function Quiz() {
                 </div>
               ) : (
                 <>
-                  <div className="mt-7 flex items-center justify-between gap-4">
+                  <div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 lg:gap-y-3">
                     <p className="text-sm font-bold text-[#C97112]">
                       Question {questionIndex + 1} of {quiz.questions.length}
                     </p>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#F0E7DC]">
+                    <p className="text-xs font-semibold text-[#C97112]">{answers.filter((answer) => answer !== null).length} of {quiz.questions.length} answered</p>
+                    <div className="order-last h-2 w-full flex-none overflow-hidden rounded-full bg-[#F0E7DC]">
                       <div
                         className="h-full rounded-full bg-[#E58C1A] transition-all"
                         style={{ width: `${((questionIndex + 1) / quiz.questions.length) * 100}%` }}
@@ -683,34 +736,35 @@ function Quiz() {
                     </div>
                   </div>
 
-                  <div className="mt-5 rounded-2xl border border-[#2D2E30]/10 bg-[#FFF9EA] p-3 sm:p-4">
-                    <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Questions</p><p className="text-xs font-semibold text-[#C97112]">{answers.filter((answer) => answer !== null).length} of {quiz.questions.length} answered</p></div>
+                  <div className="mt-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#765F55]">Questions</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {quiz.questions.map((_, index) => {
                         const isActive = index === questionIndex;
                         const isAnswered = answers[index] !== null;
-                        return <button key={index} type="button" onClick={() => setQuestionIndex(index)} className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold transition ${isActive ? 'bg-[#2D2E30] text-white shadow-sm' : isAnswered ? 'bg-[#FFF1CE] text-[#9A5816] hover:bg-[#F8C56A]' : 'bg-white text-[#765F55] hover:bg-[#FFF4D8] hover:text-[#C97112]'}`}>{index + 1}</button>
+                        return <button key={index} type="button" onClick={() => setQuestionIndex(index)} className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold transition lg:min-h-12 lg:min-w-12 ${isActive ? 'bg-[#2D2E30] text-white shadow-sm' : isAnswered ? 'bg-[#FFF1CE] text-[#9A5816] hover:bg-[#F8C56A]' : 'bg-[#FFF9EA] text-[#765F55] hover:bg-[#FFF4D8] hover:text-[#C97112]'}`}>{index + 1}</button>
                       })}
                     </div>
                   </div>
+                  </div>
 
-                  <section className="pb-14 pt-9">
-                    <h3 className="text-center text-xl font-bold leading-relaxed text-[#2D2E30] sm:text-2xl">
+                  <section className="mt-5 border-t border-[#2D2E30]/10 px-1 pb-7 pt-6 sm:px-2 lg:pb-6">
+                    <h3 className="text-center text-xl font-bold leading-relaxed text-[#2D2E30] sm:text-2xl lg:break-words">
                       {question.prompt || "What is this?"}
                     </h3>
-                    {question.image ? <div className="mx-auto mt-7 max-w-xl rounded-[1.5rem] bg-[#FFF9EA] p-2 shadow-inner sm:p-3">
+                    {question.image ? <div className="mx-auto mt-7 max-w-xl rounded-[1.5rem] bg-[#FFF9EA] p-2 shadow-inner sm:p-3 lg:max-w-lg">
                       <button type="button" onClick={(event) => { lightboxOrigin.current = event.currentTarget; setLightboxImage({ src: question.image, alt: question.imageDecorative ? "" : question.imageAlt || `Quiz question ${questionIndex + 1}` }); }} className="group relative block w-full cursor-zoom-in rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/30" aria-label="View question image larger"><img key={`image-${mediaRetry[questionIndex] || 0}`}
                         src={question.image}
                         alt={question.imageDecorative ? "" : question.imageAlt || `Quiz question ${questionIndex + 1}`}
                         onLoad={() => setFailedMedia((current) => ({ ...current, [questionIndex]: { ...current[questionIndex], image: "ready" } }))}
                         onError={() => setFailedMedia((current) => ({ ...current, [questionIndex]: { ...current[questionIndex], image: "failed" } }))}
-                        className="mx-auto aspect-video w-full rounded-2xl object-contain shadow-md sm:h-80"
+                        className="mx-auto aspect-video w-full rounded-2xl object-contain shadow-md sm:h-80 lg:max-h-64"
                       /><span aria-hidden="true" className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 rounded-full bg-[#2D2E30]/85 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition group-hover:bg-[#2D2E30] sm:bottom-3 sm:right-3"><Maximize2 size={14} />View larger</span></button>
                     </div> : null}
                     <QuestionAudio key={`${question._id || questionIndex}-audio-${mediaRetry[questionIndex] || 0}`} src={question.audio} label={question.audioLabel} onReady={() => setFailedMedia((current) => ({ ...current, [questionIndex]: { ...current[questionIndex], audio: "ready" } }))} onFailure={() => setFailedMedia((current) => ({ ...current, [questionIndex]: { ...current[questionIndex], audio: "failed" } }))} />
                     {Object.values(failedMedia[questionIndex] || {}).includes("failed") ? <div role="status" className="mx-auto mt-3 max-w-xl rounded-2xl border border-[#E58C1A]/20 bg-[#FFF9EA] px-4 py-3 text-sm text-[#765F55]"><p className="font-bold text-[#2D2E30]">{failedMedia[questionIndex]?.audio === "failed" ? "We couldn't load the audio" : "We couldn't load the image"}</p><p className="mt-1">Try loading it again before continuing.</p><button type="button" onClick={() => { setError(""); setFailedMedia((current) => ({ ...current, [questionIndex]: {} })); setMediaRetry((current) => ({ ...current, [questionIndex]: (current[questionIndex] || 0) + 1 })); }} className="mt-2 min-h-10 rounded-lg bg-[#FFF1CE] px-3 py-2 font-bold text-[#9A5816] hover:bg-[#F8C56A]">Try again</button></div> : null}
 
-                    <p className="mt-9 text-center text-xs font-bold uppercase tracking-[0.18em] text-[#765F55]">
+                    <p className="mt-9 text-center text-xs font-bold uppercase tracking-[0.18em] text-[#765F55] lg:mt-7">
                       Choose the best answer
                     </p>
 
@@ -719,7 +773,7 @@ function Quiz() {
                         <button
                           key={optionIndex}
                           onClick={() => chooseAnswer(optionIndex)}
-                          className={`flex min-h-14 items-center gap-3 rounded-xl border-2 px-4 py-4 text-left font-semibold shadow-sm transition ${
+                          className={`flex min-h-14 items-center gap-3 rounded-xl border-2 px-4 py-4 text-left font-semibold shadow-sm transition lg:text-sm lg:leading-relaxed ${
                             answers[questionIndex] === optionIndex
                               ? "border-[#E58C1A] bg-[#FFF4D8] text-[#2D2E30] shadow-[#E58C1A]/10"
                               : "border-[#2D2E30]/10 bg-white text-[#2D2E30] hover:border-[#E58C1A]/45 hover:bg-[#FFF9EA] hover:shadow-md"
@@ -733,11 +787,11 @@ function Quiz() {
                     {error ? <div className="mx-auto mt-4 max-w-lg rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
                   </section>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-8">
+                  <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-8 lg:mt-5 lg:border-[#2D2E30]/10 lg:pt-6">
                     <button
                       onClick={() => setQuestionIndex((current) => current - 1)}
                       disabled={questionIndex === 0}
-                      className="rounded-xl px-4 py-2.5 font-bold text-[#765F55] transition hover:bg-[#FFF4D8] hover:text-[#C97112] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-xl px-4 py-2.5 font-bold text-[#765F55] transition hover:bg-[#FFF4D8] hover:text-[#C97112] disabled:cursor-not-allowed disabled:opacity-40 lg:min-h-11 lg:text-sm"
                     >
                       Back
                     </button>
@@ -746,14 +800,14 @@ function Quiz() {
                       <button
                         onClick={handleFinishQuiz}
                         disabled={submitting || sessionState !== "ready"}
-                        className="rounded-xl bg-[#F8C56A] px-6 py-3 font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md"
+                        className="rounded-xl bg-[#F8C56A] px-6 py-3 font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md lg:min-h-11 lg:text-sm"
                       >
                         {submitting ? "Submitting…" : "Finish quiz"}
                       </button>
                     ) : (
                       <button
                         onClick={() => setQuestionIndex((current) => current + 1)}
-                        className="rounded-xl bg-[#F8C56A] px-6 py-3 font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md"
+                        className="rounded-xl bg-[#F8C56A] px-6 py-3 font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md lg:min-h-11 lg:text-sm"
                       >
                         Next question
                       </button>
