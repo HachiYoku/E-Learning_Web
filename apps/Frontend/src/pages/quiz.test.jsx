@@ -168,15 +168,144 @@ describe('Quiz result navigation', () => {
     expect(document.querySelector('.rounded-full.border-8')).toBeNull()
   })
 
+  it('uses a count-free accessible button to open and close previous attempts', async () => {
+    const user = userEvent.setup()
+    fetchQuizHistory.mockResolvedValueOnce({ attempts: [1, 2].map((number) => ({ _id: `attempt-${number}`, attemptNumber: number, score: 1, total: 1 })), attemptsUsed: 2, maxAttempts: null, bestScore: 100 })
+    renderLessonQuiz()
+    const open = await screen.findByRole('button', { name: 'View previous attempts' })
+    expect(open.textContent).not.toMatch(/\d/)
+    expect(open.getAttribute('aria-expanded')).toBe('false')
+    expect(open.getAttribute('aria-controls')).toBe('quiz-attempt-history')
+    expect(screen.queryByRole('button', { name: 'Review attempt 1' })).toBeNull()
+    await user.click(open)
+    const close = screen.getByRole('button', { name: 'Close' })
+    expect(close.getAttribute('aria-expanded')).toBe('true')
+    expect(close.textContent).not.toMatch(/\d/)
+    expect(screen.getByRole('button', { name: 'Review attempt 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Review attempt 2' })).toBeTruthy()
+    await user.click(close)
+    expect(screen.getByRole('button', { name: 'View previous attempts' }).getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('button', { name: 'Review attempt 1' })).toBeNull()
+  })
+
+  it.each(['Lesson', 'Final'])('keeps the %s quiz mobile header unified when history opens and an attempt is reviewed', async (quizType) => {
+    const user = userEvent.setup()
+    const isFinal = quizType === 'Final'
+    if (isFinal) {
+      fetchCourseQuizzes.mockResolvedValueOnce([{ ...lessonQuiz, _id: 'final-1', id: 'final-1', maxAttempts: 3 }])
+    }
+    fetchQuizHistory.mockResolvedValueOnce({
+      attempts: [{ _id: 'attempt-1', attemptNumber: 1, score: 1, total: 1 }],
+      attemptsUsed: 1,
+      maxAttempts: isFinal ? 3 : null,
+      bestScore: 100,
+    })
+    if (isFinal) {
+      render(<MemoryRouter initialEntries={['/app/course-quiz/course-1/final-1']}><Routes><Route path="/app/course-quiz/:courseId/:quizId" element={<Quiz />} /></Routes></MemoryRouter>)
+    } else {
+      renderLessonQuiz()
+    }
+
+    const title = await screen.findByRole('heading', { name: 'Greetings quiz' })
+    await screen.findByText('Your progress')
+    const header = title.closest('aside')
+    const expectUnifiedHeader = (reviewing = false) => {
+      expect(header.firstElementChild.className).toContain('bg-white')
+      expect(header.firstElementChild.className).toContain(reviewing ? 'lg:rounded-none' : 'lg:rounded-2xl')
+      expect(title.parentElement.parentElement.className).toContain('bg-white')
+      expect(screen.getByText('Your progress').closest('section').className).toContain('border-t')
+      expect(screen.getByText('Best score').nextElementSibling.className).toContain('text-[#C97112]')
+    }
+    expectUnifiedHeader()
+    await user.click(screen.getByRole('button', { name: 'View previous attempts' }))
+    expect(screen.getByRole('button', { name: 'Close' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Review attempt 1' })).toBeTruthy()
+    expectUnifiedHeader()
+    await user.click(screen.getByRole('button', { name: 'Review attempt 1' }))
+    expect(await screen.findByRole('heading', { name: 'Attempt 1' })).toBeTruthy()
+    expectUnifiedHeader(true)
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.getByRole('button', { name: 'View previous attempts' }).getAttribute('aria-expanded')).toBe('false')
+    expectUnifiedHeader(true)
+  })
+
+  it.each(['Lesson', 'Final'])('scrolls to the %s previous result only after an attempt is selected', async (quizType) => {
+    const user = userEvent.setup()
+    const isFinal = quizType === 'Final'
+    const previousScrollIntoView = Element.prototype.scrollIntoView
+    const previousMatchMedia = window.matchMedia
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    window.matchMedia = vi.fn().mockReturnValue({ matches: isFinal })
+    try {
+      if (isFinal) fetchCourseQuizzes.mockResolvedValueOnce([{ ...lessonQuiz, _id: 'final-1', id: 'final-1', maxAttempts: 3 }])
+      fetchQuizHistory.mockResolvedValueOnce({
+        attempts: [1, 2].map((number) => ({
+          _id: `attempt-${number}`, attemptNumber: number, score: 1, total: 1,
+          snapshot: { questions: [{ prompt: 'Original question', options: ['One', 'Two'], image: 'https://example.com/old-question.jpg', audio: 'https://example.com/old-question.mp3' }] },
+          review: [{ selectedAnswer: 0, isCorrect: true, correctAnswer: 0 }],
+        })),
+        attemptsUsed: 2,
+        maxAttempts: isFinal ? 3 : null,
+        bestScore: 100,
+      })
+      if (isFinal) {
+        render(<MemoryRouter initialEntries={['/app/course-quiz/course-1/final-1']}><Routes><Route path="/app/course-quiz/:courseId/:quizId" element={<Quiz />} /></Routes></MemoryRouter>)
+      } else {
+        renderLessonQuiz()
+      }
+
+      await user.click(await screen.findByRole('button', { name: 'View previous attempts' }))
+      expect(scrollIntoView).not.toHaveBeenCalled()
+      await user.click(screen.getByRole('button', { name: 'Review attempt 1' }))
+      const resultSection = screen.getByText('Previous result').closest('section')
+      expect(resultSection.className).toContain('scroll-mt-24')
+      expect(screen.getByRole('button', { name: 'View question 1 image larger' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Play question audio' })).toBeTruthy()
+      expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({ behavior: isFinal ? 'auto' : 'smooth', block: 'start' })
+      expect(scrollIntoView.mock.contexts[0]).toBe(resultSection)
+
+      await user.click(screen.getByRole('button', { name: 'Review attempt 2' }))
+      expect(screen.getByRole('heading', { name: 'Attempt 2' })).toBeTruthy()
+      expect(scrollIntoView).toHaveBeenCalledTimes(2)
+      expect(scrollIntoView.mock.contexts[1]).toBe(resultSection)
+      await user.click(screen.getByRole('button', { name: 'Close' }))
+      await user.click(screen.getByRole('button', { name: 'Back to current quiz' }))
+      expect(scrollIntoView).toHaveBeenCalledTimes(2)
+    } finally {
+      if (previousScrollIntoView) Element.prototype.scrollIntoView = previousScrollIntoView
+      else delete Element.prototype.scrollIntoView
+      window.matchMedia = previousMatchMedia
+    }
+  })
+
+  it('omits the previous-attempts button when history is empty', async () => {
+    renderLessonQuiz()
+    expect(await screen.findByText('No attempts yet')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'View previous attempts' })).toBeNull()
+  })
+
   it('opens an immutable Lesson attempt review after the live Quiz changes', async () => {
     const user = userEvent.setup()
     fetchQuizHistory.mockResolvedValueOnce({ attempts: [{ _id: 'old-attempt', attemptNumber: 1, score: 0, total: 1, snapshot: { title: 'Earlier lesson', revision: 1, questions: [{ _id: 'old-question', prompt: 'Original Thai greeting', options: ['Sawasdee', 'Goodbye'], image: 'https://example.com/old.jpg', imageAlt: 'Original lesson picture' }] }, review: [{ selectedAnswer: 1, correctAnswer: 0, isCorrect: false }] }], attemptsUsed: 1, maxAttempts: null, bestScore: 0 })
     renderLessonQuiz()
-    await user.click(await screen.findByRole('button', { name: /view 1 previous attempt/i }))
+    await user.click(await screen.findByRole('button', { name: 'View previous attempts' }))
     await user.click(screen.getByRole('button', { name: 'Review attempt 1' }))
     expect(screen.getByRole('heading', { name: 'Original Thai greeting' })).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Original lesson picture' })).toBeTruthy()
-    expect(screen.getByText(/correct answer:/i).parentElement.textContent).toContain('Sawasdee')
+    const options = screen.getByRole('list', { name: 'Saved answer options for question 1' })
+    expect([...options.children].map((option) => option.textContent)).toEqual(['ASawasdeeCorrect answer', 'BGoodbyeYour answer · Incorrect'])
+    expect(options.children[0].className).toContain('border-[#2F7A49]')
+    expect(options.children[1].className).toContain('border-[#B5443C]')
+    const imageButton = screen.getByRole('button', { name: 'View question 1 image larger' })
+    expect(imageButton.parentElement.className).toContain('bg-[#FFF9EA]')
+    expect(imageButton.querySelector('img').className).toContain('object-contain')
+    await user.click(imageButton)
+    expect(screen.getByRole('dialog', { name: 'Enlarged question image' })).toBeTruthy()
+    await user.click(screen.getByRole('dialog', { name: 'Enlarged question image' }).querySelector('button[aria-label="Close"]'))
+    expect(screen.queryByRole('dialog', { name: 'Enlarged question image' })).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(imageButton))
+    expect(screen.getByText('Status: Incorrect')).toBeTruthy()
     expect(screen.getByText('Your score')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Back to current quiz' }))
     expect(screen.getByText('Choose hello')).toBeTruthy()
@@ -189,21 +318,49 @@ describe('Quiz result navigation', () => {
     fetchQuizHistory.mockResolvedValueOnce({ attempts: [attempt], attemptsUsed: 3, maxAttempts: 3, bestScore: 0 })
     const view = () => render(<MemoryRouter initialEntries={['/app/course-quiz/course-1/final-1']}><Routes><Route path="/app/course-quiz/:courseId/:quizId" element={<Quiz />} /></Routes></MemoryRouter>)
     const first = view()
-    await user.click(await screen.findByRole('button', { name: /view 1 previous attempt/i }))
+    await user.click(await screen.findByRole('button', { name: 'View previous attempts' }))
     await user.click(screen.getByRole('button', { name: 'Review attempt 1' }))
     expect(screen.getByRole('heading', { name: 'Original Final wording' })).toBeTruthy()
-    expect(screen.getByText('Wrong')).toBeTruthy()
-    expect(screen.queryByText(/correct answer:/i)).toBeNull()
+    const options = screen.getByRole('list', { name: 'Saved answer options for question 1' })
+    expect([...options.children].map((option) => option.textContent)).toEqual(['AOld correct', 'BOld selectedYour answer · Incorrect'])
+    expect(options.children[0].className).toContain('bg-white')
+    expect(options.children[1].className).toContain('border-[#B5443C]')
+    expect(screen.getByText('Status: Incorrect')).toBeTruthy()
+    expect(screen.queryByText(/correct answer/i)).toBeNull()
     expect(screen.getByText("You've used all available attempts.")).toBeTruthy()
     first.unmount()
     fetchCourseQuizzes.mockResolvedValueOnce([{ ...lessonQuiz, _id: 'final-1', id: 'final-1', maxAttempts: 4, attemptsUsed: 3 }])
     fetchQuizHistory.mockResolvedValueOnce({ attempts: [{ ...attempt, review: [{ ...attempt.review[0], correctAnswer: 0 }] }], attemptsUsed: 3, maxAttempts: 4, bestScore: 0 })
     view()
-    await user.click(await screen.findByRole('button', { name: /view 1 previous attempt/i }))
+    await user.click(await screen.findByRole('button', { name: 'View previous attempts' }))
     await user.click(screen.getByRole('button', { name: 'Review attempt 1' }))
     expect(screen.getByText('Your score')).toBeTruthy()
-    expect(screen.queryByText(/correct answer:/i)).toBeNull()
+    expect(screen.queryByText(/correct answer/i)).toBeNull()
+    expect(screen.getByRole('list', { name: 'Saved answer options for question 1' }).children[0].className).toContain('bg-white')
     expect(screen.getByText("You're making progress. Try again!")).toBeTruthy()
+  })
+
+  it('uses neutral Final selection styling when question correctness is unavailable', async () => {
+    const user = userEvent.setup()
+    fetchCourseQuizzes.mockResolvedValueOnce([{ ...lessonQuiz, _id: 'final-1', id: 'final-1', maxAttempts: 3 }])
+    fetchQuizHistory.mockResolvedValueOnce({ attempts: [{ _id: 'attempt-1', attemptNumber: 1, score: 0, total: 1, snapshot: { questions: [{ prompt: 'Original question', options: ['A', 'B'] }] }, review: [{ selectedAnswer: 1 }] }], attemptsUsed: 1, maxAttempts: 3, bestScore: 0 })
+    render(<MemoryRouter initialEntries={['/app/course-quiz/course-1/final-1']}><Routes><Route path="/app/course-quiz/:courseId/:quizId" element={<Quiz />} /></Routes></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'View previous attempts' }))
+    await user.click(screen.getByRole('button', { name: 'Review attempt 1' }))
+    const options = screen.getByRole('list', { name: 'Saved answer options for question 1' })
+    expect(options.children[1].className).toContain('border-[#E58C1A]')
+    expect(screen.getByText('Status: Unavailable')).toBeTruthy()
+    expect(screen.queryByText(/correct answer/i)).toBeNull()
+  })
+
+  it('keeps the older-attempt fallback when original options are incomplete', async () => {
+    const user = userEvent.setup()
+    fetchQuizHistory.mockResolvedValueOnce({ attempts: [{ _id: 'legacy', attemptNumber: 1, score: 0, total: 1, snapshot: { questions: [{ prompt: 'Old question', options: [] }] }, review: [{ selectedAnswer: 0, isCorrect: false }] }], attemptsUsed: 1, maxAttempts: null, bestScore: 0 })
+    renderLessonQuiz()
+    await user.click(await screen.findByRole('button', { name: 'View previous attempts' }))
+    await user.click(screen.getByRole('button', { name: 'Review attempt 1' }))
+    expect(screen.getByText('Detailed review is unavailable for this older attempt.')).toBeTruthy()
+    expect(screen.queryByRole('list', { name: /saved answer options/i })).toBeNull()
   })
 
   it('returns a lesson quiz result to the exact originating lesson and retains Try again', async () => {

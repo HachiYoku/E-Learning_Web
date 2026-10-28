@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { startGeneralPracticeSession, submitGeneralPracticeQuiz } from "../services/generalPracticeService"
 import { generalPracticeErrorMessage, isStandaloneTransactionConflict } from "../utils/generalPracticeErrors"
+import GeneralPracticeQuestionMedia from "../components/GeneralPracticeQuestionMedia"
 
 function validSession(value) {
   return typeof value?.sessionId === "string" && value.sessionId.length > 0
@@ -220,8 +221,7 @@ function GeneralPracticeTake() {
           <section className="mt-5 rounded-2xl border border-[#2D2E30]/10 bg-white p-5 sm:p-8" aria-label={`Question ${currentIndex + 1}`}>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-accent">Question {currentIndex + 1}</p>
             <h2 className="mt-5 break-words text-center text-xl font-bold leading-relaxed sm:text-2xl">{question.prompt || "Look or listen, then choose an answer."}</h2>
-            {question.image ? <img src={question.image} alt={question.imageDecorative ? "" : question.imageAlt || "Question illustration"} className="mt-5 max-h-72 w-full rounded-xl object-contain" /> : null}
-            {question.audio ? <div className="mt-5"><p className="mb-2 text-sm font-semibold text-[#765F55]">{question.audioLabel || "Question audio"}</p><audio controls preload="none" src={question.audio} aria-label={question.audioLabel || "Question audio"} className="w-full">Your browser does not support audio.</audio></div> : null}
+            <GeneralPracticeQuestionMedia key={question._id || currentIndex} question={question} index={currentIndex} />
             <fieldset className="mx-auto mt-7 grid max-w-lg gap-4 sm:grid-cols-2">
               <legend className="mb-4 text-center text-xs font-bold uppercase tracking-[0.18em] text-[#765F55]">Choose the best answer<span className="sr-only"> for question {currentIndex + 1}</span></legend>
               {question.options.map((option, optionIndex) => (
