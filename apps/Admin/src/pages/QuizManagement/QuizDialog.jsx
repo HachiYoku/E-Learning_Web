@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 
-export default function QuizDialog({ title, message, confirmText, cancelText = 'Cancel', onConfirm, onCancel, busy = false }) {
+export default function QuizDialog({ title, message, confirmText, cancelText = 'Cancel', onConfirm, onCancel, busy = false, showClose = false }) {
   const dialog = useRef(null);
   const cancel = useRef(onCancel);
   cancel.current = onCancel;
@@ -22,7 +23,7 @@ export default function QuizDialog({ title, message, confirmText, cancelText = '
   }, []);
   return createPortal(<div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#2D2E30]/55 p-4">
     <section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="quiz-confirmation-title" aria-describedby="quiz-confirmation-description" className="w-full max-w-lg overflow-hidden rounded-3xl border border-[#E58C1A]/20 bg-white shadow-2xl">
-      <h2 id="quiz-confirmation-title" className="bg-[#FFF9EA] p-6 text-xl font-bold text-[#2D2E30]">{title}</h2>
+      {showClose ? <div className="flex items-center justify-between gap-3 bg-[#FFF9EA] p-6"><h2 id="quiz-confirmation-title" className="text-xl font-bold text-[#2D2E30]">{title}</h2><button type="button" aria-label="Close and stay on quiz editor" title="Stay and continue editing" onClick={onCancel} disabled={busy} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[#765F55] hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#E58C1A] disabled:opacity-50"><X size={20} aria-hidden="true" /></button></div> : <h2 id="quiz-confirmation-title" className="bg-[#FFF9EA] p-6 text-xl font-bold text-[#2D2E30]">{title}</h2>}
       <p id="quiz-confirmation-description" className="p-6 text-sm leading-6 text-[#765F55]">{message}</p>
       <div className="flex flex-wrap justify-end gap-3 border-t border-[#2D2E30]/10 p-5">
         <button type="button" onClick={onCancel} disabled={busy} className="rounded-xl border border-[#2D2E30]/15 px-5 py-3 font-bold text-[#765F55] focus:ring-4 focus:ring-[#E58C1A]/25 disabled:cursor-not-allowed disabled:opacity-50">{cancelText}</button>

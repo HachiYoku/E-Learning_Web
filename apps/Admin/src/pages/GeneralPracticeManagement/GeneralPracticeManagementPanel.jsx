@@ -69,10 +69,10 @@ function GeneralPracticeManagementPanel({ quiz, onQuizChange }) {
       try {
         const latest = await fetchGeneralPracticeQuiz(quiz.id)
         onQuizChange(latest)
-        setNotice(action === 'retry' && latest.mediaProcessing === 'retry_required' ? 'Media processing still requires retry. No draft save or publication was repeated.' : `${actions[action].confirmText} confirmed. Current quiz state loaded.`)
+        setNotice(action === 'publish' && quiz.published ? 'publish-success' : action === 'retry' && latest.mediaProcessing === 'retry_required' ? 'Media processing still requires retry. No draft save or publication was repeated.' : `${actions[action].confirmText} confirmed. Current quiz state loaded.`)
       } catch {
         setReconciliationRequired(true)
-        setNotice(`${actions[action].confirmText} confirmed by the server, but the latest state could not be reloaded.`)
+        setNotice(action === 'publish' && quiz.published ? 'publish-success' : `${actions[action].confirmText} confirmed by the server, but the latest state could not be reloaded.`)
       }
     } catch (failure) {
       if (failure.status === 409) {
@@ -104,7 +104,7 @@ function GeneralPracticeManagementPanel({ quiz, onQuizChange }) {
     <p className="mt-1 text-sm text-[#765F55]">Media processing: {quiz.mediaProcessing === 'retry_required' ? 'Retry required' : 'Complete'}</p>
     {mediaPending ? <p role="status" className="mt-3 rounded-xl border border-[#E58C1A]/30 bg-[#FFF9EA] p-3 text-sm text-[#765F55]">A Quiz write has already committed. Retry media processing; do not save or publish again to recover it.</p> : null}
     {error ? <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-    {notice ? <p role="status" className="mt-3 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">{notice}</p> : null}
+    {notice ? <div role="status" className="mt-3 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">{notice === 'publish-success' ? <><p className="font-bold">Quiz Update Published</p><p className="mt-1">Your changes are now live for new quiz attempts. Students who started this quiz before the update will continue using their previous version until their current session ends or expires (up to 24 hours).</p></> : notice}</div> : null}
     {reconciliationRequired ? <button type="button" disabled={busy} onClick={reloadCurrent} className="mt-4 min-h-11 rounded-xl bg-[#2D2E30] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#E58C1A] focus:outline-none focus:ring-2 focus:ring-[#E58C1A] disabled:opacity-50">Reload current quiz</button> : null}
     <div className="mt-4 flex flex-wrap gap-2">
       {quiz.draft && ['draft', 'published'].includes(quiz.status) ? button('publish', 'Publish draft') : null}

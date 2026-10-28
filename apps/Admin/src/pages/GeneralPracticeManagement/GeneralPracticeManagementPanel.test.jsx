@@ -40,6 +40,20 @@ describe('General Practice management actions', () => {
     await waitFor(() => expect(publishGeneralPracticeDraft).toHaveBeenCalledWith('quiz-1', 2))
     await waitFor(() => expect(fetchGeneralPracticeQuiz).toHaveBeenCalledWith('quiz-1'))
     expect(screen.getByText(/Unpublished changes: No/)).toBeTruthy()
+    expect(screen.getByText('Quiz Update Published')).toBeTruthy()
+    expect(screen.getByText(/Students who started this quiz before the update/)).toBeTruthy()
+  })
+
+  it('does not describe an initial publication as an update to existing sessions', async () => {
+    const user = userEvent.setup()
+    const draft = { ...base, status: 'draft', published: null, draft: { version: 1 } }
+    const published = { ...draft, status: 'published', published: { revision: 1 }, draft: null }
+    publishGeneralPracticeDraft.mockResolvedValue(published)
+    fetchGeneralPracticeQuiz.mockResolvedValue(published)
+    render(<Harness initial={draft} />)
+    await confirm(user, 'Publish draft', 'Publish draft')
+    await waitFor(() => expect(fetchGeneralPracticeQuiz).toHaveBeenCalledWith('quiz-1'))
+    expect(screen.queryByText('Quiz Update Published')).toBeNull()
   })
 
   it('disables a published quiz and requires confirmation before archiving', async () => {
@@ -167,6 +181,7 @@ describe('General Practice management actions', () => {
     render(<Harness />)
     await confirm(user, 'Publish draft', 'Publish draft')
     expect((await screen.findByRole('alert')).textContent).toMatch(/changed or this action is no longer allowed/)
+    expect(screen.queryByText('Quiz Update Published')).toBeNull()
     expect(screen.getByRole('button', { name: 'Publish draft' }).disabled).toBe(true)
     await user.click(screen.getByRole('button', { name: 'Reload current quiz' }))
     await waitFor(() => expect(screen.getByText(/Pending draft version: 3/)).toBeTruthy())

@@ -44,12 +44,12 @@ function ProtectedLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.innerWidth >= 768)
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100 [contain:layout]">
       {isSidebarOpen && <button type="button" className="fixed inset-0 z-30 bg-[#2D2E30]/45 md:hidden" onClick={() => setIsSidebarOpen(false)} aria-label="Close navigation" />}
       <Sidebar isOpen={isSidebarOpen} onNavigate={() => { if (window.innerWidth < 768) setIsSidebarOpen(false) }} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopNav isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen((current) => !current)} />
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto bg-[#FFFDF8]">
           <Outlet />
         </div>
       </div>

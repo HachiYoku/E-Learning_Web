@@ -3,6 +3,7 @@ import { CheckCircle2, RotateCcw, XCircle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { startGeneralPracticeSession } from "../services/generalPracticeService"
 import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
+import GeneralPracticeQuestionMedia from "../components/GeneralPracticeQuestionMedia"
 
 function ReviewQuestion({ question, index }) {
   const selectedIndex = Number.isInteger(question.selectedAnswer) ? question.selectedAnswer : null
@@ -11,8 +12,7 @@ function ReviewQuestion({ question, index }) {
   return <li className="rounded-2xl border border-[#2D2E30]/10 bg-[#FFFDF8] p-5 sm:p-6">
     <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-accent">Question {index + 1}</p>
     <h3 className="mt-2 break-words text-lg font-bold">{question.prompt || "Look or listen, then review the answer."}</h3>
-    {question.image ? <img src={question.image} alt={question.imageDecorative ? "" : question.imageAlt || "Question illustration"} className="mt-4 max-h-72 w-full rounded-xl object-contain" /> : null}
-    {question.audio ? <div className="mt-4"><p className="mb-2 text-sm font-semibold text-[#765F55]">{question.audioLabel || "Question audio"}</p><audio controls preload="none" src={question.audio} aria-label={question.audioLabel || "Question audio"} className="w-full">Your browser does not support audio.</audio></div> : null}
+    <GeneralPracticeQuestionMedia question={question} index={index} />
     <p className="mt-4 font-bold" aria-label={`Question ${index + 1}: ${status}`}>Status: {status}</p>
     {selectedIndex == null ? <p className="mt-2 text-sm text-[#765F55]">No answer submitted.</p> : null}
     <ol className="mt-4 grid gap-3 sm:grid-cols-2" aria-label={`Saved answer options for question ${index + 1}`}>
