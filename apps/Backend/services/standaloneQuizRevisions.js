@@ -4,6 +4,8 @@ const QuizAttempt = require("../models/quizAttemptModel");
 const QuizMedia = require("../models/quizMediaModel");
 const QuizCreationRequest = require("../models/quizCreationRequestModel");
 const { cleanupQuizMedia } = require("./quizMediaLifecycle");
+const { uploadOwnedQuestionMedia } = require("./quizQuestionMediaUpload");
+const { resolveQuestionMediaEnvironment } = require("./quizQuestionMediaEnvironment");
 const quizMediaLifecycle = require("./quizMediaLifecycle");
 const QuizSession = require("../models/quizSessionModel");
 const GuestQuizSession = require("../models/guestQuizSessionModel");
@@ -26,6 +28,9 @@ function draftFields(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new StandaloneQuizError(400, "Invalid draft.", "invalid_quiz_draft");
   const allowed = new Set(["title", "description", "category", "difficulty", "standaloneAccess", "questions"]);
   if (Object.keys(input).some((key) => !allowed.has(key))) throw new StandaloneQuizError(400, "Invalid draft field.", "invalid_quiz_draft");
+  if (input.standaloneAccess !== undefined && input.standaloneAccess !== "students") {
+    throw new StandaloneQuizError(400, "General Practice requires student access.", "invalid_quiz_draft");
+  }
   return Object.fromEntries(Object.entries(input).filter(([key]) => allowed.has(key)));
 }
 
@@ -35,16 +40,17 @@ function draftFromPublished(quiz) {
     description: quiz.description || "",
     category: quiz.category,
     difficulty: quiz.difficulty,
-    standaloneAccess: quiz.standaloneAccess,
+    standaloneAccess: "students",
     questions: quiz.questions.map((question) => question.toObject()),
     version: 0,
     basePublishedRevision: quiz.publishedRevision,
   };
 }
 
-async function validateOwnedMedia(quiz, questions, previousQuestions = []) {
+async function validateOwnedMedia(quiz, questions, previousQuestions = [], pending = new Set()) {
   for (const question of questions) {
     for (const type of ["image", "audio"]) {
+      if (pending.has(`${question._id}:${type}`)) continue;
       const url = question[type];
       const publicId = question[`${type}PublicId`];
       if (!url && !publicId) continue;
@@ -54,13 +60,24 @@ async function validateOwnedMedia(quiz, questions, previousQuestions = []) {
         if (!publicId && previous?.[type] === url && !previous?.[`${type}PublicId`]) continue;
         throw new StandaloneQuizError(400, "Use an owned Quiz media asset.", "invalid_quiz_media");
       }
-      const owned = await QuizMedia.exists({ quiz: quiz._id, questionId: question._id, mediaType: type, publicId, url, cleanupState: { $ne: "deleted" } });
+      const owned = await QuizMedia.findOne({ quiz: quiz._id, questionId: question._id, mediaType: type,
+        publicId, url, cleanupState: { $nin: ["deleted", "cleanup_processing"] } });
       if (!owned) throw new StandaloneQuizError(400, "Use an owned Quiz media asset.", "invalid_quiz_media");
+      const previous = previousQuestions.find((item) => String(item._id) === String(question._id)
+        && item[type] === url && item[`${type}PublicId`] === publicId);
+      if (!previous && owned.environment) {
+        let mode;
+        try { mode = resolveQuestionMediaEnvironment().mode; } catch { /* Fail closed for new references. */ }
+        if (owned.environment !== mode) throw new StandaloneQuizError(400, "Use an owned Quiz media asset.", "invalid_quiz_media");
+      }
     }
   }
 }
 
-async function validateDraft(quiz, data, previousQuestions = []) {
+async function validateDraft(quiz, data, previousQuestions = [], pending = new Set()) {
+  if (data.standaloneAccess !== "students") {
+    throw new StandaloneQuizError(400, "General Practice requires student access.", "invalid_quiz_draft");
+  }
   if (!Array.isArray(data.questions) || data.questions.length < 1 || data.questions.length > 10) {
     throw new StandaloneQuizError(400, "Add between 1 and 10 questions.", "invalid_quiz_draft");
   }
@@ -73,7 +90,7 @@ async function validateDraft(quiz, data, previousQuestions = []) {
   try { await candidate.validate(); }
   catch (_error) { throw new StandaloneQuizError(400, "Check the quiz metadata and questions.", "invalid_quiz_draft"); }
   const normalized = candidate.draft.toObject();
-  await validateOwnedMedia(quiz, normalized.questions, previousQuestions);
+  await validateOwnedMedia(quiz, normalized.questions, previousQuestions, pending);
   return normalized;
 }
 
@@ -146,6 +163,80 @@ async function saveDraft(quizId, expectedVersion, input) {
   return finishMediaReconciliation(updated, "save_draft");
 }
 
+// A multipart revision uses the same ownership reservation as initial creation.
+// An uncertain upload or write is retained for review; the client must reload
+// the authoritative draft rather than automatically repeating the request.
+async function saveDraftWithMedia(quizId, expectedVersion, input, files) {
+  if (!Array.isArray(files) || !files.length || files.length > 20) {
+    throw new StandaloneQuizError(400, "Invalid question media count.", "invalid_quiz_media");
+  }
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+    throw new StandaloneQuizError(400, "Provide a valid draft version.", "invalid_draft_version");
+  }
+  const quiz = await loadStandalone(quizId);
+  if (quiz.status === "archived") throw new StandaloneQuizError(409, "Archived quizzes cannot be edited.", "quiz_archived");
+  const previous = quiz.draft?.toObject() || draftFromPublished(quiz);
+  if (previous.version !== expectedVersion) throw conflict();
+  const patch = draftFields(input);
+  if (!Array.isArray(patch.questions)) throw new StandaloneQuizError(400, "Provide draft questions with media.", "invalid_quiz_media");
+  const questions = patch.questions.map((question) => ({ ...question,
+    _id: question._id || new mongoose.Types.ObjectId() }));
+  if (questions.some((question) => !mongoose.isValidObjectId(question._id))
+    || new Set(questions.map((question) => String(question._id))).size !== questions.length) {
+    throw new StandaloneQuizError(400, "Invalid question identity.", "invalid_quiz_media");
+  }
+  const assignments = new Map();
+  for (const file of files) {
+    const match = /^question(Image|Audio)_(\d+)$/.exec(file.fieldname || "");
+    const index = match && Number(match[2]);
+    if (!match || !Number.isSafeInteger(index) || index >= questions.length
+      || assignments.has(file.fieldname) || !Buffer.isBuffer(file.buffer)) {
+      throw new StandaloneQuizError(400, "Invalid question media mapping.", "invalid_quiz_media");
+    }
+    assignments.set(file.fieldname, { file, index, type: match[1] === "Image" ? "image" : "audio" });
+  }
+  const pending = new Set([...assignments.values()].map(({ index, type }) => `${questions[index]._id}:${type}`));
+  const draft = { ...previous, ...patch, questions, version: expectedVersion + 1,
+    basePublishedRevision: quiz.publishedRevision };
+  const preview = { ...draft, questions: questions.map((question, index) => ({ ...question,
+    ...(assignments.has(`questionImage_${index}`) ? { image: question.image || "pending-image" } : {}),
+    ...(assignments.has(`questionAudio_${index}`) ? { audio: question.audio || "pending-audio" } : {}),
+  })) };
+  await validateDraft(quiz, preview, [...(quiz.draft?.questions || []), ...quiz.questions], pending);
+  // Do not upload before the environment guard and complete draft validation pass.
+  try { resolveQuestionMediaEnvironment(); }
+  catch { throw new StandaloneQuizError(503, "Question media is unavailable.", "quiz_media_unavailable"); }
+  const uploaded = [];
+  let saveStarted = false;
+  try {
+    for (const { file, index, type } of assignments.values()) {
+      const record = await uploadOwnedQuestionMedia({ quizId: quiz._id,
+        questionId: questions[index]._id, mediaType: type, buffer: file.buffer,
+        holdForRevision: true });
+      uploaded.push(record);
+      questions[index][type] = record.url;
+      questions[index][`${type}PublicId`] = record.publicId;
+      questions[index][`${type}ResourceType`] = record.resourceType;
+      questions[index][`${type}Format`] = record.format;
+    }
+    saveStarted = true;
+    return await saveDraft(quizId, expectedVersion, { ...patch, questions });
+  } catch (error) {
+    // A known validation/version rejection cannot have committed this draft.
+    // Unknown upload and database outcomes keep their records for investigation.
+    if (!saveStarted || error instanceof StandaloneQuizError) {
+      for (const record of uploaded) {
+        try {
+          await QuizMedia.updateOne({ _id: record._id, cleanupState: "reserved" },
+            { $set: { cleanupState: "pending_cleanup" } });
+          await cleanupQuizMedia({ ...record.toObject(), cleanupState: "pending_cleanup" });
+        } catch { /* Durable ownership remains for retry. */ }
+      }
+    }
+    throw error;
+  }
+}
+
 async function publishDraft(quizId, expectedVersion) {
   if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw new StandaloneQuizError(400, "Provide a valid draft version.", "invalid_draft_version");
   const quiz = await loadStandalone(quizId);
@@ -153,6 +244,9 @@ async function publishDraft(quizId, expectedVersion) {
   if (quiz.status === "archived") throw new StandaloneQuizError(409, "Archived quizzes cannot be published.", "quiz_archived");
   if (!quiz.draft || quiz.draft.version !== expectedVersion || quiz.draft.basePublishedRevision !== quiz.publishedRevision) throw conflict();
   const draft = quiz.draft.toObject();
+  if (draft.standaloneAccess !== "students") {
+    throw new StandaloneQuizError(409, "Save this draft with student access before publishing.", "student_access_required");
+  }
   const nextRevision = quiz.publishedRevision === null ? 1 : quiz.publishedRevision + 1;
   const live = {
     title: draft.title, description: draft.description, category: draft.category,
@@ -221,8 +315,7 @@ async function invalidateStandaloneSessions(quizId, reason, session) {
     { quiz: quizId, contextType: "standalone", activeSlot: true },
     { $set: { activeSlot: false } }, { session }
   );
-  // The guest collection is introduced separately from its HTTP rollout.
-  // Avoid an implicit collection-creation write in transactions before rollout.
+  // Preserve existing legacy guest records without implicitly creating their collection.
   if (await GuestQuizSession.exists({ quiz: quizId }).session(session)) {
     await GuestQuizSession.updateMany(
       { quiz: quizId, invalidatedAt: null, expiresAt: { $gt: now } },
@@ -285,5 +378,5 @@ function publicSummary(quiz) {
 }
 
 module.exports = { StandaloneQuizError, draftFields, validateDraft, createDraft,
-  saveDraft, publishDraft, changeAvailability,
+  saveDraft, saveDraftWithMedia, publishDraft, changeAvailability,
   deleteDraftOrQuiz, loadStandalone, publicSummary, retryMediaReconciliation };

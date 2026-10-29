@@ -7,7 +7,8 @@ const covers = require("../services/quizSetCoverService");
 
 function errorResponse(res, error) {
   if ([400, 404, 409, 503].includes(error?.status) && typeof error.code === "string") {
-    return res.status(error.status).json({ message: error.message, code: error.code });
+    return res.status(error.status).json({ message: error.message, code: error.code,
+      ...(error.mediaCleanup ? { mediaCleanup: error.mediaCleanup } : {}) });
   }
   console.error("Quiz Set request failed", { name: error?.name });
   return res.status(500).json({ message: "Unable to process the Quiz Set request." });
@@ -55,8 +56,23 @@ const orderQuiz = handle(async (req) => {
   return { id: String(quiz._id), quizSetId: String(quiz.quizSet), sortOrder: quiz.sortOrder,
     setVersion };
 });
-const createDraft = handle(async (req) => service.createIdempotentSetDraft(req.params.setId,
-  req.user.id, req.body?.creationRequestId, req.body?.draft), true);
+const createDraft = handle(async (req) => {
+  let draft = req.body?.draft;
+  if (req.is("multipart/form-data") && typeof draft === "string") {
+    try { draft = JSON.parse(draft); }
+    catch (_error) { throw new service.QuizSetError(400, "Invalid draft.", "invalid_quiz_draft"); }
+  }
+  const files = req.files || [];
+  return files.length
+    ? service.createIdempotentSetDraftWithMedia(req.params.setId, req.user.id,
+      req.body?.creationRequestId, draft, files)
+    : service.createIdempotentSetDraft(req.params.setId, req.user.id,
+      req.body?.creationRequestId, draft);
+}, true);
+const creationOutcome = handle(async (req) => service.getCreationOutcome(req.params.setId,
+  req.user.id, req.params.creationRequestId));
+const abandonFailedCreation = handle(async (req) => service.abandonFailedCreation(req.params.setId,
+  req.user.id, req.params.creationRequestId));
 const remove = handle(async (req) => service.deleteEmptySet(req.params.setId, req.body?.expectedVersion));
 
 function catalogParams(query) {
@@ -112,5 +128,6 @@ const getPublic = handle(async (req) => {
   return { set: service.publicSet(set), quizzes: quizzes.map((quiz) => ({ ...publicSummary(quiz), sortOrder: quiz.sortOrder })) };
 });
 
-module.exports = { listAdmin, getAdmin, create, update, uploadCover, removeCover, lifecycle, orderQuiz, createDraft, remove,
+module.exports = { listAdmin, getAdmin, create, update, uploadCover, removeCover, lifecycle, orderQuiz, createDraft,
+  creationOutcome, abandonFailedCreation, remove,
   listPublic, getPublic };

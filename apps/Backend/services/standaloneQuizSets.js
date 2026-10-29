@@ -3,6 +3,9 @@ const { createHash } = require("node:crypto");
 const QuizSet = require("../models/quizSetModel");
 const Quiz = require("../models/quizModel");
 const QuizCreationRequest = require("../models/quizCreationRequestModel");
+const QuizMedia = require("../models/quizMediaModel");
+const { uploadOwnedQuestionMedia } = require("./quizQuestionMediaUpload");
+const { cleanupQuizMedia } = require("./quizMediaLifecycle");
 const { draftFields, validateDraft } = require("./standaloneQuizRevisions");
 const { runStandaloneTransaction, StandaloneTransactionConflict,
   StandaloneTransactionOutcomeUnknown } = require("./standaloneQuizTransactions");
@@ -162,12 +165,12 @@ function checkedDraftFields(input) {
   return fields;
 }
 
-async function createSetDraftInSession(setId, fields, session) {
+async function createSetDraftInSession(setId, fields, session, allocatedId) {
   const set = await QuizSet.findById(setId).session(session);
   if (!set || set.status === "archived") throw missing();
   if (!await writeSetFence(set, session)) throw new StandaloneTransactionConflict();
   const last = await Quiz.findOne({ quizSet: setId, contextType: "standalone" }).sort({ sortOrder: -1, _id: -1 }).session(session);
-  const quizId = new mongoose.Types.ObjectId();
+  const quizId = allocatedId || new mongoose.Types.ObjectId();
   const shell = { _id: quizId, title: String(fields.title || ""), status: "draft", publishedRevision: null, revision: 1 };
   const normalized = await validateDraft(shell, { ...fields, version: 1, basePublishedRevision: null });
   const [quiz] = await Quiz.create([{ ...shell, contextType: "standalone", quizSet: set._id,
@@ -225,6 +228,10 @@ async function replayCreation(record, payloadHash, session) {
   if (record.payloadHash !== payloadHash) {
     throw new QuizSetError(409, "This creation request ID was used with different quiz content.", "quiz_creation_request_reused");
   }
+  if (record.status === "abandoned") {
+    throw new QuizSetError(409, "This creation request was abandoned.", "quiz_creation_request_abandoned");
+  }
+  if (record.status === "failed") return undefined;
   if (!record.responseSnapshot || String(record.responseSnapshot.id) !== String(record.quizId)
     || String(record.responseSnapshot.quizSetId) !== String(record.quizSetId)) {
     throw new QuizCreationOutcomeUnknown();
@@ -242,6 +249,29 @@ async function replayCreation(record, payloadHash, session) {
   return record.responseSnapshot;
 }
 
+async function recordFailedMediaCreation(key, payloadHash, mediaCleanup) {
+  let record = await readCommittedCreation(key);
+  if (!record) {
+    try {
+      await QuizCreationRequest.create([{ ...key, payloadHash, status: "failed", mediaCleanup }],
+        { writeConcern: { w: "majority" } });
+    } catch (error) {
+      if (error?.code !== 11000) throw error;
+    }
+    record = await readCommittedCreation(key);
+  }
+  if (!record) throw new QuizCreationOutcomeUnknown();
+  const replayed = await replayCreation(record, payloadHash);
+  if (replayed) return { replayed };
+  const levels = { complete: 0, unverified: 1, retry_required: 2 };
+  const combined = levels[mediaCleanup] > (levels[record.mediaCleanup] ?? -1) ? mediaCleanup : record.mediaCleanup;
+  if (combined !== record.mediaCleanup) {
+    await QuizCreationRequest.updateOne({ ...key, status: "failed" }, { $set: { mediaCleanup: combined } },
+      { writeConcern: { w: "majority" } });
+  }
+  return { mediaCleanup: combined };
+}
+
 async function createIdempotentSetDraft(setId, adminId, creationRequestId, input) {
   if (!validId(setId)) throw missing();
   if (!validId(adminId)) throw new QuizSetError(400, "Invalid Admin identity.", "invalid_quiz_creation_request");
@@ -252,7 +282,11 @@ async function createIdempotentSetDraft(setId, adminId, creationRequestId, input
   const { hash: payloadHash, unhashable } = creationPayloadHash(input);
   const key = { adminId: new mongoose.Types.ObjectId(String(adminId)),
     quizSetId: new mongoose.Types.ObjectId(String(setId)), creationRequestId };
-  const previous = await replayCreation(await readCommittedCreation(key), payloadHash);
+  const previousRecord = await readCommittedCreation(key);
+  if (previousRecord?.status === "failed" || previousRecord?.status === "abandoned") {
+    throw new QuizSetError(409, "This creation request ID belongs to a media request.", "quiz_creation_request_reused");
+  }
+  const previous = await replayCreation(previousRecord, payloadHash);
   if (previous) return previous;
   if (unhashable) throw new QuizSetError(400, "Invalid draft.", "invalid_quiz_draft");
   const fields = checkedDraftFields(input);
@@ -260,6 +294,9 @@ async function createIdempotentSetDraft(setId, adminId, creationRequestId, input
   try {
     return await runStandaloneTransaction(async (session) => {
       const existing = await QuizCreationRequest.findOne(key).session(session);
+      if (existing?.status === "failed" || existing?.status === "abandoned") {
+        throw new QuizSetError(409, "This creation request ID belongs to a media request.", "quiz_creation_request_reused");
+      }
       const replayed = await replayCreation(existing, payloadHash, session);
       if (replayed) return replayed;
       const quiz = await createSetDraftInSession(setId, fields, session);
@@ -288,6 +325,193 @@ async function createIdempotentSetDraft(setId, adminId, creationRequestId, input
   }
 }
 
+// Keep the JSON creation contract above unchanged. Media-bearing creation uses
+// the same ledger, but hashes file contents as well as the draft before upload.
+async function createIdempotentSetDraftWithMedia(setId, adminId, creationRequestId, input, files) {
+  if (!validId(setId)) throw missing();
+  if (!validId(adminId) || !validCreationRequestId(creationRequestId)) {
+    throw new QuizSetError(400, "Invalid creation request.", "invalid_quiz_creation_request");
+  }
+  if (!Array.isArray(files) || !files.length || files.length > 20) throw invalid("Invalid question media count.");
+  const manifest = files.map((file) => ({ field: file.fieldname, type: file.mimetype,
+    bytes: file.buffer?.length, digest: file.buffer && createHash("sha256").update(file.buffer).digest("hex") }))
+    .sort((a, b) => a.field.localeCompare(b.field));
+  const { hash: payloadHash, unhashable } = creationPayloadHash({ draft: input, media: manifest });
+  const key = { adminId: new mongoose.Types.ObjectId(String(adminId)),
+    quizSetId: new mongoose.Types.ObjectId(String(setId)), creationRequestId };
+  await requireCreationIndex();
+  const previous = await replayCreation(await readCommittedCreation(key), payloadHash);
+  if (previous) return previous;
+  if (unhashable) throw new QuizSetError(400, "Invalid draft.", "invalid_quiz_draft");
+
+  const fields = checkedDraftFields(input);
+  const used = new Set();
+  const assignments = files.map((file) => {
+    const match = /^question(Image|Audio)_(\d+)$/.exec(file.fieldname || "");
+    const index = match && Number(match[2]);
+    if (!match || !Number.isSafeInteger(index) || index >= fields.questions.length
+      || used.has(file.fieldname) || !Buffer.isBuffer(file.buffer)) {
+      throw new QuizSetError(400, "Invalid question media mapping.", "invalid_quiz_media");
+    }
+    used.add(file.fieldname);
+    return { file, index, type: match[1] === "Image" ? "image" : "audio" };
+  });
+  const quizId = new mongoose.Types.ObjectId();
+  const prepared = { ...fields, questions: fields.questions.map((question) => {
+    if (question._id || question.imageResourceType || question.imageFormat || question.audioResourceType || question.audioFormat) {
+      throw new QuizSetError(400, "Invalid new question media.", "invalid_quiz_media");
+    }
+    return { ...question, _id: new mongoose.Types.ObjectId() };
+  }) };
+  // Validate media-only questions before any external upload. The temporary
+  // markers are never persisted or accepted as owned media.
+  const preview = { ...prepared, questions: prepared.questions.map((question, index) => ({ ...question,
+    ...(assignments.some((item) => item.index === index && item.type === "image") ? { image: "pending-image" } : {}),
+    ...(assignments.some((item) => item.index === index && item.type === "audio") ? { audio: "pending-audio" } : {}),
+  })) };
+  try {
+    await new Quiz({ _id: quizId, contextType: "standalone", quizSet: setId,
+      title: prepared.title, status: "draft", publishedRevision: null,
+      draft: { ...preview, version: 1, basePublishedRevision: null } }).validate();
+  } catch (_error) { throw new QuizSetError(400, "Check the quiz metadata and questions.", "invalid_quiz_draft"); }
+
+  await retryAbandonedCreationMedia().catch(() => { /* A later request can retry cleanup. */ });
+
+  const uploaded = [];
+  let transactionStarted = false;
+  let uploadOutcomeUnknown = false;
+  async function cleanupOwnUploads() {
+    let complete = true;
+    for (const item of uploaded) {
+      try {
+        const record = item.record || await QuizMedia.findOneAndUpdate({ publicId: item.publicId },
+          { $setOnInsert: item }, { upsert: true, returnDocument: "after" });
+        if (!await cleanupQuizMedia(record)) complete = false;
+      } catch (_error) { complete = false; /* A durable pending record remains retryable when available. */ }
+    }
+    return complete;
+  }
+  try {
+    for (const { file, index, type } of assignments) {
+      let record;
+      try {
+        record = await uploadOwnedQuestionMedia({ quizId, questionId: prepared.questions[index]._id,
+          mediaType: type, buffer: file.buffer });
+      } catch (error) { uploadOutcomeUnknown = true; throw error; }
+      const item = { quiz: quizId, questionId: prepared.questions[index]._id, mediaType: type,
+        publicId: record.publicId, resourceType: record.resourceType,
+        url: record.url, format: record.format || "", bytes: file.buffer.length,
+        cleanupState: "pending_cleanup", record };
+      uploaded.push(item);
+      const question = prepared.questions[index];
+      question[type] = item.url;
+      question[`${type}PublicId`] = item.publicId;
+      question[`${type}ResourceType`] = item.resourceType;
+      question[`${type}Format`] = item.format;
+    }
+    transactionStarted = true;
+    const response = await runStandaloneTransaction(async (session) => {
+      const existing = await QuizCreationRequest.findOne(key).session(session);
+      const replayed = await replayCreation(existing, payloadHash, session);
+      if (replayed) return replayed;
+      const quiz = await createSetDraftInSession(setId, prepared, session, quizId);
+      await Quiz.updateOne({ _id: quizId }, { $set: { mediaReconciliationToken: new mongoose.Types.ObjectId().toString() } }, { session });
+      const snapshot = { id: String(quiz._id), quizSetId: String(quiz.quizSet), status: quiz.status,
+        sortOrder: quiz.sortOrder, draft: quiz.draft.toObject() };
+      if (existing?.status === "failed") {
+        const updated = await QuizCreationRequest.updateOne({ ...key, status: "failed", payloadHash },
+          { $set: { status: "committed", quizId: quiz._id, responseSnapshot: snapshot },
+            $unset: { mediaCleanup: "" } }, { session });
+        if (updated.modifiedCount !== 1) throw new StandaloneTransactionConflict();
+      } else {
+        await QuizCreationRequest.create([{ ...key, payloadHash, quizId: quiz._id,
+          responseSnapshot: snapshot }], { session });
+      }
+      return snapshot;
+    }, { resolveAmbiguous: async () => replayCreation(await readCommittedCreation(key), payloadHash) });
+    if (response.id !== String(quizId)) await cleanupOwnUploads();
+    else {
+      // A committed draft stays authoritative even if reconciliation must retry.
+      try { await require("./standaloneQuizRevisions").retryMediaReconciliation(quizId); }
+      catch (_error) { /* The committed draft and its recovery marker remain authoritative. */ }
+    }
+    return response;
+  } catch (error) {
+    if (!transactionStarted) {
+      const cleanupComplete = await cleanupOwnUploads();
+      // This attempt never entered the creation transaction. Still consult the
+      // majority-read ledger: another request using the same key may have won.
+      // A failed lookup must never be reported as a confirmed failure.
+      const outcome = await recordFailedMediaCreation(key, payloadHash,
+        cleanupComplete ? uploadOutcomeUnknown ? "unverified" : "complete" : "retry_required");
+      if (outcome.replayed) return outcome.replayed;
+      const failure = new QuizSetError(503, "Quiz creation failed before commit. Retry the same request manually.",
+        "quiz_creation_precommit_failed");
+      failure.mediaCleanup = outcome.mediaCleanup;
+      throw failure;
+    } else {
+      let committed;
+      try { committed = await replayCreation(await readCommittedCreation(key), payloadHash); }
+      catch (lookupError) {
+        if (["quiz_creation_request_reused", "quiz_creation_request_abandoned"].includes(lookupError?.code)) {
+          await cleanupOwnUploads();
+          throw lookupError;
+        }
+        // An uncertain commit must retain media until the ledger is resolved.
+      }
+      if (committed) {
+        if (committed.id !== String(quizId)) await cleanupOwnUploads();
+        return committed;
+      }
+      if (error?.status === 400 || error?.status === 404) await cleanupOwnUploads();
+    }
+    throw error;
+  }
+}
+
+async function getCreationOutcome(setId, adminId, creationRequestId) {
+  if (!validId(setId) || !validId(adminId) || !validCreationRequestId(creationRequestId)) throw missing();
+  const key = { adminId: new mongoose.Types.ObjectId(String(adminId)),
+    quizSetId: new mongoose.Types.ObjectId(String(setId)), creationRequestId };
+  const record = await readCommittedCreation(key);
+  if (record?.status === "failed" || record?.status === "abandoned") {
+    return { status: record.status, ...(record.mediaCleanup ? { mediaCleanup: record.mediaCleanup } : {}) };
+  }
+  return record ? { status: "committed", quiz: await replayCreation(record, record.payloadHash) }
+    : { status: "unresolved" };
+}
+
+async function abandonFailedCreation(setId, adminId, creationRequestId) {
+  if (!validId(setId) || !validId(adminId) || !validCreationRequestId(creationRequestId)) throw missing();
+  await requireCreationIndex();
+  const key = { adminId: new mongoose.Types.ObjectId(String(adminId)),
+    quizSetId: new mongoose.Types.ObjectId(String(setId)), creationRequestId };
+  const updated = await QuizCreationRequest.findOneAndUpdate({ ...key, status: "failed" },
+    { $set: { status: "abandoned" } }, { returnDocument: "after", writeConcern: { w: "majority" } });
+  if (updated) return { status: "abandoned" };
+  const record = await readCommittedCreation(key);
+  if (!record) throw new QuizCreationOutcomeUnknown();
+  if (record.status === "abandoned") return { status: "abandoned" };
+  if (record.status === "failed") throw new QuizCreationOutcomeUnknown();
+  return { status: "committed", quiz: await replayCreation(record, record.payloadHash) };
+}
+
+// A bounded follow-up pass for uploads whose process ended before a draft was
+// committed. Never touch recent uploads, and let the shared reference checks
+// decide whether a Cloudinary deletion is safe.
+async function retryAbandonedCreationMedia() {
+  const olderThan = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const pending = await QuizMedia.find({ $or: [
+    { cleanupState: { $in: ["pending_cleanup", "cleanup_failed"] },
+      cleanupError: { $ne: "legacy_media_unverified" }, createdAt: { $lt: olderThan } },
+    { cleanupState: "cleanup_processing", cleanupStartedAt: { $lt: olderThan } },
+  ] })
+    .sort({ createdAt: 1 }).limit(20);
+  for (const record of pending) {
+    if (!await Quiz.exists({ _id: record.quiz })) await cleanupQuizMedia(record);
+  }
+}
+
 async function deleteEmptySet(setId, expectedVersion, { env = process.env } = {}) {
   if (!validId(setId)) throw missing();
   if (!validVersion(expectedVersion)) throw invalid("expectedVersion is required.");
@@ -306,7 +530,8 @@ async function deleteEmptySet(setId, expectedVersion, { env = process.env } = {}
     const fenced = await writeSetFence(set, session);
     if (!fenced) throw new StandaloneTransactionConflict();
     if (await Quiz.exists({ quizSet: setId }).session(session)) throw conflict("A Set with quizzes cannot be deleted safely.", "quiz_set_has_members");
-    if (await QuizCreationRequest.exists({ quizSetId: set._id }).session(session)) {
+    if (await QuizCreationRequest.exists({ quizSetId: set._id,
+      status: { $nin: ["failed", "abandoned"] } }).session(session)) {
       throw conflict("A Set with quiz creation requests cannot be permanently deleted.", "quiz_set_has_creation_requests");
     }
     // Queue the owned cover in this transaction. A failed ownership check aborts
@@ -342,4 +567,5 @@ function publicSet(set) {
 }
 
 module.exports = { QuizSetError, metadata, writeSetFence, fenceActiveSetForQuiz, createSet, updateSet,
-  transitionSet, orderQuiz, createSetDraft, createIdempotentSetDraft, deleteEmptySet, publicSet };
+  transitionSet, orderQuiz, createSetDraft, createIdempotentSetDraft,
+  createIdempotentSetDraftWithMedia, getCreationOutcome, abandonFailedCreation, deleteEmptySet, publicSet };

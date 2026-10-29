@@ -131,7 +131,7 @@ describe('Admin General Practice Quiz Set read-only views', () => {
     renderPages(`/general-practice/sets/${setId}`)
     expect(await screen.findByText('Set: disabled')).toBeTruthy()
     expect(screen.getByText('Quiz: published')).toBeTruthy()
-    expect(screen.getByText(/Students Only/)).toBeTruthy()
+    expect(screen.getByText(/Signed-in students/)).toBeTruthy()
     expect(screen.getByText(/Published revision: 1/)).toBeTruthy()
     await userEvent.setup().click(screen.getByRole('link', { name: 'View details for Greetings' }))
     expect(screen.getByText('Quiz destination from Thai basics')).toBeTruthy()

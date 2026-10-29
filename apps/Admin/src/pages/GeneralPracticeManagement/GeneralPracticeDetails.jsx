@@ -11,7 +11,7 @@ function ContentSummary({ label, content }) {
     <h2 className="text-lg font-bold text-[#2D2E30]">{label}</h2>
     <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
       <div><dt className="font-semibold text-[#765F55]">Title</dt><dd className="mt-1 break-words text-[#2D2E30]">{content.title || 'Untitled quiz'}</dd></div>
-      <div><dt className="font-semibold text-[#765F55]">Visibility</dt><dd className="mt-1 text-[#2D2E30]">{content.standaloneAccess === 'students' ? 'Students Only' : content.standaloneAccess === 'public' ? 'Public' : 'Not set'}</dd></div>
+      <div><dt className="font-semibold text-[#765F55]">Access</dt><dd className="mt-1 text-[#2D2E30]">Signed-in students</dd></div>
       <div><dt className="font-semibold text-[#765F55]">Category</dt><dd className="mt-1 text-[#2D2E30]">{content.category || 'Not set'}</dd></div>
       <div><dt className="font-semibold text-[#765F55]">Difficulty</dt><dd className="mt-1 text-[#2D2E30]">{content.difficulty || 'Not set'}</dd></div>
       <div className="sm:col-span-2"><dt className="font-semibold text-[#765F55]">Description</dt><dd className="mt-1 whitespace-pre-wrap break-words text-[#2D2E30]">{content.description || 'No description'}</dd></div>

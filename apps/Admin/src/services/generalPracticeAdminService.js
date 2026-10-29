@@ -127,16 +127,36 @@ export async function createGeneralPracticeDraft(draft) {
   throw new Error('Quiz creation requires a Quiz Set. Open a Set and select Create Quiz.')
 }
 
-export async function createGeneralPracticeSetDraft(setId, creationRequestId, draft) {
+export async function createGeneralPracticeSetDraft(setId, creationRequestId, draft, files = []) {
   if (typeof setId !== 'string' || !/^[0-9a-f]{24}$/i.test(setId)) throw new Error('Select a valid Quiz Set before creating a quiz.')
   if (typeof creationRequestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(creationRequestId)) {
     throw new Error('A secure creation request ID is required.')
   }
-  return apiClient.post(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/quizzes`, { creationRequestId, draft })
+  const url = `/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/quizzes`
+  if (!files.length) return apiClient.post(url, { creationRequestId, draft })
+  const body = new FormData()
+  body.append('creationRequestId', creationRequestId)
+  body.append('draft', JSON.stringify(draft))
+  files.forEach(({ field, file }) => body.append(field, file))
+  return apiClient.post(url, body)
 }
 
-export async function updateGeneralPracticeDraft(quizId, expectedVersion, draft) {
-  return apiClient.put(`/quizzes/admin/standalone/${encodeURIComponent(quizId)}/draft`, { expectedVersion, draft })
+export async function fetchGeneralPracticeCreationOutcome(setId, creationRequestId) {
+  return apiClient.get(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/quizzes/creation/${encodeURIComponent(creationRequestId)}`)
+}
+
+export async function abandonFailedGeneralPracticeCreation(setId, creationRequestId) {
+  return apiClient.post(`/quizzes/admin/standalone/sets/${encodeURIComponent(setId)}/quizzes/creation/${encodeURIComponent(creationRequestId)}/abandon`)
+}
+
+export async function updateGeneralPracticeDraft(quizId, expectedVersion, draft, files = []) {
+  const url = `/quizzes/admin/standalone/${encodeURIComponent(quizId)}/draft`
+  if (!files.length) return apiClient.put(url, { expectedVersion, draft })
+  const body = new FormData()
+  body.append('expectedVersion', String(expectedVersion))
+  body.append('draft', JSON.stringify(draft))
+  files.forEach(({ field, file }) => body.append(field, file))
+  return apiClient.put(url, body)
 }
 
 export async function publishGeneralPracticeDraft(quizId, expectedVersion) {

@@ -16,9 +16,3 @@ export function generalPracticeErrorMessage(error) {
   if (error?.status === 503) return "General Practice is temporarily unavailable. Please try again later."
   return "The request could not be completed. Check your connection and try again."
 }
-
-export function guestGeneralPracticeErrorMessage(error) {
-  if (error?.status === 401) return "This guest session is no longer available in this browser. Start a new quiz when ready."
-  if (error?.status === 404) return "This quiz or temporary result is no longer available."
-  return generalPracticeErrorMessage(error)
-}

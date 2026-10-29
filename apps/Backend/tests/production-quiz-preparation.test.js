@@ -69,14 +69,14 @@ test("dry-run plans exact required collections and indexes without writes", asyn
   const report = await preparation.inspect(db, {}, inspectors);
   assert.equal(report.status, "READY_FOR_ADDITIVE_APPLY");
   assert.equal(report.missingCollections.length, Object.keys(preparation.REQUIRED).length);
-  assert.equal(report.missing.length, 18);
-  assert.equal(report.plan.length, 28);
+  assert.equal(report.missing.length, 10);
+  assert.equal(report.plan.length, 17);
   assert.deepEqual(db.writes, []);
   assert.deepEqual(preparation.REQUIRED.quizcreationrequests[0].key,
     { adminId: 1, quizSetId: 1, creationRequestId: 1 });
   assert.deepEqual(preparation.REQUIRED.quizzes[0].options.partialFilterExpression,
     { contextType: "standalone", quizSet: { $type: "objectId" } });
-  assert.equal(preparation.REQUIRED.guestquizattempts.find((item) => item.name === "guest_quiz_result_expiry")
+  assert.equal(preparation.REQUIRED.standalonequizratewindows.find((item) => item.name === "standalone_quiz_rate_window_expiry")
     .options.expireAfterSeconds, 0);
 });
 
@@ -85,12 +85,12 @@ test("additive preparation is idempotent and retains unrelated indexes", async (
   const first = await preparation.inspect(db, {}, inspectors);
   const result = await preparation.apply(db, {}, first, inspectors);
   assert.equal(result.status, "INDEXES_READY");
-  assert.equal(result.created.length, 27);
+  assert.equal(result.created.length, 16);
   assert.ok(db.collections.get("quizzes").some((index) => index.name === "legacy_quiz_index"));
   const repeat = await preparation.inspect(db, {}, inspectors);
   assert.equal(repeat.status, "INDEXES_READY");
   assert.deepEqual((await preparation.apply(db, {}, repeat, inspectors)).created, []);
-  assert.equal(db.writes.length, 27);
+  assert.equal(db.writes.length, 16);
 });
 
 test("wrong index definition or unique-key duplicates stop before any mutation", async () => {
@@ -132,17 +132,17 @@ test("integrity or transaction-readiness failures block additive preparation", a
 });
 
 test("missing TTL indexes disclose expired records and block apply", async () => {
-  const safe = fakeDatabase({ guestquizattempts: [] });
+  const safe = fakeDatabase({ standalonequizratewindows: [] });
   const safePlan = await preparation.inspect(safe, {}, inspectors);
   assert.equal(safePlan.status, "READY_FOR_ADDITIVE_APPLY");
   assert.ok(safePlan.ttlRisks.some(({ collection, expiredDocuments }) =>
-    collection === "guestquizattempts" && expiredDocuments === 0));
+    collection === "standalonequizratewindows" && expiredDocuments === 0));
 
-  const expired = fakeDatabase({ guestquizattempts: [] }, 0, 3);
+  const expired = fakeDatabase({ standalonequizratewindows: [] }, 0, 3);
   const blocked = await preparation.inspect(expired, {}, inspectors);
   assert.equal(blocked.status, "BLOCKED_FOR_REVIEW");
   assert.ok(blocked.ttlRisks.some(({ collection, expiredDocuments }) =>
-    collection === "guestquizattempts" && expiredDocuments === 3));
+    collection === "standalonequizratewindows" && expiredDocuments === 3));
   await assert.rejects(preparation.apply(expired, {}, blocked, inspectors));
   assert.deepEqual(expired.writes, []);
 
@@ -154,19 +154,19 @@ test("missing TTL indexes disclose expired records and block apply", async () =>
 
 test("TTL expiry appearing after planning stops immediately before index creation", async () => {
   const initial = Object.fromEntries(Object.entries(preparation.REQUIRED).map(([collection, specs]) =>
-    [collection, specs.filter((spec) => spec.name !== "guest_quiz_result_expiry")
+    [collection, specs.filter((spec) => spec.name !== "standalone_quiz_rate_window_expiry")
       .map((spec) => ({ key: spec.key, ...spec.options, name: spec.name }))]));
   const db = fakeDatabase(initial);
   let counts = 0;
   const collection = db.collection;
   db.collection = (name) => ({ ...collection(name),
-    countDocuments: async () => name === "guestquizattempts" && ++counts === 3 ? 1 : 0 });
+    countDocuments: async () => name === "standalonequizratewindows" && ++counts === 3 ? 1 : 0 });
   const plan = await preparation.inspect(db, {}, inspectors);
   assert.equal(plan.status, "READY_FOR_ADDITIVE_APPLY");
   const result = await preparation.apply(db, {}, plan, inspectors);
   assert.equal(result.status, "APPLY_INCOMPLETE");
   assert.deepEqual(result.failedOperation, { action: "createIndex",
-    collection: "guestquizattempts", name: "guest_quiz_result_expiry" });
+    collection: "standalonequizratewindows", name: "standalone_quiz_rate_window_expiry" });
   assert.deepEqual(db.writes, []);
 });
 

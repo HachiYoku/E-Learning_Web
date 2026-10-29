@@ -15,7 +15,7 @@ const user = () => ({ id: id(), role: "user" });
 const question = (prompt = "Original question") => ({ prompt, options: ["A", "B"], correctAnswer: 0,
   explanation: "Answer A", imageAlt: "Example image" });
 const draft = () => ({ title: "General Practice", category: "Vocabulary", difficulty: "Beginner",
-  standaloneAccess: "public", questions: [question()] });
+  standaloneAccess: "students", questions: [question()] });
 const deferred = () => {
   let resolve;
   const promise = new Promise((done) => { resolve = done; });
@@ -73,7 +73,7 @@ after(async () => {
   if (directory) await fs.rm(directory, { recursive: true, force: true });
 });
 
-test("internal start stores a 24-hour snapshot, resumes it, and leaves public standalone runtime locked", async () => {
+test("authenticated start stores a 24-hour snapshot, resumes it, and leaves course runtime locked", async () => {
   const quiz = await publishedQuiz(); const learner = user();
   const started = await startOrResume({ quizId: quiz._id, user: learner });
   assert.equal(started.created, true);
