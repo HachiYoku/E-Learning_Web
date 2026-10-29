@@ -8,13 +8,19 @@ const CoverAsset = require('../models/quizSetCoverAssetModel');
 const covers = require('../services/quizSetCoverService');
 const sets = require('../services/standaloneQuizSets');
 const { resolveCoverEnvironment, TESTING_FOLDER, PRODUCTION_FOLDER } = require('../services/quizSetCoverEnvironment');
+const fixtureMongoUri = (host, database, username = "example", password = "example") => {
+  const uri = new URL(`mongodb+srv://${host}/${database}`);
+  uri.username = username;
+  uri.password = password;
+  return uri.toString();
+};
 
 const env = { QUIZ_SET_COVER_ENV: 'testing', NODE_ENV: 'test',
-  MONGO_DB: 'mongodb+srv://example:example@englishkafe.xhqpzdd.mongodb.net/english_kafe',
+  MONGO_DB: fixtureMongoUri("englishkafe.xhqpzdd.mongodb.net", "english_kafe", "example", "example"),
   STANDALONE_QUIZ_EXPECTED_DB: 'english_kafe', CLOUDINARY_CLOUD_NAME: 'du6lhdq8t',
   CLOUDINARY_API_KEY: 'mock-key', CLOUDINARY_API_SECRET: 'mock-secret' };
 const productionEnv = { ...env, QUIZ_SET_COVER_ENV: 'production', NODE_ENV: 'production',
-  MONGO_DB: 'mongodb+srv://example:example@production.example/arunthai',
+  MONGO_DB: fixtureMongoUri("production.example", "arunthai", "example", "example"),
   STANDALONE_QUIZ_EXPECTED_DB: 'arunthai' };
 
 const setId = new mongoose.Types.ObjectId();
@@ -322,7 +328,7 @@ test('operator command requires explicit execution and the approved testing targ
   assert.doesNotThrow(() => command.assertTestingTarget(env.MONGO_DB, env));
   assert.doesNotThrow(() => command.assertConfiguredCloud(command.assertTestingTarget(env.MONGO_DB, env), 'du6lhdq8t'));
   assert.throws(() => command.assertConfiguredCloud(command.assertTestingTarget(env.MONGO_DB, env), 'other'));
-  assert.throws(() => command.assertTestingTarget('mongodb+srv://user:pass@production.example/english_kafe', env));
+  assert.throws(() => command.assertTestingTarget(fixtureMongoUri("production.example", "english_kafe", "user", "pass"), env));
   assert.throws(() => command.assertTestingTarget(env.MONGO_DB, { ...env, CLOUDINARY_CLOUD_NAME: 'other' }));
   assert.throws(() => command.assertTestingTarget(env.MONGO_DB, productionEnv));
 });
@@ -334,13 +340,13 @@ test('cover namespace requires an explicit consistent environment and database g
   assert.throws(() => resolveCoverEnvironment({ ...env, NODE_ENV: 'production' }));
   assert.throws(() => resolveCoverEnvironment({ ...productionEnv, NODE_ENV: 'test' }));
   assert.throws(() => resolveCoverEnvironment({ ...env, STANDALONE_QUIZ_EXPECTED_DB: 'other' }));
-  assert.throws(() => resolveCoverEnvironment({ ...env, MONGO_DB: 'mongodb+srv://example:example@other.example/english_kafe' }));
+  assert.throws(() => resolveCoverEnvironment({ ...env, MONGO_DB: fixtureMongoUri("other.example", "english_kafe", "example", "example") }));
   assert.throws(() => resolveCoverEnvironment({ ...env, CLOUDINARY_CLOUD_NAME: 'other' }));
   assert.throws(() => resolveCoverEnvironment({ ...env, CLOUDINARY_URL: 'cloudinary://other:secret@du6lhdq8t' }));
   assert.doesNotThrow(() => resolveCoverEnvironment({ ...env, CLOUDINARY_URL: 'cloudinary://mock-key:mock-secret@du6lhdq8t' }));
   assert.throws(() => resolveCoverEnvironment({ ...productionEnv, MONGO_DB: env.MONGO_DB,
     STANDALONE_QUIZ_EXPECTED_DB: 'english_kafe' }));
-  assert.throws(() => resolveCoverEnvironment({ ...productionEnv, MONGO_DB: 'mongodb+srv://example:example@production.example/english_kafe',
+  assert.throws(() => resolveCoverEnvironment({ ...productionEnv, MONGO_DB: fixtureMongoUri("production.example", "english_kafe", "example", "example"),
     STANDALONE_QUIZ_EXPECTED_DB: 'english_kafe' }));
 });
 
