@@ -5,19 +5,22 @@ const fs = require("node:fs/promises");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { Writable } = require("node:stream");
 const mongoose = require("mongoose");
 const { initiateReplicaSet } = require("./helpers/replicaSet");
 
-let processHandle; let directory; let Quiz; let QuizMedia; let QuizAttempt; let QuizSession;
+let processHandle; let directory; let Quiz; let QuizMedia; let QuizAttempt; let QuizSession; let oldMediaEnv; let oldCloudConfig;
 let revisions; let controller; let oldController; let buildQuizSubmissionSnapshot;
 const id = () => new mongoose.Types.ObjectId();
 const question = (prompt = "First question") => ({ prompt, options: ["A", "B"], correctAnswer: 0, explanation: "Because A is correct." });
-const draft = (title = "General Practice") => ({ title, description: "Practice description", category: "Vocabulary", difficulty: "Beginner", standaloneAccess: "public", questions: [question()] });
+const draft = (title = "General Practice") => ({ title, description: "Practice description", category: "Vocabulary", difficulty: "Beginner", standaloneAccess: "students", questions: [question()] });
 const response = () => ({ statusCode: 200, body: null, status(value) { this.statusCode = value; return this; }, json(value) { this.body = value; return this; } });
 const ownedImage = async (quiz, questionId) => {
-  const publicId = `arun_thai/quiz_media/images/${id()}`;
-  const url = `https://res.cloudinary.com/example/image/upload/${publicId}.webp`;
-  const record = await QuizMedia.create({ quiz: quiz._id, questionId, mediaType: "image", publicId, resourceType: "image", url });
+  const recordId = id();
+  const publicId = `arun_thai/testing/quiz_media/images/${recordId}`;
+  const url = `https://res.cloudinary.com/du6lhdq8t/image/upload/${publicId}.webp`;
+  const record = await QuizMedia.create({ _id: recordId, quiz: quiz._id, questionId, mediaType: "image",
+    environment: "testing", publicId, resourceType: "image", url });
   return { record, fields: { image: url, imagePublicId: publicId } };
 };
 async function withReplacement(object, key, replacement, operation) {
@@ -25,6 +28,24 @@ async function withReplacement(object, key, replacement, operation) {
   object[key] = replacement;
   try { return await operation(); }
   finally { object[key] = original; }
+}
+function mockQuestionMedia(t, { failOn = 0 } = {}) {
+  const cloudinary = require("../config/cloudinary");
+  let count = 0;
+  const upload = t.mock.method(cloudinary.uploader, "upload_stream", (options, callback) => new Writable({
+    write(_chunk, _encoding, done) { done(); },
+    final(done) {
+      count += 1;
+      if (count === failOn) { callback(new Error("simulated ambiguous upload")); done(); return; }
+      const publicId = `${options.folder}/${options.public_id}`;
+      callback(null, { public_id: publicId, resource_type: options.resource_type,
+        secure_url: `https://res.cloudinary.com/du6lhdq8t/${options.resource_type}/upload/${publicId}.${options.resource_type === "image" ? "png" : "mp3"}`,
+        format: options.resource_type === "image" ? "png" : "mp3" });
+      done();
+    },
+  }));
+  const destroy = t.mock.method(cloudinary.uploader, "destroy", async () => ({ result: "ok" }));
+  return { upload, destroy };
 }
 
 before(async () => {
@@ -45,6 +66,17 @@ before(async () => {
   });
   await initiateReplicaSet(port);
   await mongoose.connect(`mongodb://127.0.0.1:${port}/quiz_package_one?replicaSet=paymentTests`);
+  oldMediaEnv = Object.fromEntries(["QUIZ_QUESTION_MEDIA_ENV", "NODE_ENV", "MONGO_DB", "STANDALONE_QUIZ_EXPECTED_DB",
+    "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET", "CLOUDINARY_URL"]
+    .map((key) => [key, process.env[key]]));
+  Object.assign(process.env, { QUIZ_QUESTION_MEDIA_ENV: "testing", NODE_ENV: "test",
+    MONGO_DB: "mongodb+srv://englishkafe.xhqpzdd.mongodb.net/english_kafe",
+    STANDALONE_QUIZ_EXPECTED_DB: "english_kafe", CLOUDINARY_CLOUD_NAME: "du6lhdq8t",
+    CLOUDINARY_API_KEY: "x", CLOUDINARY_API_SECRET: "x" });
+  delete process.env.CLOUDINARY_URL;
+  const cloudinary = require("../config/cloudinary");
+  oldCloudConfig = cloudinary.config;
+  cloudinary.config = () => ({ cloud_name: "du6lhdq8t" });
   Quiz = require("../models/quizModel");
   QuizMedia = require("../models/quizMediaModel");
   QuizAttempt = require("../models/quizAttemptModel");
@@ -62,6 +94,10 @@ beforeEach(async () => {
 });
 
 after(async () => {
+  require("../config/cloudinary").config = oldCloudConfig;
+  for (const [key, value] of Object.entries(oldMediaEnv || {})) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
   await mongoose.disconnect();
   if (processHandle && processHandle.exitCode === null) {
     await new Promise((resolve) => { processHandle.once("exit", resolve); processHandle.kill("SIGTERM"); });
@@ -70,6 +106,7 @@ after(async () => {
 });
 
 test("new standalone draft is valid, unpublished, and hidden from public responses", async () => {
+  await assert.rejects(revisions.createDraft({ ...draft(), standaloneAccess: "public" }), /student access/);
   const quiz = await revisions.createDraft(draft());
   assert.equal(quiz.status, "draft");
   assert.equal(quiz.publishedRevision, null);
@@ -221,23 +258,20 @@ test("restore rejects invalid states and permits only one concurrent transition"
     (error) => error.status === 404 && error.code === "quiz_unavailable");
 });
 
-test("public responses expose only published metadata, with Students Only requiring authentication", async () => {
+test("published summaries omit answers and include legacy Public records for authenticated routes", async () => {
   const publicQuiz = await revisions.createDraft(draft());
   await revisions.publishDraft(publicQuiz._id, 1);
+  await Quiz.updateOne({ _id: publicQuiz._id }, { $set: { standaloneAccess: "public" } });
   const studentQuiz = await revisions.createDraft({ ...draft("Student practice"), standaloneAccess: "students" });
   await revisions.publishDraft(studentQuiz._id, 1);
-  const anonymous = response();
-  await controller.listPublished({}, anonymous);
-  assert.equal(anonymous.body.quizzes.length, 1);
-  assert.equal(anonymous.body.quizzes[0].title, "General Practice");
-  assert.equal("questions" in anonymous.body.quizzes[0], false);
-  assert.equal("draft" in anonymous.body.quizzes[0], false);
   const authenticated = response();
   await controller.listPublished({ user: { id: id(), role: "user" } }, authenticated);
   assert.equal(authenticated.body.quizzes.length, 2);
+  assert.equal("questions" in authenticated.body.quizzes[0], false);
+  assert.equal("draft" in authenticated.body.quizzes[0], false);
   const privateDetail = response();
-  await controller.getPublished({ params: { quizId: String(studentQuiz._id) } }, privateDetail);
-  assert.equal(privateDetail.statusCode, 404);
+  await controller.getPublished({ user: { id: id(), role: "user" }, params: { quizId: String(studentQuiz._id) } }, privateDetail);
+  assert.equal(privateDetail.statusCode, 200);
 });
 
 test("explanations are snapshotted for standalone only and old attempts remain readable", async () => {
@@ -426,6 +460,130 @@ test("cleanup failure is retryable and never reports a completed media pass", as
   assert.equal((await QuizMedia.findById(record._id)).cleanupState, "deleted");
 });
 
+test("legacy media remains readable and does not hold an unrelated draft save open", async () => {
+  const quiz = await revisions.createDraft(draft());
+  const questionId = quiz.draft.questions[0]._id;
+  const publicId = `arun_thai/quiz_media/images/${id()}`;
+  const url = `https://res.cloudinary.com/example/image/upload/${publicId}.webp`;
+  const legacy = await QuizMedia.create({ quiz: quiz._id, questionId, mediaType: "image",
+    publicId, resourceType: "image", url });
+  await revisions.saveDraft(quiz._id, 1, { questions: [{ ...question(), _id: questionId,
+    image: url, imagePublicId: publicId }] });
+  const saved = await revisions.saveDraft(quiz._id, 2, { questions: [{ ...question(), _id: questionId }] });
+  assert.equal(saved.mediaReconciliationToken, undefined);
+  assert.equal((await QuizMedia.findById(legacy._id)).cleanupError, "legacy_media_unverified");
+});
+
+test("multipart draft edit replaces image with a testing-owned reservation without changing published or session media", async (t) => {
+  const cloud = mockQuestionMedia(t);
+  const created = await revisions.createDraft(draft());
+  const published = await revisions.publishDraft(created._id, 1);
+  const original = published.questions[0].toObject();
+  const session = await QuizSession.create({ user: id(), quiz: created._id, revision: 1,
+    contextType: "standalone", snapshot: { questions: [original] }, expiresAt: new Date(Date.now() + 86400000) });
+  const edited = await revisions.saveDraftWithMedia(created._id, 0,
+    { questions: [{ ...original, audio: "", audioPublicId: "" }] },
+    [{ fieldname: "questionImage_0", buffer: Buffer.from("image fixture"), mimetype: "image/png" }]);
+  assert.equal(edited.draft.version, 1);
+  assert.equal(edited.publishedRevision, 1);
+  assert.equal(edited.questions[0].image || "", original.image || "");
+  assert.equal((await QuizSession.findById(session._id)).snapshot.questions[0].image || "", original.image || "");
+  const record = await QuizMedia.findOne({ publicId: edited.draft.questions[0].imagePublicId });
+  assert.equal(record.environment, "testing");
+  assert.equal(record.cleanupState, "active");
+  assert.equal(String(record.questionId), String(original._id));
+  assert.match(record.publicId, /^arun_thai\/testing\/quiz_media\/images\//);
+  assert.equal(cloud.upload.mock.calls[0].arguments[0].overwrite, false);
+  assert.equal(cloud.destroy.mock.callCount(), 0);
+  const republished = await revisions.publishDraft(created._id, 1);
+  assert.equal(republished.questions[0].imagePublicId, record.publicId);
+  assert.equal((await QuizSession.findById(session._id)).snapshot.questions[0].image || "", original.image || "");
+});
+
+test("audio-only replacement and explicit removal preserve unrelated media and published references", async (t) => {
+  const cloud = mockQuestionMedia(t);
+  const created = await revisions.createDraft(draft());
+  const first = created.draft.questions[0].toObject();
+  const image = await ownedImage(created, first._id);
+  await revisions.saveDraft(created._id, 1, { questions: [{ ...first, ...image.fields }] });
+  const published = await revisions.publishDraft(created._id, 2);
+  const live = published.questions[0].toObject();
+  const edited = await revisions.saveDraftWithMedia(created._id, 0,
+    { questions: [live] }, [{ fieldname: "questionAudio_0", buffer: Buffer.from("audio fixture"), mimetype: "audio/mpeg" }]);
+  assert.equal(edited.draft.questions[0].imagePublicId, image.record.publicId);
+  assert.match(edited.draft.questions[0].audioPublicId, /^arun_thai\/testing\/quiz_media\/audio\//);
+  const removed = await revisions.saveDraft(created._id, 1,
+    { questions: [{ ...edited.draft.questions[0].toObject(), image: "", imagePublicId: "" }] });
+  assert.equal(removed.draft.questions[0].image || "", "");
+  assert.equal(removed.draft.questions[0].audioPublicId, edited.draft.questions[0].audioPublicId);
+  assert.equal(removed.questions[0].imagePublicId, image.record.publicId);
+  assert.equal((await QuizMedia.findById(image.record._id)).cleanupState, "active");
+  assert.equal(cloud.destroy.mock.callCount(), 0);
+});
+
+test("new question media validates ownership, stale versions, and ambiguous upload reservations", async (t) => {
+  const cloud = mockQuestionMedia(t, { failOn: 2 });
+  const quiz = await revisions.createDraft(draft());
+  const original = quiz.draft.questions[0].toObject();
+  const replacement = { ...draft(), questions: [original, question("New media question")] };
+  await assert.rejects(revisions.saveDraftWithMedia(quiz._id, 0, replacement,
+    [{ fieldname: "questionImage_1", buffer: Buffer.from("image"), mimetype: "image/png" }]),
+  (error) => error.status === 409);
+  assert.equal(cloud.upload.mock.callCount(), 0);
+  await assert.rejects(revisions.saveDraftWithMedia(quiz._id, 1, replacement,
+    [{ fieldname: "questionImage_4", buffer: Buffer.from("image"), mimetype: "image/png" }]),
+  (error) => error.status === 400);
+  assert.equal(cloud.upload.mock.callCount(), 0);
+  const edited = await revisions.saveDraftWithMedia(quiz._id, 1, replacement,
+    [{ fieldname: "questionImage_1", buffer: Buffer.from("image"), mimetype: "image/png" }]);
+  assert.equal(edited.draft.questions.length, 2);
+  assert.match(edited.draft.questions[1].imagePublicId, /^arun_thai\/testing\/quiz_media\/images\//);
+  await assert.rejects(revisions.saveDraftWithMedia(quiz._id, 2,
+    { questions: edited.draft.questions.map((item) => item.toObject()) },
+    [{ fieldname: "questionAudio_1", buffer: Buffer.from("audio"), mimetype: "audio/mpeg" }]), /ambiguous upload/);
+  assert.equal((await Quiz.findById(quiz._id)).draft.version, 2);
+  assert.ok(await QuizMedia.exists({ quiz: quiz._id, mediaType: "audio", cleanupState: "reserved", url: "" }));
+  assert.equal(cloud.destroy.mock.callCount(), 0);
+  const foreign = await QuizMedia.create({ quiz: quiz._id, questionId: original._id, mediaType: "audio",
+    environment: "production", publicId: `arun_thai/production/quiz_media/audio/${id()}`,
+    resourceType: "video", url: "https://res.cloudinary.com/du6lhdq8t/video/upload/foreign.mp3" });
+  await assert.rejects(revisions.saveDraft(quiz._id, 2,
+    { questions: [{ ...edited.draft.questions[0].toObject(), audio: foreign.url,
+      audioPublicId: foreign.publicId }, edited.draft.questions[1].toObject()] }),
+  (error) => error.status === 400 && error.code === "invalid_quiz_media");
+});
+
+test("a partial edit upload cleans only confirmed assets and retains ambiguous reservations", async (t) => {
+  const cloud = mockQuestionMedia(t, { failOn: 2 });
+  const quiz = await revisions.createDraft(draft());
+  const questionId = quiz.draft.questions[0]._id;
+  await assert.rejects(revisions.saveDraftWithMedia(quiz._id, 1,
+    { questions: [{ ...quiz.draft.questions[0].toObject(), _id: questionId }] },
+    [{ fieldname: "questionImage_0", mimetype: "image/png", buffer: Buffer.from("image") },
+      { fieldname: "questionAudio_0", mimetype: "audio/mpeg", buffer: Buffer.from("audio") }]),
+  /ambiguous upload/);
+  assert.equal((await Quiz.findById(quiz._id)).draft.version, 1);
+  assert.equal(cloud.destroy.mock.callCount(), 1);
+  assert.ok(await QuizMedia.exists({ quiz: quiz._id, mediaType: "image", cleanupState: "deleted" }));
+  assert.ok(await QuizMedia.exists({ quiz: quiz._id, mediaType: "audio", cleanupState: "reserved", url: "" }));
+});
+
+test("uncommitted edit media stays reserved during reconciliation and activates only after the draft references it", async (t) => {
+  const cloud = mockQuestionMedia(t);
+  const quiz = await revisions.createDraft(draft());
+  const questionId = quiz.draft.questions[0]._id;
+  const record = await require("../services/quizQuestionMediaUpload").uploadOwnedQuestionMedia({
+    quizId: quiz._id, questionId, mediaType: "image", buffer: Buffer.from("image"), holdForRevision: true });
+  assert.equal(record.cleanupState, "reserved");
+  await require("../services/quizMediaLifecycle").reconcileStandaloneQuizMedia(quiz);
+  assert.equal((await QuizMedia.findById(record._id)).cleanupState, "reserved");
+  assert.equal(cloud.destroy.mock.callCount(), 0);
+  const saved = await revisions.saveDraft(quiz._id, 1, { questions: [{ ...quiz.draft.questions[0].toObject(),
+    image: record.url, imagePublicId: record.publicId }] });
+  assert.equal(saved.draft.questions[0].imagePublicId, record.publicId);
+  assert.equal((await QuizMedia.findById(record._id)).cleanupState, "active");
+});
+
 test("media retry is a separate POST behind authentication and Admin authorization", async () => {
   const router = require("../routes/quiz");
   const route = router.stack.find((layer) => layer.route?.path === "/admin/standalone/:quizId/media/retry");
@@ -439,4 +597,22 @@ test("media retry is a separate POST behind authentication and Admin authorizati
   const nonAdmin = response();
   await route.route.stack[1].handle({ user: { role: "user" } }, nonAdmin, () => assert.fail("student retry proceeded"));
   assert.equal(nonAdmin.statusCode, 403);
+});
+
+test("draft media route retains Admin authentication and rejects unsupported or oversized files", () => {
+  const router = require("../routes/quiz");
+  const route = router.stack.find((layer) => layer.route?.path === "/admin/standalone/:quizId/draft");
+  assert.equal(route.route.methods.put, true);
+  assert.deepEqual(route.route.stack.slice(0, 2).map((layer) => layer.name), ["validateToken", "requireAdmin"]);
+  const validate = require("../middleware/uploadValidation").validateQuizMediaContent;
+  for (const file of [
+    { fieldname: "questionImage_0", mimetype: "text/plain", buffer: Buffer.from("plain") },
+    { fieldname: "questionAudio_0", mimetype: "audio/mpeg", buffer: Buffer.from("plain") },
+    { fieldname: "questionImage_0", mimetype: "image/png", buffer: Buffer.alloc(5 * 1024 * 1024 + 1) },
+  ]) {
+    const res = response(); let next = false;
+    validate({ files: [file] }, res, () => { next = true; });
+    assert.equal(res.statusCode, 400);
+    assert.equal(next, false);
+  }
 });

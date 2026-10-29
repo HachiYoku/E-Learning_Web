@@ -111,7 +111,7 @@ function GeneralPracticeSetDetails() {
                   <span className="text-xs text-[#765F55]">Order {quiz.sortOrder}</span>
                 </div>
                 <h3 className="mt-3 break-words text-lg font-bold text-[#2D2E30]">{quiz.title || 'Untitled quiz'}</h3>
-                <p className="mt-2 text-sm text-[#765F55]">{quiz.standaloneAccess === 'public' ? 'Public' : quiz.standaloneAccess === 'students' ? 'Students Only' : 'Visibility not set'} · {quiz.category || 'No category'} · {quiz.difficulty || 'No difficulty'}</p>
+                <p className="mt-2 text-sm text-[#765F55]">Signed-in students · {quiz.category || 'No category'} · {quiz.difficulty || 'No difficulty'}</p>
                 <p className="mt-2 text-xs text-[#765F55]">Published revision: {quiz.publishedRevision ?? 'None'} · Draft version: {quiz.draftVersion ?? 'None'}</p>
                 <Link to={`/general-practice/${encodeURIComponent(quiz.id)}`} state={{ fromSet: { id: set.id, name: set.name } }} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-2.5 text-sm font-bold text-[#2D2E30] hover:bg-[#FFF4D8] focus:outline-none focus:ring-2 focus:ring-[#E58C1A]" aria-label={`View details for ${quiz.title || 'Untitled quiz'}`}>View quiz <ArrowRight size={17} aria-hidden="true" /></Link>
               </article>)}</div>}

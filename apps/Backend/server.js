@@ -13,7 +13,6 @@ const {
   redact,
 } = require("./middleware/monitoring");
 const healthCheck = require("./middleware/health");
-const { createProxyDiagnostic } = require("./middleware/proxyDiagnostic");
 const { initializeSocketServer, closeSocketServer } = require("./realtime/socketServer");
 const { resolveListenHost, listenOnHost } = require("./config/listenHost");
 
@@ -101,7 +100,7 @@ app.use((req, res, next) => {
     }
 
     res.header('Access-Control-Allow-Credentials', 'true')
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Portal, X-Guest-Quiz-Request')
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Portal')
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
 
     if (req.method === 'OPTIONS') {
@@ -238,7 +237,7 @@ app.get('/', (req, res) => {
   res.send('Hello Arun Thai!')
 })
 
-app.get('/health', createProxyDiagnostic(), healthCheck)
+app.get('/health', healthCheck)
 
 app.use(errorHandler)
 

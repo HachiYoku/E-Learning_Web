@@ -15,7 +15,7 @@ const user = () => ({ id: id(), role: "user" });
 const question = (prompt = "First question") => ({ prompt, options: ["A", "B"], correctAnswer: 0,
   explanation: "The answer is A." });
 const draft = (questions = [question(), question("Second question")]) => ({ title: "Practice A",
-  category: "Vocabulary", difficulty: "Beginner", standaloneAccess: "public", questions });
+  category: "Vocabulary", difficulty: "Beginner", standaloneAccess: "students", questions });
 const deferred = () => {
   let resolve;
   const promise = new Promise((done) => { resolve = done; });

@@ -28,7 +28,7 @@ describe('Admin General Practice read-only views', () => {
     expect(screen.getByRole('status').textContent).toMatch(/Loading General Practice/i)
     complete([quiz])
     expect(await screen.findByText('Thai greetings')).toBeTruthy()
-    expect(screen.getByText('Public')).toBeTruthy()
+    expect(screen.getByText('Signed-in students')).toBeTruthy()
     expect(screen.getByText(/Draft version: 2/)).toBeTruthy()
     expect(screen.queryByText('Private answer')).toBeNull()
     expect(screen.queryByRole('button', { name: /create|publish|archive/i })).toBeNull()

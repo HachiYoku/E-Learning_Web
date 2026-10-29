@@ -4,7 +4,7 @@ import { draftFromQuiz, draftPayload, emptyDraft, validateDraft } from './genera
 it('validates required text questions, options, answers and metadata', () => {
   const form = emptyDraft()
   expect(validateDraft(form).length).toBeGreaterThan(3)
-  Object.assign(form, { title: 'Thai', category: 'Vocabulary', difficulty: 'Beginner', standaloneAccess: 'public' })
+  Object.assign(form, { title: 'Thai', category: 'Vocabulary', difficulty: 'Beginner' })
   Object.assign(form.questions[0], { prompt: 'Greeting?', options: ['Hello', 'Goodbye'], correctAnswer: 0 })
   expect(validateDraft(form)).toEqual([])
   form.questions[0].options[1] = ''
@@ -18,6 +18,7 @@ it('clones a published revision for editing without losing owned media fields', 
   form.questions[0].options[0] = 'Changed'
   expect(quiz.published.questions[0].options[0]).toBe('A')
   const payload = draftPayload(form)
+  expect(payload.standaloneAccess).toBe('students')
   expect(payload.questions[0]).toEqual({ ...question, options: ['Changed', 'B'] })
   expect(payload.questions[0].localId).toBeUndefined()
   expect(validateDraft(form)).toEqual([])

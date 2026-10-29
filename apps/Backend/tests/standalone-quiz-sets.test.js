@@ -5,10 +5,12 @@ const fs = require("node:fs/promises");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { Writable } = require("node:stream");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { initiateReplicaSet } = require("./helpers/replicaSet");
+const errorHandler = require("../middleware/errorHandler");
 const QuizSet = require("../models/quizSetModel");
 const Quiz = require("../models/quizModel");
 const QuizSession = require("../models/quizSessionModel");
@@ -18,6 +20,8 @@ const QuizCreationRequest = require("../models/quizCreationRequestModel");
 const CoverAsset = require("../models/quizSetCoverAssetModel");
 const cloudinary = require("../config/cloudinary");
 const covers = require("../services/quizSetCoverService");
+const { cleanupQuizMedia, registerQuizMedia } = require("../services/quizMediaLifecycle");
+const { uploadOwnedQuestionMedia } = require("../services/quizQuestionMediaUpload");
 const { TESTING_FOLDER } = require("../services/quizSetCoverEnvironment");
 const User = require("../models/userModel");
 const sets = require("../services/standaloneQuizSets");
@@ -35,12 +39,17 @@ const fixtureMongoUri = (host, database, username = "example", password = "examp
 const id = () => new mongoose.Types.ObjectId();
 const creationId = () => require("node:crypto").randomUUID();
 const learner = () => ({ id: id(), role: "user" });
+async function studentToken() {
+  const student = await User.create({ name: "Learner", email: "learner@example.test", password: "local-only",
+    role: "user", isVerified: true, isActive: true });
+  return jwt.sign({ id: String(student._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+}
 const coverEnv = { QUIZ_SET_COVER_ENV: "testing", NODE_ENV: "test",
   MONGO_DB: fixtureMongoUri("englishkafe.xhqpzdd.mongodb.net", "english_kafe", "example", "example"),
   STANDALONE_QUIZ_EXPECTED_DB: "english_kafe", CLOUDINARY_CLOUD_NAME: "du6lhdq8t",
   CLOUDINARY_API_KEY: "mock-key", CLOUDINARY_API_SECRET: "mock-secret" };
 const draft = () => ({ title: "Thai greetings", category: "Vocabulary", difficulty: "Beginner",
-  standaloneAccess: "public", questions: [{ prompt: "Hello?", options: ["Sawasdee", "Bye"], correctAnswer: 0,
+  standaloneAccess: "students", questions: [{ prompt: "Hello?", options: ["Sawasdee", "Bye"], correctAnswer: 0,
     explanation: "Sawasdee means hello." }] });
 const freePort = () => new Promise((resolve, reject) => {
   const socket = net.createServer(); socket.once("error", reject);
@@ -68,7 +77,7 @@ async function pauseNextSetFence(run) {
   try { return await run({ entered: entered.promise, release: release.resolve }); }
   finally { release.resolve(); QuizSet.findOneAndUpdate = original; }
 }
-let mongo; let directory; let server; let base; let oldSecret; let mongoUri; let configuredCloud;
+let mongo; let directory; let server; let base; let oldSecret; let mongoUri; let configuredCloud; let oldMediaEnv;
 
 async function activeSet() {
   const set = await sets.createSet({ name: "UAT Set", difficulty: "Beginner" });
@@ -95,6 +104,55 @@ async function request(route, { method = "GET", token, body } = {}) {
   return { status: response.status, body: await response.json() };
 }
 
+const imageBytes = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("test")]);
+const audioBytes = Buffer.from("ID3test-audio");
+function mediaBody(key, content, media = []) {
+  const body = new FormData();
+  body.append("creationRequestId", key);
+  body.append("draft", JSON.stringify(content));
+  for (const { field, bytes, type, name } of media) body.append(field, new Blob([bytes], { type }), name);
+  return body;
+}
+async function mediaRequest(route, token, body) {
+  const response = await fetch(`${base}/quizzes${route}`, { method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {}, body });
+  return { status: response.status, body: await response.json() };
+}
+function mockMediaCloud({ failAt = 0, failDestroy = false } = {}) {
+  let uploads = 0;
+  const upload = mock.method(cloudinary.uploader, "upload_stream", (options, callback) => new Writable({
+    write(_chunk, _encoding, done) { done(); },
+    final(done) {
+      uploads += 1;
+      if (uploads === failAt) { callback(new Error("Simulated upload failure")); done(); return; }
+      const publicId = `${options.folder}/${options.public_id}`;
+      callback(null, { public_id: publicId, resource_type: options.resource_type,
+        secure_url: `https://res.cloudinary.com/du6lhdq8t/${options.resource_type}/upload/${publicId}.${options.resource_type === "image" ? "png" : "mp3"}`,
+        format: options.resource_type === "image" ? "png" : "mp3" });
+      done();
+    },
+  }));
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => {
+    if (failDestroy) throw new Error("Simulated cleanup failure");
+    return { result: "ok" };
+  });
+  return { get uploads() { return uploads; }, upload, destroy,
+    restore() { upload.mock.restore(); destroy.mock.restore(); } };
+}
+
+async function managedMedia({ environment = "testing", mediaType = "image", legacy = false,
+  wrongId = false, state = "pending_cleanup" } = {}) {
+  const recordId = id();
+  const resourceType = mediaType === "image" ? "image" : "video";
+  const folder = `arun_thai/${environment}/quiz_media/${mediaType === "image" ? "images" : "audio"}`;
+  const publicId = legacy ? `arun_thai/quiz_media/images/${recordId}`
+    : `${folder}/${wrongId ? id() : recordId}`;
+  return QuizMedia.create({ _id: recordId, quiz: id(), questionId: id(), mediaType,
+    ...(legacy ? {} : { environment }), publicId, resourceType,
+    url: `https://res.cloudinary.com/du6lhdq8t/${resourceType}/upload/${publicId}.${mediaType === "image" ? "png" : "mp3"}`,
+    cleanupState: state });
+}
+
 before(async () => {
   configuredCloud = mock.method(cloudinary, "config", () => ({ cloud_name: "du6lhdq8t" }));
   const mongoPort = await freePort(); const apiPort = await freePort();
@@ -111,7 +169,14 @@ before(async () => {
   await mongoose.connect(mongoUri,
     { autoIndex: false, autoCreate: false });
   oldSecret = process.env.JWT_SECRET; process.env.JWT_SECRET = "isolated-quiz-set-test-secret";
+  oldMediaEnv = Object.fromEntries(["QUIZ_QUESTION_MEDIA_ENV", "NODE_ENV", "MONGO_DB", "STANDALONE_QUIZ_EXPECTED_DB",
+    "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET", "CLOUDINARY_URL"]
+    .map((key) => [key, process.env[key]]));
+  for (const [key, value] of Object.entries(coverEnv)) process.env[key] = value;
+  process.env.QUIZ_QUESTION_MEDIA_ENV = "testing";
+  delete process.env.CLOUDINARY_URL;
   const app = express(); app.use(express.json()); app.use("/quizzes", require("../routes/quiz"));
+  app.use(errorHandler);
   server = app.listen(apiPort, "127.0.0.1"); base = `http://127.0.0.1:${apiPort}`;
 });
 beforeEach(async () => {
@@ -124,6 +189,9 @@ after(async () => {
   configuredCloud?.mock.restore();
   if (server) await new Promise((resolve) => server.close(resolve));
   if (oldSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = oldSecret;
+  for (const [key, value] of Object.entries(oldMediaEnv || {})) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
   await mongoose.disconnect();
   if (mongo && mongo.exitCode === null) await new Promise((resolve) => { mongo.once("exit", resolve); mongo.kill("SIGTERM"); });
   if (directory) await fs.rm(directory, { recursive: true, force: true });
@@ -137,29 +205,44 @@ test("model validates required metadata and starts Disabled", async () => {
   await assert.rejects(sets.createSet({ name: "x", difficulty: "Expert" }), /Invalid difficulty/);
 });
 
-test("public catalog includes empty active sets and excludes disabled/archived sets", async () => {
+test("every General Practice discovery and attempt endpoint denies anonymous requests", async () => {
+  const quizId = id();
+  const attemptId = id();
+  const setId = id();
+  for (const route of ["/standalone", "/standalone/sets", `/standalone/sets/${setId}`,
+    `/standalone/${quizId}`, `/standalone/${quizId}/attempts`, `/standalone/attempts/${attemptId}`]) {
+    assert.equal((await request(route)).status, 401, route);
+  }
+  for (const route of [`/standalone/${quizId}/sessions`, `/standalone/${quizId}/submit`]) {
+    assert.equal((await request(route, { method: "POST", body: {} })).status, 401, route);
+  }
+});
+
+test("authenticated catalog includes empty active sets and excludes disabled/archived sets", async () => {
   const active = await activeSet();
   await sets.createSet({ name: "Hidden Set" });
-  const result = await request("/standalone/sets");
+  const token = await studentToken();
+  const result = await request("/standalone/sets", { token });
   assert.equal(result.status, 200); assert.equal(result.body.sets.length, 1);
   assert.equal(result.body.sets[0].id, String(active._id));
   assert.equal("status" in result.body.sets[0], false);
-  const detail = await request(`/standalone/sets/${active._id}`);
+  const detail = await request(`/standalone/sets/${active._id}`, { token });
   assert.equal(detail.status, 200); assert.deepEqual(detail.body.quizzes, []);
 });
 
 test("catalog paginates deterministically and filters name and difficulty", async () => {
+  const token = await studentToken();
   for (const name of ["Thai A", "Thai B", "Thai C"]) {
     const set = await sets.createSet({ name, difficulty: "Beginner", displayOrder: 1 });
     await sets.transitionSet(set._id, 1, "activate");
   }
-  const first = await request("/standalone/sets?limit=2&name=Thai&difficulty=Beginner");
+  const first = await request("/standalone/sets?limit=2&name=Thai&difficulty=Beginner", { token });
   assert.equal(first.status, 200); assert.equal(first.body.sets.length, 2);
   assert.ok(first.body.nextCursor);
-  const second = await request(`/standalone/sets?limit=2&after=${encodeURIComponent(first.body.nextCursor)}`);
+  const second = await request(`/standalone/sets?limit=2&after=${encodeURIComponent(first.body.nextCursor)}`, { token });
   assert.equal(second.status, 200); assert.equal(second.body.sets.length, 1);
   assert.equal(new Set([...first.body.sets, ...second.body.sets].map((set) => set.id)).size, 3);
-  assert.equal((await request("/standalone/sets?after=invalid")).status, 400);
+  assert.equal((await request("/standalone/sets?after=invalid", { token })).status, 400);
 });
 
 test("Admin-only APIs require authentication and new drafts require Set assignment", async () => {
@@ -259,6 +342,374 @@ test("committed creation replays its original result and rejects changed content
   assert.equal(distinct.status, 201);
   assert.notEqual(distinct.body.id, first.body.id);
   assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 2);
+});
+
+test("one multipart Save creates a Set draft with owned image and audio; replay never reuploads", async () => {
+  const cloud = mockMediaCloud();
+  try {
+    const set = await activeSet();
+    const admin = await User.create({ name: "Admin", email: "media-create@example.test", password: String(id()),
+      role: "admin", isVerified: true, isActive: true });
+    const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const route = `/admin/standalone/sets/${set._id}/quizzes`;
+    const key = creationId();
+    const content = { ...draft(), questions: [{ prompt: "", options: ["Yes", "No"], correctAnswer: 0 }] };
+    const media = [
+      { field: "questionImage_0", bytes: imageBytes, type: "image/png", name: "prompt.png" },
+      { field: "questionAudio_0", bytes: audioBytes, type: "audio/mpeg", name: "prompt.mp3" },
+    ];
+    const first = await mediaRequest(route, token, mediaBody(key, content, media));
+    assert.equal(first.status, 201);
+    assert.equal(first.body.draft.version, 1);
+    assert.equal(first.body.quizSetId, String(set._id));
+    assert.equal(cloud.uploads, 2);
+    assert.ok(cloud.upload.mock.calls.every(({ arguments: [options] }) =>
+      options.overwrite === false && options.unique_filename === false
+      && options.folder.startsWith("arun_thai/testing/quiz_media/")));
+    const owned = await QuizMedia.find({ quiz: first.body.id });
+    assert.equal(owned.length, 2);
+    assert.ok(owned.every((item) => item.cleanupState === "active"));
+    assert.deepEqual(new Set(owned.map((item) => item.format)), new Set(["png", "mp3"]));
+    assert.equal(String(owned[0].questionId), String(first.body.draft.questions[0]._id));
+    const replay = await mediaRequest(route, token, mediaBody(key, content, media));
+    assert.equal(replay.status, 201);
+    assert.deepEqual(replay.body, first.body);
+    assert.equal(cloud.uploads, 2);
+    assert.equal((await request(`/admin/standalone/sets/${set._id}/quizzes/creation/${key}`, { token })).body.status, "committed");
+    const changed = await mediaRequest(route, token, mediaBody(key, content,
+      [{ ...media[0], bytes: Buffer.concat([imageBytes, Buffer.from("different")]) }, media[1]]));
+    assert.equal(changed.status, 409);
+    assert.equal(cloud.uploads, 2);
+    const published = await revisions.publishDraft(first.body.id, 1);
+    assert.equal(published.publishedRevision, 1);
+    assert.equal(published.questions[0].imagePublicId, first.body.draft.questions[0].imagePublicId);
+  } finally { cloud.restore(); }
+});
+
+test("a production-mode upload reserves a production-owned ID before provider upload", async () => {
+  const cloud = mockMediaCloud();
+  const previous = { NODE_ENV: process.env.NODE_ENV, QUIZ_QUESTION_MEDIA_ENV: process.env.QUIZ_QUESTION_MEDIA_ENV,
+    MONGO_DB: process.env.MONGO_DB, STANDALONE_QUIZ_EXPECTED_DB: process.env.STANDALONE_QUIZ_EXPECTED_DB };
+  try {
+    Object.assign(process.env, { NODE_ENV: "production", QUIZ_QUESTION_MEDIA_ENV: "production",
+      MONGO_DB: "mongodb+srv://production.example.test/app_data", STANDALONE_QUIZ_EXPECTED_DB: "app_data" });
+    const record = await uploadOwnedQuestionMedia({ quizId: id(), questionId: id(),
+      mediaType: "audio", buffer: audioBytes });
+    assert.equal(record.environment, "production");
+    assert.equal(record.publicId, `arun_thai/production/quiz_media/audio/${record._id}`);
+    assert.equal(cloud.upload.mock.calls[0].arguments[0].overwrite, false);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+    cloud.restore();
+  }
+});
+
+test("question-media ownership reservation exists before the upload stream completes", async () => {
+  let observedState;
+  const upload = mock.method(cloudinary.uploader, "upload_stream", (options, callback) => new Writable({
+    write(_chunk, _encoding, done) { done(); },
+    final(done) {
+      const publicId = `${options.folder}/${options.public_id}`;
+      QuizMedia.findOne({ publicId }).then((record) => {
+        observedState = record?.cleanupState;
+        callback(null, { public_id: publicId, resource_type: "image",
+          secure_url: `https://res.cloudinary.com/du6lhdq8t/image/upload/${publicId}.png`, format: "png" });
+        done();
+      }, done);
+    },
+  }));
+  try {
+    const record = await uploadOwnedQuestionMedia({ quizId: id(), questionId: id(),
+      mediaType: "image", buffer: imageBytes });
+    assert.equal(observedState, "reserved");
+    assert.equal(record.cleanupState, "pending_cleanup");
+  } finally { upload.mock.restore(); }
+});
+
+test("missing or invalid question-media environment blocks upload before ownership or provider calls", async () => {
+  const cloud = mockMediaCloud();
+  const previous = process.env.QUIZ_QUESTION_MEDIA_ENV;
+  try {
+    for (const value of [undefined, "staging"]) {
+      if (value === undefined) delete process.env.QUIZ_QUESTION_MEDIA_ENV;
+      else process.env.QUIZ_QUESTION_MEDIA_ENV = value;
+      await assert.rejects(uploadOwnedQuestionMedia({ quizId: id(), questionId: id(),
+        mediaType: "image", buffer: imageBytes }), /environment is not configured/);
+    }
+    assert.equal(await QuizMedia.countDocuments(), 0);
+    assert.equal(cloud.upload.mock.callCount(), 0);
+  } finally {
+    if (previous === undefined) delete process.env.QUIZ_QUESTION_MEDIA_ENV;
+    else process.env.QUIZ_QUESTION_MEDIA_ENV = previous;
+    cloud.restore();
+  }
+});
+
+test("question-media cleanup refuses other environments, legacy IDs, and mismatched ownership", async () => {
+  const cloud = mockMediaCloud();
+  try {
+    for (const options of [{ environment: "production" }, { legacy: true }, { wrongId: true }]) {
+      const record = await managedMedia(options);
+      assert.equal(await cleanupQuizMedia(record), false);
+      assert.equal((await QuizMedia.findById(record._id)).cleanupError,
+        options.legacy ? "legacy_media_unverified" : "ownership_mismatch");
+    }
+    assert.equal(cloud.destroy.mock.callCount(), 0);
+    const valid = await managedMedia({ mediaType: "audio" });
+    assert.equal(await cleanupQuizMedia(valid), true);
+    assert.equal(cloud.destroy.mock.callCount(), 1);
+    assert.equal((await QuizMedia.findById(valid._id)).cleanupState, "deleted");
+  } finally { cloud.restore(); }
+});
+
+test("concurrent cleanup claims one owned asset once", async () => {
+  const record = await managedMedia();
+  const entered = deferred();
+  const release = deferred();
+  let calls = 0;
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => {
+    calls += 1;
+    entered.resolve();
+    await release.promise;
+    return { result: "ok" };
+  });
+  try {
+    const first = cleanupQuizMedia(record);
+    await entered.promise;
+    assert.equal(await cleanupQuizMedia(record), false);
+    release.resolve();
+    assert.equal(await first, true);
+    assert.equal(calls, 1);
+    assert.equal((await QuizMedia.findById(record._id)).cleanupState, "deleted");
+  } finally { release.resolve(); destroy.mock.restore(); }
+});
+
+test("reconciliation cannot reactivate question media while deletion is claimed", async () => {
+  const record = await managedMedia();
+  const entered = deferred();
+  const release = deferred();
+  const destroy = mock.method(cloudinary.uploader, "destroy", async () => {
+    entered.resolve();
+    await release.promise;
+    return { result: "ok" };
+  });
+  const quiz = { _id: record.quiz, questions: [{ _id: record.questionId,
+    image: record.url, imagePublicId: record.publicId }] };
+  try {
+    const cleanup = cleanupQuizMedia(record);
+    await entered.promise;
+    assert.equal((await QuizMedia.findById(record._id)).cleanupState, "cleanup_processing");
+    await assert.rejects(registerQuizMedia(quiz, { existingOnly: true }), /requires recovery/);
+    await assert.rejects(registerQuizMedia(quiz));
+    assert.equal((await QuizMedia.findById(record._id)).cleanupState, "cleanup_processing");
+    release.resolve();
+    assert.equal(await cleanup, true);
+    assert.equal((await QuizMedia.findById(record._id)).cleanupState, "deleted");
+  } finally { release.resolve(); destroy.mock.restore(); }
+});
+
+test("unknown upload outcomes retain reservations and pending retry cannot delete legacy media", async () => {
+  const cloud = mockMediaCloud({ failAt: 1 });
+  try {
+    await assert.rejects(uploadOwnedQuestionMedia({ quizId: id(), questionId: id(), mediaType: "image",
+      buffer: imageBytes }), /Simulated upload failure/);
+    const reservation = await QuizMedia.findOne({ cleanupState: "reserved" });
+    assert.ok(reservation);
+    assert.equal(reservation.url, "");
+    assert.equal(await cleanupQuizMedia(reservation), false);
+    const legacy = await managedMedia({ legacy: true });
+    await QuizMedia.collection.updateOne({ _id: legacy._id },
+      { $set: { createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) } });
+    const set = await activeSet();
+    const admin = await User.create({ name: "Admin", email: "media-guard@example.test", password: String(id()),
+      role: "admin", isVerified: true, isActive: true });
+    const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const response = await mediaRequest(`/admin/standalone/sets/${set._id}/quizzes`, token,
+      mediaBody(creationId(), draft(), [{ field: "questionImage_0", bytes: imageBytes, type: "image/png", name: "safe.png" }]));
+    assert.equal(response.status, 201);
+    assert.equal(cloud.destroy.mock.callCount(), 0);
+    assert.equal((await QuizMedia.findById(reservation._id)).cleanupState, "reserved");
+    assert.equal((await QuizMedia.findById(legacy._id)).cleanupError, "legacy_media_unverified");
+  } finally { cloud.restore(); }
+});
+
+test("multipart validation and Admin authorization reject bad media before Cloudinary", async () => {
+  const cloud = mockMediaCloud();
+  try {
+    const set = await activeSet();
+    const admin = await User.create({ name: "Admin", email: "media-reject@example.test", password: String(id()),
+      role: "admin", isVerified: true, isActive: true });
+    const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const student = await User.create({ name: "Student", email: "media-student@example.test", password: String(id()),
+      role: "user", isVerified: true, isActive: true });
+    const studentToken = jwt.sign({ id: String(student._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const route = `/admin/standalone/sets/${set._id}/quizzes`;
+    const valid = [{ field: "questionImage_0", bytes: imageBytes, type: "image/png", name: "prompt.png" }];
+    assert.equal((await mediaRequest(route, null, mediaBody(creationId(), draft(), valid))).status, 401);
+    assert.equal((await mediaRequest(route, studentToken, mediaBody(creationId(), draft(), valid))).status, 403);
+    for (const media of [
+      [{ ...valid[0], bytes: Buffer.from("wrong-signature") }],
+      [{ ...valid[0], field: "questionImage_2" }],
+      [{ ...valid[0], type: "text/plain" }],
+    ]) {
+      const response = await mediaRequest(route, token, mediaBody(creationId(), draft(), media));
+      assert.equal(response.status, 400);
+      assert.equal(typeof response.body.message, "string");
+    }
+    assert.equal(cloud.uploads, 0);
+    assert.equal(await Quiz.countDocuments(), 0);
+  } finally { cloud.restore(); }
+});
+
+test("concurrent identical media creation requests commit one quiz and bound extra uploads", async () => {
+  const cloud = mockMediaCloud();
+  try {
+    const set = await activeSet();
+    const admin = await User.create({ name: "Admin", email: "media-concurrent@example.test", password: String(id()),
+      role: "admin", isVerified: true, isActive: true });
+    const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const route = `/admin/standalone/sets/${set._id}/quizzes`;
+    const key = creationId();
+    const media = [{ field: "questionImage_0", bytes: imageBytes, type: "image/png", name: "prompt.png" }];
+    const results = await Promise.all(Array.from({ length: 3 }, () =>
+      mediaRequest(route, token, mediaBody(key, draft(), media))));
+    assert.ok(results.every((result) => [201, 503].includes(result.status)));
+    assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 1);
+    assert.equal(await QuizCreationRequest.countDocuments(), 1);
+    assert.ok(cloud.uploads <= 3);
+    const replay = await mediaRequest(route, token, mediaBody(key, draft(), media));
+    assert.equal(replay.status, 201);
+    assert.equal(cloud.uploads <= 3, true);
+  } finally { cloud.restore(); }
+});
+
+test("a definite second-file upload failure does not create a draft and cleans the first asset", async () => {
+  const cloud = mockMediaCloud({ failAt: 2 });
+  try {
+    const set = await activeSet();
+    const admin = await User.create({ name: "Admin", email: "media-failure@example.test", password: String(id()),
+      role: "admin", isVerified: true, isActive: true });
+    const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const media = [
+      { field: "questionImage_0", bytes: imageBytes, type: "image/png", name: "prompt.png" },
+      { field: "questionAudio_0", bytes: audioBytes, type: "audio/mpeg", name: "prompt.mp3" },
+    ];
+    const key = creationId();
+    const route = `/admin/standalone/sets/${set._id}/quizzes`;
+    const result = await mediaRequest(route, token, mediaBody(key, draft(), media));
+    assert.equal(result.status, 503);
+    assert.equal(result.body.code, "quiz_creation_precommit_failed");
+    assert.equal(result.body.mediaCleanup, "unverified");
+    assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 0);
+    assert.equal(await QuizCreationRequest.countDocuments(), 1);
+    assert.equal((await QuizCreationRequest.findOne()).status, "failed");
+    assert.equal((await QuizMedia.findOne()).cleanupState, "deleted");
+    assert.equal(cloud.destroy.mock.callCount(), 1);
+    const changed = await mediaRequest(route, token, mediaBody(key, { ...draft(), title: "Changed" }, media));
+    assert.equal(changed.status, 409);
+    assert.equal(changed.body.code, "quiz_creation_request_reused");
+    const changedMedia = await mediaRequest(route, token, mediaBody(key, draft(),
+      [{ ...media[0], bytes: Buffer.concat([imageBytes, Buffer.from("changed")]) }, media[1]]));
+    assert.equal(changedMedia.status, 409);
+    assert.equal(changedMedia.body.code, "quiz_creation_request_reused");
+    assert.equal(cloud.uploads, 2);
+    const retried = await mediaRequest(route, token, mediaBody(key, draft(), media));
+    assert.equal(retried.status, 201);
+    assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 1);
+    assert.equal(await QuizCreationRequest.countDocuments(), 1);
+    assert.equal((await QuizCreationRequest.findOne()).status, "committed");
+    const replay = await mediaRequest(route, token, mediaBody(key, draft(), media));
+    assert.deepEqual(replay, retried);
+    assert.equal(cloud.uploads, 4);
+  } finally { cloud.restore(); }
+});
+
+test("pre-commit media failure reports cleanup still required without claiming a quiz committed", async () => {
+  const cloud = mockMediaCloud({ failAt: 2, failDestroy: true });
+  try {
+    const set = await activeSet();
+    const admin = await User.create({ name: "Admin", email: "media-cleanup-failure@example.test", password: String(id()),
+      role: "admin", isVerified: true, isActive: true });
+    const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const media = [
+      { field: "questionImage_0", bytes: imageBytes, type: "image/png", name: "prompt.png" },
+      { field: "questionAudio_0", bytes: audioBytes, type: "audio/mpeg", name: "prompt.mp3" },
+    ];
+    const result = await mediaRequest(`/admin/standalone/sets/${set._id}/quizzes`, token,
+      mediaBody(creationId(), draft(), media));
+    assert.equal(result.status, 503);
+    assert.equal(result.body.code, "quiz_creation_precommit_failed");
+    assert.equal(result.body.mediaCleanup, "retry_required");
+    assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 0);
+    assert.equal(await QuizCreationRequest.countDocuments(), 1);
+    assert.equal((await QuizCreationRequest.findOne()).status, "failed");
+    assert.equal((await QuizMedia.findOne()).cleanupState, "cleanup_failed");
+    assert.equal(cloud.destroy.mock.callCount(), 1);
+  } finally { cloud.restore(); }
+});
+
+test("confirmed failed media creation can be abandoned without allowing the old request ID to create", async () => {
+  const cloud = mockMediaCloud({ failAt: 2 });
+  try {
+    const set = await activeSet();
+    const admin = await User.create({ name: "Admin", email: "media-abandon@example.test", password: String(id()),
+      role: "admin", isVerified: true, isActive: true });
+    const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const route = `/admin/standalone/sets/${set._id}/quizzes`;
+    const key = creationId();
+    const media = [
+      { field: "questionImage_0", bytes: imageBytes, type: "image/png", name: "prompt.png" },
+      { field: "questionAudio_0", bytes: audioBytes, type: "audio/mpeg", name: "prompt.mp3" },
+    ];
+    assert.equal((await mediaRequest(route, token, mediaBody(key, draft(), media))).body.code,
+      "quiz_creation_precommit_failed");
+    assert.equal((await request(`${route}/creation/${key}`, { token })).body.status, "failed");
+    assert.equal((await request(`${route}/creation/${key}/abandon`, { method: "POST" })).status, 401);
+    const student = await studentToken();
+    assert.equal((await request(`${route}/creation/${key}/abandon`, { method: "POST", token: student })).status, 403);
+    assert.equal((await request(`${route}/creation/${key}/abandon`, { method: "POST", token })).body.status,
+      "abandoned");
+    const old = await mediaRequest(route, token, mediaBody(key, draft(), media));
+    assert.equal(old.status, 409);
+    assert.equal(old.body.code, "quiz_creation_request_abandoned");
+    assert.equal(cloud.uploads, 2);
+    assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 0);
+    assert.equal((await QuizCreationRequest.findOne()).status, "abandoned");
+    const disabled = await sets.transitionSet(set._id, set.version, "disable");
+    assert.deepEqual(await sets.deleteEmptySet(set._id, disabled.version), { deleted: true });
+  } finally { cloud.restore(); }
+});
+
+test("abandoning a failed request during its retry prevents a duplicate quiz", async () => {
+  const cloud = mockMediaCloud({ failAt: 2 });
+  try {
+    const set = await activeSet();
+    const admin = await User.create({ name: "Admin", email: "media-abandon-race@example.test", password: String(id()),
+      role: "admin", isVerified: true, isActive: true });
+    const token = jwt.sign({ id: String(admin._id), sessionVersion: 0 }, process.env.JWT_SECRET);
+    const route = `/admin/standalone/sets/${set._id}/quizzes`;
+    const key = creationId();
+    const media = [
+      { field: "questionImage_0", bytes: imageBytes, type: "image/png", name: "prompt.png" },
+      { field: "questionAudio_0", bytes: audioBytes, type: "audio/mpeg", name: "prompt.mp3" },
+    ];
+    assert.equal((await mediaRequest(route, token, mediaBody(key, draft(), media))).body.code,
+      "quiz_creation_precommit_failed");
+    await pauseNextSetFence(async ({ entered, release }) => {
+      const retry = mediaRequest(route, token, mediaBody(key, draft(), media));
+      await entered;
+      const abandoned = await request(`${route}/creation/${key}/abandon`, { method: "POST", token });
+      assert.equal(abandoned.body.status, "abandoned");
+      release();
+      const result = await retry;
+      assert.equal(result.status, 409);
+      assert.equal(result.body.code, "quiz_creation_request_abandoned");
+    });
+    assert.equal(await Quiz.countDocuments({ quizSet: set._id }), 0);
+    assert.equal((await QuizCreationRequest.findOne()).status, "abandoned");
+  } finally { cloud.restore(); }
 });
 
 test("concurrent same-key requests create at most one quiz across independent HTTP calls", async () => {
@@ -723,28 +1174,28 @@ test("malformed Set draft questions return structured HTTP 400", async () => {
   assert.equal(await Quiz.countDocuments(), 0);
 });
 
-test("new Set quiz starts Draft, cannot move Sets, and public data excludes answers", async () => {
+test("new Set quiz starts Draft, cannot move Sets, and student catalog excludes answers", async () => {
   const set = await activeSet(); const other = await activeSet();
+  const token = await studentToken();
   const created = await sets.createSetDraft(set._id, draft());
   assert.equal(created.status, "draft"); assert.equal(String(created.quizSet), String(set._id));
-  assert.equal((await request(`/standalone/sets/${set._id}`)).body.quizzes.length, 0);
+  assert.equal((await request(`/standalone/sets/${set._id}`, { token })).body.quizzes.length, 0);
   created.quizSet = other._id;
   await created.save();
   assert.equal(String((await Quiz.findById(created._id)).quizSet), String(set._id));
   await revisions.publishDraft(created._id, 1);
-  const response = await request(`/standalone/sets/${set._id}`);
+  const response = await request(`/standalone/sets/${set._id}`, { token });
   assert.equal(response.body.quizzes.length, 1);
   assert.equal(JSON.stringify(response.body).includes("correctAnswer"), false);
   assert.equal(JSON.stringify(response.body).includes("explanation"), false);
 });
 
-test("guest Set discovery shows ordered safe Public and Students Only summaries without granting protected access", async () => {
+test("Set discovery requires authentication and safely includes legacy Public records", async () => {
   const set = await activeSet();
-  const student = await User.create({ name: "Learner", email: "learner@example.test", password: "local-only",
-    role: "user", isVerified: true, isActive: true });
-  const token = jwt.sign({ id: String(student._id), sessionVersion: 0 }, process.env.JWT_SECRET);
-  const publicDraft = await sets.createSetDraft(set._id, { ...draft(), title: "Public greetings" });
+  const token = await studentToken();
+  const publicDraft = await sets.createSetDraft(set._id, { ...draft(), title: "Legacy greetings" });
   const publicQuiz = await revisions.publishDraft(publicDraft._id, 1);
+  await Quiz.updateOne({ _id: publicQuiz._id }, { $set: { standaloneAccess: "public" } });
   const studentsDraft = await sets.createSetDraft(set._id,
     { ...draft(), title: "Student greetings", standaloneAccess: "students" });
   const studentsQuiz = await revisions.publishDraft(studentsDraft._id, 1);
@@ -759,8 +1210,9 @@ test("guest Set discovery shows ordered safe Public and Students Only summaries 
   await sets.orderQuiz(set._id, studentsQuiz._id, publicOrder.setVersion, 2);
 
   const guest = await request(`/standalone/sets/${set._id}`);
+  assert.equal(guest.status, 401);
   const signedIn = await request(`/standalone/sets/${set._id}`, { token });
-  for (const response of [guest, signedIn]) {
+  for (const response of [signedIn]) {
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.quizzes.map((quiz) => quiz.id),
       [String(studentsQuiz._id), String(publicQuiz._id)]);
@@ -775,23 +1227,28 @@ test("guest Set discovery shows ordered safe Public and Students Only summaries 
       assert.equal(serialized.includes(protectedText), false);
     }
   }
-  assert.equal((await request(`/standalone/${publicQuiz._id}`)).status, 200);
-  assert.equal((await request(`/standalone/${studentsQuiz._id}`)).status, 404);
+  assert.equal((await request(`/standalone/${publicQuiz._id}`)).status, 401);
+  assert.equal((await request(`/standalone/${studentsQuiz._id}`)).status, 401);
+  assert.equal((await request(`/standalone/${publicQuiz._id}`, { token })).status, 200);
   assert.equal((await request(`/standalone/${studentsQuiz._id}`, { token })).status, 200);
   assert.equal((await request(`/standalone/${studentsQuiz._id}/sessions`, { method: "POST", body: {} })).status, 401);
   assert.equal((await request(`/standalone/${studentsQuiz._id}/sessions`, { method: "POST", token: "invalid", body: {} })).status, 401);
-  assert.equal((await request("/standalone")).body.quizzes.some((quiz) => quiz.id === String(studentsQuiz._id)), false);
+  assert.equal((await request("/standalone")).status, 401);
+  assert.equal((await request("/standalone/sets")).status, 401);
+  assert.equal((await fetch(`${base}/quizzes/standalone/guest/attempts/${id()}`)).status, 404);
+  assert.equal((await fetch(`${base}/quizzes/standalone/${publicQuiz._id}/guest/sessions`, { method: "POST" })).status, 404);
 });
 
-test("disabled and archived Sets hide guest discovery and direct quiz details", async () => {
+test("disabled and archived Sets hide authenticated discovery and direct quiz details", async () => {
   const set = await activeSet();
   const quiz = await published(set._id);
+  const token = await studentToken();
   const disabled = await sets.transitionSet(set._id, set.version, "disable");
-  assert.equal((await request(`/standalone/sets/${set._id}`)).status, 404);
-  assert.equal((await request(`/standalone/${quiz._id}`)).status, 404);
+  assert.equal((await request(`/standalone/sets/${set._id}`, { token })).status, 404);
+  assert.equal((await request(`/standalone/${quiz._id}`, { token })).status, 404);
   await sets.transitionSet(set._id, disabled.version, "archive");
-  assert.equal((await request(`/standalone/sets/${set._id}`)).status, 404);
-  assert.equal((await request(`/standalone/${quiz._id}`)).status, 404);
+  assert.equal((await request(`/standalone/sets/${set._id}`, { token })).status, 404);
+  assert.equal((await request(`/standalone/${quiz._id}`, { token })).status, 404);
 });
 
 test("Set lifecycle uses CAS and rejects invalid transitions", async () => {

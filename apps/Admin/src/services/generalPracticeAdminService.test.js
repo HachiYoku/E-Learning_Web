@@ -131,6 +131,19 @@ it('blocks the obsolete create contract while preserving versioned draft updates
   expect(apiClient.put).toHaveBeenCalledWith('/quizzes/admin/standalone/quiz-1/draft', { expectedVersion: 2, draft })
 })
 
+it('sends edited question media with the draft version in one multipart request', async () => {
+  const draft = { title: 'Thai', questions: [{ prompt: 'Greeting?', options: ['Hello', 'Goodbye'], correctAnswer: 0 }] }
+  const image = new File(['image'], 'question.png', { type: 'image/png' })
+  apiClient.put.mockResolvedValue({ id: 'quiz-1', draft: { version: 3 } })
+  await updateGeneralPracticeDraft('quiz-1', 2, draft, [{ field: 'questionImage_0', file: image }])
+  const [url, body] = apiClient.put.mock.calls[0]
+  expect(url).toBe('/quizzes/admin/standalone/quiz-1/draft')
+  expect(body).toBeInstanceOf(FormData)
+  expect(body.get('expectedVersion')).toBe('2')
+  expect(JSON.parse(body.get('draft'))).toEqual(draft)
+  expect(body.get('questionImage_0')).toBe(image)
+})
+
 it('creates only through the selected Quiz Set endpoint with the complete draft', async () => {
   const setId = '507f1f77bcf86cd799439011'
   const draft = { title: 'Thai', questions: [{ prompt: 'Greeting?', options: ['Hello', 'Goodbye'], correctAnswer: 0 }] }

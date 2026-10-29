@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
-const { SESSION_MS } = require("../services/guestQuizSecurity");
+// Legacy records remain readable for safe lifecycle and media cleanup.
+const SESSION_MS = 24 * 60 * 60 * 1000;
 
 // Guest ownership is a hash of a server-issued secret, never a User reference.
 const schema = new mongoose.Schema({
