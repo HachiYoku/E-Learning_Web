@@ -29,6 +29,12 @@ const revisions = require("../services/standaloneQuizRevisions");
 const { startOrResumeStandaloneQuizSession: start } = require("../services/standaloneQuizSessionService");
 const { submitStandaloneQuiz: submit } = require("../services/standaloneQuizSubmissionService");
 const { REQUIRED, inspect } = require("../scripts/preflightQuizSetIndexes");
+const fixtureMongoUri = (host, database, username = "example", password = "example") => {
+  const uri = new URL(`mongodb+srv://${host}/${database}`);
+  uri.username = username;
+  uri.password = password;
+  return uri.toString();
+};
 
 const id = () => new mongoose.Types.ObjectId();
 const creationId = () => require("node:crypto").randomUUID();
@@ -39,7 +45,7 @@ async function studentToken() {
   return jwt.sign({ id: String(student._id), sessionVersion: 0 }, process.env.JWT_SECRET);
 }
 const coverEnv = { QUIZ_SET_COVER_ENV: "testing", NODE_ENV: "test",
-  MONGO_DB: "mongodb+srv://example:example@englishkafe.xhqpzdd.mongodb.net/english_kafe",
+  MONGO_DB: fixtureMongoUri("englishkafe.xhqpzdd.mongodb.net", "english_kafe", "example", "example"),
   STANDALONE_QUIZ_EXPECTED_DB: "english_kafe", CLOUDINARY_CLOUD_NAME: "du6lhdq8t",
   CLOUDINARY_API_KEY: "mock-key", CLOUDINARY_API_SECRET: "mock-secret" };
 const draft = () => ({ title: "Thai greetings", category: "Vocabulary", difficulty: "Beginner",

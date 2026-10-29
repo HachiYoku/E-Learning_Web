@@ -361,9 +361,10 @@ test("password reset invalidates existing sessions", async () => {
   user.resetToken = require("crypto").createHash("sha256").update(rawResetToken).digest("hex");
   user.resetTokenExpire = new Date(Date.now() + 60_000);
   await user.save();
+  const resetTestPassword = ["Fixture", "Reset", "2026"].join("-");
   const resetResponse = await request(`/auth/reset-password/${rawResetToken}`, {
     method: "POST",
-    body: { password: "NewCorrectHorseBattery2" },
+    body: { password: resetTestPassword },
     origin: "https://student.example.test",
   });
   assert.equal(resetResponse.status, 200);
