@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import AuthShell from "../components/AuthShell";
 import { resetPassword as resetPasswordRequest } from "../services/authService";
 
-const inputClass = "mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 pr-12 text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10";
+const inputClass = "mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 pr-12 text-base text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 sm:text-sm";
 
 function PasswordField({ label, value, onChange, visible, toggle, autoComplete }) {
   return <label className="block text-sm font-bold text-[#2D2E30]">{label}<div className="relative"><input type={visible ? "text" : "password"} value={value} onChange={onChange} required minLength="12" autoComplete={autoComplete} className={inputClass} placeholder="Enter your new password" /><button type="button" onClick={toggle} className="absolute bottom-3 right-3 text-[#765F55] hover:text-[#C97112]" aria-label={visible ? "Hide password" : "Show password"}>{visible ? <EyeOff size={19} /> : <Eye size={19} />}</button></div></label>;
