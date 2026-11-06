@@ -87,10 +87,10 @@ function ContactSection() {
 
           <div className="mt-7 grid gap-5 sm:grid-cols-2">
             <label className="block text-sm font-semibold text-[#2D2E30]">Name
-              <input required name="name" value={form.name} onChange={updateField} autoComplete="name" className="mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10" placeholder="Your name" />
+              <input required name="name" value={form.name} onChange={updateField} autoComplete="name" className="mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 text-base text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 sm:text-sm" placeholder="Your name" />
             </label>
             <label className="block text-sm font-semibold text-[#2D2E30]">Email address
-              <input required type="email" name="email" value={form.email} onChange={updateField} autoComplete="email" className="mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10" placeholder="you@example.com" />
+              <input required type="email" name="email" value={form.email} onChange={updateField} autoComplete="email" className="mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 text-base text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 sm:text-sm" placeholder="you@example.com" />
             </label>
           </div>
           <div className="absolute -left-[10000px] top-auto h-px w-px overflow-hidden" aria-hidden="true">
@@ -98,7 +98,7 @@ function ContactSection() {
             <input id="contact-website" type="text" name="website" value={form.website} onChange={updateField} tabIndex="-1" autoComplete="off" />
           </div>
           <label className="mt-5 block text-sm font-semibold text-[#2D2E30]">Message <span className="font-normal text-[#765F55]">(optional)</span>
-            <textarea name="message" value={form.message} onChange={updateField} rows="3" className="mt-2 w-full resize-y rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10" placeholder="How can we help?" />
+            <textarea name="message" value={form.message} onChange={updateField} rows="3" className="mt-2 w-full resize-y rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 text-base text-[#2D2E30] outline-none transition focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 sm:text-sm" placeholder="How can we help?" />
           </label>
           <label className="mt-5 flex min-h-11 items-start gap-3 rounded-xl px-1 text-sm leading-relaxed text-[#765F55]">
             <input type="checkbox" name="marketingOptIn" checked={form.marketingOptIn} onChange={updateField} className="mt-1 h-4 w-4 rounded border-[#2D2E30]/30 text-[#E58C1A] focus:ring-[#E58C1A]" />
