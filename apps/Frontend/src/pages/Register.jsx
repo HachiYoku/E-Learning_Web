@@ -5,7 +5,7 @@ import AuthShell from "../components/AuthShell";
 import RegistrationTurnstile from "../components/RegistrationTurnstile";
 import { register as registerRequest } from "../services/authService";
 
-const inputClass = "mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10";
+const inputClass = "mt-2 w-full rounded-xl border border-[#2D2E30]/15 bg-white px-4 py-3 text-base text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 sm:text-sm";
 
 function Register() {
   const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [ageGroup, setAgeGroup] = useState(""); const [guardianPermission, setGuardianPermission] = useState(false);
