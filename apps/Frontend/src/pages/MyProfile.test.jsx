@@ -89,4 +89,9 @@ describe("MyProfile account deletion", () => {
     expect(screen.getByRole("heading", { level: 1, name: /your profile/i })).toBeTruthy();
     expect(deleteAccount).not.toHaveBeenCalled();
   });
+
+  it("always provides a direct Back to More destination for profile entry", () => {
+    render(<MemoryRouter initialEntries={["/app/profile"]}><MyProfile /></MemoryRouter>);
+    expect(screen.getByRole("link", { name: /back to more/i }).getAttribute("href")).toBe("/app/more");
+  });
 });

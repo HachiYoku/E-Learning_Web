@@ -1,8 +1,9 @@
 import { BookOpen, ChevronRight, Headphones, MessageCircleHeart, Newspaper, ReceiptText } from "lucide-react"
-import { createElement } from "react"
-import { Link } from "react-router-dom"
+import { createElement, useRef, useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import Avatar from "../components/Avatar"
+import LogoutConfirmModal from "../components/LogoutConfirmModal"
 
 const destinations = [
   { title: "Explore courses", description: "Browse every Arun Thai course", to: "/app/explore", icon: BookOpen, color: "bg-[#FFF1D0] text-[#C97112]" },
@@ -13,8 +14,24 @@ const destinations = [
 ]
 
 function StudentMore() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const logoutInFlightRef = useRef(false)
   const profileImage = user?.avatar || ""
+
+  const confirmLogout = async () => {
+    if (logoutInFlightRef.current) return
+    logoutInFlightRef.current = true
+    setIsLoggingOut(true)
+    try {
+      await logout()
+    } finally {
+      setIsLogoutConfirmOpen(false)
+      navigate("/")
+    }
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
@@ -34,6 +51,10 @@ function StudentMore() {
           </Link>
         ))}
       </div>
+      <button type="button" onClick={() => setIsLogoutConfirmOpen(true)} disabled={isLoggingOut} className="mt-5 flex min-h-14 w-full items-center justify-center rounded-2xl border border-[#A34D45]/30 bg-white px-4 py-3 text-center font-bold text-[#A34D45] transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60">
+        Log out
+      </button>
+      <LogoutConfirmModal isOpen={isLogoutConfirmOpen} onCancel={() => setIsLogoutConfirmOpen(false)} onConfirm={confirmLogout} />
     </div>
   )
 }
