@@ -2,7 +2,7 @@ const User = require('../models/userModel')
 const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
 const sendEmail = require('../services/sendEmail')
-const { verifyRegistrationTurnstile } = require('../services/turnstileVerification')
+const { verifyRegistrationTurnstile, verifyTurnstile, FORGOT_PASSWORD_ACTION } = require('../services/turnstileVerification')
 const { getTrustedUrls, buildTrustedUrl, buildVerificationUrl, buildPasswordResetUrl } = require('../config/trustedUrls')
 const {
   REFRESH_COOKIE_NAME,
@@ -375,11 +375,19 @@ const getCurrentUser = async (req, res) => {
 
 const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, turnstileToken } = req.body;
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail) {
       return res.status(400).json({ message: "Email is required" });
     }
+
+    const verification = await verifyTurnstile(turnstileToken, { expectedAction: FORGOT_PASSWORD_ACTION });
+    if (!verification.ok) {
+      return verification.reason === "unavailable"
+        ? res.status(503).json({ message: "Security verification is temporarily unavailable. Please try again shortly.", code: "TURNSTILE_UNAVAILABLE" })
+        : res.status(400).json({ message: "Security verification failed or expired. Please try again.", code: "TURNSTILE_INVALID" });
+    }
+
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(200).json({ message: GENERIC_PASSWORD_RESET_MESSAGE });
@@ -401,12 +409,16 @@ const forgotPassword = async (req, res) => {
       type: "passwordReset",
     });
 
-    await sendEmail(user.email, "Password Reset", html);
+    try {
+      await sendEmail(user.email, "Password Reset", html);
+    } catch (emailError) {
+      console.error("Password reset email failed:", emailError.message);
+    }
 
     res.json({ message: GENERIC_PASSWORD_RESET_MESSAGE });
   } catch (error) {
-    console.error("Password reset email failed:", error.message);
-    res.status(500).json({ message: "Unable to process the password reset request right now" });
+    console.error("Password reset request failed:", error.message);
+    res.status(200).json({ message: GENERIC_PASSWORD_RESET_MESSAGE });
   }
 };
 

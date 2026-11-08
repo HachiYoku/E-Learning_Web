@@ -372,6 +372,42 @@ test("password reset invalidates existing sessions", async () => {
   assert.equal((await request("/auth/refresh", { method: "POST", cookie: loginResult.cookie, origin: "https://student.example.test" })).status, 401);
 });
 
+test("forgot password requires a matching Turnstile token before lookup and preserves generic account responses", async () => {
+  const protectedUser = await createUser({ email: "forgot-protected@example.test" });
+  protectedUser.resetToken = "preserve-this-token";
+  protectedUser.resetTokenExpire = new Date(Date.now() + 60_000);
+  await protectedUser.save();
+
+  for (const [suffix, turnstileToken, expectedStatus, expectedCode] of [
+    ["missing", undefined, 400, "TURNSTILE_INVALID"],
+    ["invalid", "invalid-token", 400, "TURNSTILE_INVALID"],
+    ["wrong-action", "valid-forgot-wrong-action", 400, "TURNSTILE_INVALID"],
+    ["wrong-host", "valid-forgot-wrong-host", 400, "TURNSTILE_INVALID"],
+    ["unavailable", "service-error", 503, "TURNSTILE_UNAVAILABLE"],
+  ]) {
+    const response = await request("/auth/forgot-password", {
+      method: "POST", body: { email: "forgot-protected@example.test", turnstileToken }, forwardedFor: `198.51.100.${suffix.length}`,
+    });
+    assert.equal(response.status, expectedStatus);
+    assert.equal((await responseJson(response)).code, expectedCode);
+  }
+
+  const unchanged = await User.findOne({ email: "forgot-protected@example.test" });
+  assert.equal(unchanged.resetToken, "preserve-this-token");
+
+  const existing = await createUser({ email: "forgot-existing@example.test" });
+  const existingResponse = await request("/auth/forgot-password", {
+    method: "POST", body: { email: existing.email, turnstileToken: "valid-forgot-existing" }, forwardedFor: "198.51.100.210",
+  });
+  const unknownResponse = await request("/auth/forgot-password", {
+    method: "POST", body: { email: "forgot-unknown@example.test", turnstileToken: "valid-forgot-unknown" }, forwardedFor: "198.51.100.211",
+  });
+  assert.equal(existingResponse.status, 200);
+  assert.equal(unknownResponse.status, 200);
+  assert.deepEqual(await responseJson(existingResponse), await responseJson(unknownResponse));
+  assert.ok((await User.findOne({ email: existing.email })).resetToken);
+});
+
 test("removing an admin role blocks privileged APIs immediately", async () => {
   const admin = await createUser({ email: "role@example.test", role: "admin" });
   const loginResult = await login(admin.email);

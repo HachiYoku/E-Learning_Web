@@ -1,5 +1,6 @@
 const SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const REGISTRATION_ACTION = "register";
+const FORGOT_PASSWORD_ACTION = "forgot_password";
 const VERIFICATION_TIMEOUT_MS = 5000;
 
 function allowedHostnames(value) {
@@ -11,7 +12,8 @@ function allowedHostnames(value) {
   return new Set(hostnames);
 }
 
-async function verifyRegistrationTurnstile(token, {
+async function verifyTurnstile(token, {
+  expectedAction = REGISTRATION_ACTION,
   secretKey = process.env.TURNSTILE_SECRET_KEY,
   hostnameConfig = process.env.TURNSTILE_ALLOWED_HOSTNAMES,
   fetchImpl = fetch,
@@ -36,7 +38,7 @@ async function verifyRegistrationTurnstile(token, {
       const unavailable = result?.["error-codes"]?.includes("internal-error");
       return { ok: false, reason: unavailable ? "unavailable" : "invalid" };
     }
-    if (result.action !== REGISTRATION_ACTION || !hostnames.has(result.hostname?.toLowerCase())) {
+    if (result.action !== expectedAction || !hostnames.has(result.hostname?.toLowerCase())) {
       return { ok: false, reason: "invalid" };
     }
     return { ok: true };
@@ -45,4 +47,8 @@ async function verifyRegistrationTurnstile(token, {
   }
 }
 
-module.exports = { verifyRegistrationTurnstile };
+function verifyRegistrationTurnstile(token, options = {}) {
+  return verifyTurnstile(token, { ...options, expectedAction: REGISTRATION_ACTION });
+}
+
+module.exports = { verifyTurnstile, verifyRegistrationTurnstile, REGISTRATION_ACTION, FORGOT_PASSWORD_ACTION };
