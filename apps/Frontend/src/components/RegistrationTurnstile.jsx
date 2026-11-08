@@ -4,7 +4,7 @@ const SCRIPT_ID = "registration-turnstile-script";
 const SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 const isNarrowViewport = () => window.innerWidth < 390;
 
-function RegistrationTurnstile({ siteKey, onToken, onError, controlRef }) {
+function RegistrationTurnstile({ siteKey, onToken, onError, controlRef, action = "register" }) {
   const containerRef = useRef(null);
   const [hasError, setHasError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -42,7 +42,7 @@ function RegistrationTurnstile({ siteKey, onToken, onError, controlRef }) {
       try {
         widgetId = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
-          action: "register",
+          action,
           size: compact ? "compact" : "normal",
           callback: (token) => {
             if (!active) return;
@@ -104,7 +104,7 @@ function RegistrationTurnstile({ siteKey, onToken, onError, controlRef }) {
       if (widgetId !== null) window.turnstile?.remove(widgetId);
       controlRef.current = null;
     };
-  }, [siteKey, controlRef, retryCount, compact]);
+  }, [siteKey, controlRef, retryCount, compact, action]);
 
   return <div role="group" aria-label="Security verification" className={compact ? "flex flex-col items-center" : undefined}>
     <div ref={containerRef} className="min-h-[65px] max-w-full" />
