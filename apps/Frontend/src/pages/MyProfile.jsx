@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { AlertTriangle, Camera, CheckCircle2, Mail, Pencil, ShieldCheck, Trash2, UserRound, X } from "lucide-react"
+import { AlertTriangle, ArrowLeft, Camera, CheckCircle2, Mail, Pencil, ShieldCheck, Trash2, UserRound, X } from "lucide-react"
+import { Link } from "react-router-dom"
 import Avatar from "../components/Avatar"
 import { useAuth } from "../contexts/AuthContext"
 import { updateProfile } from "../services/authService"
@@ -117,7 +118,8 @@ function MyProfile() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-10">
-      <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Account settings</p>
+      <Link to="/app/more" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#C97112] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to More</Link>
+      <p className="mt-3 text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Account settings</p>
       <div className="mt-3"><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Your profile</h1><p className="mt-2 text-sm leading-relaxed text-[#765F55] sm:text-base">Keep your learning account details up to date.</p></div>
 
       {message ? <div className={`mt-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm font-medium ${messageType === "success" ? "border-[#7EAF85]/30 bg-[#EDF8EE] text-[#246B35]" : "border-red-200 bg-red-50 text-red-700"}`}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{message}</div> : null}

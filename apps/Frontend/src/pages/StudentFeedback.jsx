@@ -131,7 +131,7 @@ function StudentFeedback() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
       <Link
         to="/app/more"
         className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-sm font-bold text-[#765F55] transition hover:bg-[#FFF1D0] hover:text-[#9A5816] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/15"
