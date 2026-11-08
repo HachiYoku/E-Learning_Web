@@ -70,7 +70,7 @@ fi
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 archive="gitleaks_${version}_${platform}.tar.gz"
-curl --fail --silent --show-error --location --connect-timeout 10 --max-time 60 --output "$scratch/$archive" \
+curl --fail --silent --show-error --location --connect-timeout 10 --max-time 60 --retry 3 --retry-delay 2 --output "$scratch/$archive" \
   "https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}"
 if command -v shasum >/dev/null 2>&1; then
   actual_sha=$(shasum -a 256 "$scratch/$archive" | cut -d ' ' -f 1)
