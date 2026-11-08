@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { verifyRegistrationTurnstile } = require("../services/turnstileVerification");
+const { verifyTurnstile, verifyRegistrationTurnstile, FORGOT_PASSWORD_ACTION } = require("../services/turnstileVerification");
 
 const secretKey = "test-only-secret";
 const hostnameConfig = "arunthaiedu.com,student.example.test";
@@ -25,6 +25,14 @@ test("valid registration token is verified server-side with the configured secre
   assert.equal(mock.calls[0].options.body.get("secret"), secretKey);
   assert.equal(mock.calls[0].options.body.get("response"), "token");
   assert.ok(mock.calls[0].options.signal);
+});
+
+test("a password-reset token must carry the password-reset action", async () => {
+  const mock = siteverify({ ...valid, action: FORGOT_PASSWORD_ACTION });
+  assert.deepEqual(await verifyTurnstile("token", { expectedAction: FORGOT_PASSWORD_ACTION, secretKey, hostnameConfig, fetchImpl: mock.fetchImpl }), { ok: true });
+
+  const wrongAction = siteverify(valid);
+  assert.deepEqual(await verifyTurnstile("token", { expectedAction: FORGOT_PASSWORD_ACTION, secretKey, hostnameConfig, fetchImpl: wrongAction.fetchImpl }), { ok: false, reason: "invalid" });
 });
 
 test("missing or oversized token never calls Siteverify", async () => {
