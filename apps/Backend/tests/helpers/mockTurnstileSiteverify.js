@@ -8,13 +8,14 @@ globalThis.fetch = async (url, options) => {
   const token = params.get("response");
   if (token === "service-error") return new Response("", { status: 503 });
   const valid = params.get("secret") === "test-only-turnstile-secret" && token?.startsWith("valid-");
-  const action = token === "valid-wrong-action" || token === "valid-forgot-wrong-action"
+  const action = token === "valid-wrong-action" || token === "valid-forgot-wrong-action" || token === "valid-contact-wrong-action"
     ? "login"
-    : token?.startsWith("valid-forgot-") ? "forgot_password" : "register";
+    : token?.startsWith("valid-contact-") ? "contact"
+      : token?.startsWith("valid-forgot-") ? "forgot_password" : "register";
   return new Response(JSON.stringify({
     success: Boolean(valid),
     action,
-    hostname: token === "valid-wrong-host" || token === "valid-forgot-wrong-host" ? "attacker.example.test" : "student.example.test",
+    hostname: token === "valid-wrong-host" || token === "valid-forgot-wrong-host" || token === "valid-contact-wrong-host" ? "attacker.example.test" : "student.example.test",
     "error-codes": valid ? [] : ["invalid-input-response"],
   }), { status: 200, headers: { "Content-Type": "application/json" } });
 };

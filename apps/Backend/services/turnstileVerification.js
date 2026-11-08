@@ -1,6 +1,7 @@
 const SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const REGISTRATION_ACTION = "register";
 const FORGOT_PASSWORD_ACTION = "forgot_password";
+const CONTACT_ACTION = "contact";
 const VERIFICATION_TIMEOUT_MS = 5000;
 
 function allowedHostnames(value) {
@@ -51,4 +52,4 @@ function verifyRegistrationTurnstile(token, options = {}) {
   return verifyTurnstile(token, { ...options, expectedAction: REGISTRATION_ACTION });
 }
 
-module.exports = { verifyTurnstile, verifyRegistrationTurnstile, REGISTRATION_ACTION, FORGOT_PASSWORD_ACTION };
+module.exports = { verifyTurnstile, verifyRegistrationTurnstile, REGISTRATION_ACTION, FORGOT_PASSWORD_ACTION, CONTACT_ACTION };
