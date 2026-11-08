@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { verifyTurnstile, verifyRegistrationTurnstile, FORGOT_PASSWORD_ACTION } = require("../services/turnstileVerification");
+const { verifyTurnstile, verifyRegistrationTurnstile, FORGOT_PASSWORD_ACTION, CONTACT_ACTION } = require("../services/turnstileVerification");
 
 const secretKey = "test-only-secret";
 const hostnameConfig = "arunthaiedu.com,student.example.test";
@@ -33,6 +33,20 @@ test("a password-reset token must carry the password-reset action", async () => 
 
   const wrongAction = siteverify(valid);
   assert.deepEqual(await verifyTurnstile("token", { expectedAction: FORGOT_PASSWORD_ACTION, secretKey, hostnameConfig, fetchImpl: wrongAction.fetchImpl }), { ok: false, reason: "invalid" });
+});
+
+test("a contact token must carry the contact action", async () => {
+  const mock = siteverify({ ...valid, action: CONTACT_ACTION });
+  assert.deepEqual(await verifyTurnstile("token", { expectedAction: CONTACT_ACTION, secretKey, hostnameConfig, fetchImpl: mock.fetchImpl }), { ok: true });
+  const wrongAction = siteverify(valid);
+  assert.deepEqual(await verifyTurnstile("token", { expectedAction: CONTACT_ACTION, secretKey, hostnameConfig, fetchImpl: wrongAction.fetchImpl }), { ok: false, reason: "invalid" });
+});
+
+test("expired and replayed contact tokens fail closed", async () => {
+  for (const code of ["invalid-input-response", "timeout-or-duplicate"]) {
+    const mock = siteverify({ success: false, "error-codes": [code] });
+    assert.deepEqual(await verifyTurnstile("token", { expectedAction: CONTACT_ACTION, secretKey, hostnameConfig, fetchImpl: mock.fetchImpl }), { ok: false, reason: "invalid" });
+  }
 });
 
 test("missing or oversized token never calls Siteverify", async () => {

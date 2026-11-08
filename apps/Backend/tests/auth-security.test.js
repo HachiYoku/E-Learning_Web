@@ -24,6 +24,8 @@ let Payment;
 let Course;
 let Enrollment;
 let Notification;
+let ContactLead;
+let ContactEnquiry;
 
 const password = "CorrectHorseBattery1";
 
@@ -176,6 +178,8 @@ before(async () => {
   Course = require("../models/courseModel");
   Enrollment = require("../models/enrollmentModel");
   Notification = require("../models/notificationModel");
+  ContactLead = require("../models/contactLeadModel");
+  ContactEnquiry = require("../models/contactEnquiryModel");
   const PromoRedemption = require("../models/promoRedemptionModel");
   const redemptionIndex = PromoRedemption.schema.indexes().find(([, options]) => options.name === "active_promo_user_unique");
   assert.ok(redemptionIndex, "expected the payment redemption index definition");
@@ -406,6 +410,61 @@ test("forgot password requires a matching Turnstile token before lookup and pres
   assert.equal(unknownResponse.status, 200);
   assert.deepEqual(await responseJson(existingResponse), await responseJson(unknownResponse));
   assert.ok((await User.findOne({ email: existing.email })).resetToken);
+});
+
+test("contact submissions require a matching Turnstile token before persistence and do not echo personal data", async () => {
+  const email = "contact-protected@example.test";
+  for (const [suffix, turnstileToken, expectedStatus, expectedCode] of [
+    ["missing", undefined, 400, "TURNSTILE_INVALID"],
+    ["invalid", "invalid-token", 400, "TURNSTILE_INVALID"],
+    ["wrong-action", "valid-contact-wrong-action", 400, "TURNSTILE_INVALID"],
+    ["wrong-host", "valid-contact-wrong-host", 400, "TURNSTILE_INVALID"],
+    ["unavailable", "service-error", 503, "TURNSTILE_UNAVAILABLE"],
+  ]) {
+    const response = await request("/contacts", {
+      method: "POST", forwardedFor: `203.0.113.${suffix.length}`,
+      body: { name: "Contact Test", email, message: "Test message", turnstileToken },
+    });
+    assert.equal(response.status, expectedStatus);
+    assert.equal((await responseJson(response)).code, expectedCode);
+  }
+  assert.equal(await ContactLead.exists({ email }), null);
+  assert.equal(await ContactEnquiry.countDocuments({}), 0);
+
+  const honeypot = await request("/contacts", {
+    method: "POST", forwardedFor: "203.0.113.30",
+    body: { name: "Honeypot Test", email: "honeypot@example.test", website: "bot.example", turnstileToken: "invalid-token" },
+  });
+  assert.equal(honeypot.status, 201);
+  assert.equal(await ContactLead.exists({ email: "honeypot@example.test" }), null);
+
+  const valid = await request("/contacts", {
+    method: "POST", forwardedFor: "203.0.113.31",
+    body: { name: "Contact Test", email, message: "Test message", marketingOptIn: false, turnstileToken: "valid-contact-success" },
+  });
+  assert.equal(valid.status, 201);
+  const body = await responseJson(valid);
+  assert.equal(Object.hasOwn(body, "lead"), false);
+  assert.match(body.message, /enquiry has been sent/i);
+  assert.ok(await ContactLead.exists({ email }));
+  assert.equal(await ContactEnquiry.countDocuments({}), 1);
+});
+
+test("contact submissions retain the five-per-hour IP rate limit", async () => {
+  const forwardedFor = "203.0.113.240";
+  for (let index = 0; index < 5; index += 1) {
+    const response = await request("/contacts", {
+      method: "POST", forwardedFor,
+      body: { name: "Rate Test", email: `contact-rate-${index}@example.test`, turnstileToken: `valid-contact-rate-${index}` },
+    });
+    assert.equal(response.status, 201);
+  }
+  const limited = await request("/contacts", {
+    method: "POST", forwardedFor,
+    body: { name: "Rate Test", email: "contact-rate-limited@example.test", turnstileToken: "valid-contact-rate-limited" },
+  });
+  assert.equal(limited.status, 429);
+  assert.equal(await ContactLead.exists({ email: "contact-rate-limited@example.test" }), null);
 });
 
 test("removing an admin role blocks privileged APIs immediately", async () => {

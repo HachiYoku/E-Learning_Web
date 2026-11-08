@@ -4,6 +4,7 @@ const sendEmail = require("../services/sendEmail");
 const jwt = require("jsonwebtoken");
 const { getTrustedUrls, buildTrustedUrl } = require("../config/trustedUrls");
 const { submitEnquiry, acquireLeadClaim, releaseLeadClaim, contactTransaction } = require("../services/contactLeadLifecycle");
+const { verifyTurnstile, CONTACT_ACTION } = require("../services/turnstileVerification");
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const escapeHtml = (value) => String(value)
@@ -60,7 +61,7 @@ const publicLead = (lead) => ({ id: lead._id, name: lead.name, email: lead.email
 
 const createContactLead = async (req, res) => {
   try {
-    const { name, email, message = "", marketingOptIn, website = "" } = req.body || {};
+    const { name, email, message = "", marketingOptIn, website = "", turnstileToken } = req.body || {};
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
     const normalizedName = typeof name === "string" ? name.trim() : "";
 
@@ -75,6 +76,13 @@ const createContactLead = async (req, res) => {
     // Honeypot field: legitimate visitors never fill this in, while simple bots often do.
     if (typeof website === "string" && website.trim()) {
       return res.status(201).json({ message: "Thank you. We will keep you updated." });
+    }
+
+    const verification = await verifyTurnstile(turnstileToken, { expectedAction: CONTACT_ACTION });
+    if (!verification.ok) {
+      return verification.reason === "unavailable"
+        ? res.status(503).json({ message: "Security verification is temporarily unavailable. Please try again shortly.", code: "TURNSTILE_UNAVAILABLE" })
+        : res.status(400).json({ message: "Security verification failed or expired. Please try again.", code: "TURNSTILE_INVALID" });
     }
 
     const explicitOptIn = marketingOptIn === true;
@@ -110,7 +118,6 @@ const createContactLead = async (req, res) => {
       message: confirmationSent
         ? "Thank you. Please check your email for a confirmation."
         : "Thank you. Your enquiry has been sent.",
-      lead: publicLead(lead),
     });
   } catch (error) {
     if (error?.code === 11000) {

@@ -1,7 +1,8 @@
 import { Camera, CheckCircle2, ExternalLink, Mail, MessageCircle, Music2, Send } from "lucide-react";
-import { createElement, useState } from "react";
+import { createElement, useRef, useState } from "react";
 import { CONTACT_LINKS } from "../config/contactLinks";
 import { submitContactLead } from "../services/contactService";
+import RegistrationTurnstile from "./RegistrationTurnstile";
 
 function ContactChannel({ label, href, icon }) {
   const content = <><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FFF1D0] text-[#C97112]">{createElement(icon, { className: "h-5 w-5", "aria-hidden": true })}</span><span className="min-w-0 flex-1 text-left text-sm font-bold text-[#2D2E30]">{label}</span></>;
@@ -17,6 +18,10 @@ function ContactSection() {
   const [form, setForm] = useState({ name: "", email: "", message: "", marketingOptIn: false, website: "" });
   const [status, setStatus] = useState({ type: "", message: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [verificationError, setVerificationError] = useState("");
+  const turnstileControl = useRef(null);
+  const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
   const updateField = (event) => {
     const { name, value, checked, type } = event.target;
@@ -26,14 +31,22 @@ function ContactSection() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setStatus({ type: "", message: "" });
+    if (!turnstileToken || !siteKey) {
+      setVerificationError("Complete the security verification before sending your message.");
+      return;
+    }
     setIsSubmitting(true);
 
     try {
-      const response = await submitContactLead(form);
+      const response = await submitContactLead({ ...form, turnstileToken });
       setStatus({ type: "success", message: response.message || "Thank you. We will keep you updated." });
       setForm({ name: "", email: "", message: "", marketingOptIn: false, website: "" });
+      setTurnstileToken("");
+      turnstileControl.current?.reset();
     } catch (error) {
       setStatus({ type: "error", message: error.message || "Unable to send your details. Please try again." });
+      setTurnstileToken("");
+      turnstileControl.current?.reset();
     } finally {
       setIsSubmitting(false);
     }
@@ -105,12 +118,15 @@ function ContactSection() {
             I’d like to receive course updates, new class announcements, promotions, and other news from Arun Thai by email. I can unsubscribe anytime.
           </label>
 
+          {siteKey ? <div className="mt-5"><RegistrationTurnstile siteKey={siteKey} action="contact" controlRef={turnstileControl} onToken={(token) => { setTurnstileToken(token); if (token) setVerificationError(""); }} onError={setVerificationError} /></div> : <p role="alert" className="mt-5 text-sm text-red-700">Security verification is unavailable. Please try again later.</p>}
+          {verificationError ? <p role="alert" className="mt-3 text-sm text-red-700">{verificationError}</p> : null}
+
           {status.message ? (
             <p className={`mt-5 flex items-center gap-2 rounded-xl px-4 py-3 text-sm ${status.type === "success" ? "bg-[#EDF8EE] text-[#246B35]" : "bg-red-50 text-red-700"}`}>
               {status.type === "success" ? <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" /> : null}{status.message}
             </p>
           ) : null}
-          <button disabled={isSubmitting} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-6 py-3.5 font-semibold text-white shadow-lg shadow-[#2D2E30]/20 transition-all hover:-translate-y-0.5 hover:bg-[#E58C1A] disabled:cursor-not-allowed disabled:opacity-70">
+          <button disabled={isSubmitting || !turnstileToken || !siteKey} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-6 py-3.5 font-semibold text-white shadow-lg shadow-[#2D2E30]/20 transition-all hover:-translate-y-0.5 hover:bg-[#E58C1A] disabled:cursor-not-allowed disabled:opacity-70">
             {isSubmitting ? "Sending..." : "Send Message"}<Send className="h-4 w-4" aria-hidden="true" />
           </button>
         </form>
