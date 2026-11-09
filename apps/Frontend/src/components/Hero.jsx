@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 const lineIcon = "/logo/Line.svg";
 const facebookIcon = "/logo/facebook.svg";
@@ -8,7 +9,7 @@ const landing0 = "/hero/hero2.jpg";
 const landing = "/hero/hero1.jpg";
 
 function Hero() {
-  const navigate = useNavigate();
+  const { isAuthenticated, isBootstrapping } = useAuth();
   const [activeImage, setActiveImage] = useState("conversation");
 
   return (
@@ -42,12 +43,22 @@ function Hero() {
             <br className="hidden lg:block" />
             <span>ထိုင်းစာ၊ ထိုင်းစကားကို အချိန်မရွေး လွယ်ကူစွာ လေ့ကျင့်လိုက်ပါ။</span>
           </p>
-          <button
-            onClick={() => navigate("/courses")}
-            className="mt-8 rounded-xl bg-[#2D2E30] px-8 py-3.5 font-semibold text-white shadow-lg shadow-[#2D2E30]/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#E58C1A] hover:shadow-xl"
-          >
-            Explore Courses <span aria-hidden="true">→</span>
-          </button>
+          <div className="mx-auto mt-8 flex w-full max-w-sm flex-col gap-3">
+            <Link
+              to="/courses"
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-[#2D2E30] px-8 py-3.5 font-semibold text-white shadow-lg shadow-[#2D2E30]/20 transition-all duration-300 hover:-translate-y-1 hover:bg-[#E58C1A] hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C97112]"
+            >
+              Explore Courses <span aria-hidden="true">→</span>
+            </Link>
+            {!isBootstrapping ? (
+              <Link
+                to={isAuthenticated ? "/app" : "/login"}
+                className="inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-[#2D2E30]/20 bg-white/70 px-8 py-3.5 font-semibold text-[#2D2E30] transition hover:-translate-y-0.5 hover:border-[#E58C1A]/60 hover:bg-[#FFF4D8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C97112]"
+              >
+                {isAuthenticated ? "My Learning" : "Log in"}
+              </Link>
+            ) : null}
+          </div>
           <p lang="my" className="font-myanmar mx-auto mt-4 w-full max-w-none text-sm font-medium leading-7 text-[#8B6F61] max-[399px]:w-[calc(100%+1rem)] max-[399px]:-mx-2 sm:max-w-xl">ထိုင်းစာကို အခြေခံမှ စတင်လေ့လာနိုင်ပါပြီ။</p>
           <div className="mt-8 flex justify-center gap-4" aria-label="Social links">
             <img src={lineIcon} alt="Line" className="h-7 w-7 transition hover:scale-110" />
