@@ -5,7 +5,7 @@ import Avatar from "../components/Avatar"
 import { useAuth } from "../contexts/AuthContext"
 import { updateProfile } from "../services/authService"
 
-const inputClass = "w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] px-4 py-3 text-sm font-semibold text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10"
+const inputClass = "w-full rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] px-4 py-3 text-base font-semibold text-[#2D2E30] outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 sm:text-sm"
 
 function MyProfile() {
   const [isEditing, setIsEditing] = useState(false)
