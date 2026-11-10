@@ -9,6 +9,7 @@ let lookups = 0;
 let creations = 0;
 let emails = 0;
 let verificationResult = { ok: false, reason: "invalid" };
+let forgotVerificationResult = { ok: false, reason: "invalid" };
 
 require.cache[userPath] = { id: userPath, filename: userPath, loaded: true, exports: {
   findOne: async () => { lookups += 1; return null; },
@@ -17,9 +18,11 @@ require.cache[userPath] = { id: userPath, filename: userPath, loaded: true, expo
 require.cache[emailPath] = { id: emailPath, filename: emailPath, loaded: true, exports: async () => { emails += 1; } };
 require.cache[verificationPath] = { id: verificationPath, filename: verificationPath, loaded: true, exports: {
   verifyRegistrationTurnstile: async () => verificationResult,
+  verifyTurnstile: async () => forgotVerificationResult,
+  FORGOT_PASSWORD_ACTION: "forgot_password",
 } };
 
-const { register } = require("../controllers/authController");
+const { register, forgotPassword } = require("../controllers/authController");
 
 function response() {
   return {
@@ -42,6 +45,19 @@ test("rejected Turnstile verification never looks up or creates a user or sends 
     assert.equal(res.statusCode, reason === "unavailable" ? 503 : 400);
     assert.equal(lookups, 0);
     assert.equal(creations, 0);
+    assert.equal(emails, 0);
+  }
+});
+
+test("rejected password-reset Turnstile verification never looks up a user or sends email", async () => {
+  for (const reason of ["invalid", "unavailable"]) {
+    lookups = 0; emails = 0;
+    forgotVerificationResult = { ok: false, reason };
+    const res = response();
+    await forgotPassword({ body: { email: "student@example.test", turnstileToken: "test-token" } }, res);
+    assert.equal(res.statusCode, reason === "unavailable" ? 503 : 400);
+    assert.equal(res.body.code, reason === "unavailable" ? "TURNSTILE_UNAVAILABLE" : "TURNSTILE_INVALID");
+    assert.equal(lookups, 0);
     assert.equal(emails, 0);
   }
 });
