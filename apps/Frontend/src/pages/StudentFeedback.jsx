@@ -208,7 +208,7 @@ function StudentFeedback() {
                     disabled={submitting}
                     rows="6"
                     maxLength={MAX_FEEDBACK_LENGTH}
-                    className="mt-2 w-full resize-y rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] p-3 text-sm font-normal leading-6 outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10"
+                    className="mt-2 w-full resize-y rounded-xl border border-[#2D2E30]/15 bg-[#FFFDF8] p-3 text-base font-normal leading-6 outline-none transition placeholder:text-[#9B867C] focus:border-[#E58C1A] focus:ring-4 focus:ring-[#E58C1A]/10 sm:text-sm"
                     placeholder="Share your genuine learning experience…"
                     aria-describedby="feedback-character-count"
                   />
