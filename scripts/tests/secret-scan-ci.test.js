@@ -6,6 +6,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const project = path.resolve(__dirname, "../..");
+const ciWorkflow = fs.readFileSync(path.join(project, ".github/workflows/ci.yml"), "utf8");
 const legacyWorkflow = fs.readFileSync(path.join(project, ".github/workflows/secret-scan.yml"), "utf8");
 const trustedWorkflow = fs.readFileSync(path.join(project, ".github/workflows/trusted-secret-scan.yml"), "utf8");
 const wrapper = path.join(project, "scripts/secret-scan-ci.sh");
@@ -57,11 +58,11 @@ function fixture(t) {
   const log = path.join(dir, "scan.log");
   return { dir, remote, base, log };
 }
-function checkPr(setup, head, number = "7") {
+function checkPr(setup, head, number = "7", overrides = {}) {
   git(setup.dir, "push", "-q", "origin", `${head}:refs/pull/${number}/head`);
   git(setup.dir, "switch", "-q", "--detach", setup.base);
   return run(setup.dir, "bash", ["scripts/secret-scan-ci.sh"], {
-    ...eventEnv(setup, head, { PR_NUMBER: number }),
+    ...eventEnv(setup, head, { PR_NUMBER: number, ...overrides }),
   });
 }
 function eventEnv(setup, head, overrides = {}) {
@@ -73,17 +74,15 @@ function eventEnv(setup, head, overrides = {}) {
   };
 }
 
-test("legacy PR and push scanning stays byte-for-byte unchanged", () => {
-  const committed = run(project, "git", ["show", "HEAD:.github/workflows/secret-scan.yml"]);
-  assert.equal(committed.status, 0);
-  assert.equal(legacyWorkflow, committed.stdout);
-  assert.match(legacyWorkflow, /\bpull_request:\s*\n\s*branches: \[testing-environment, main\]/);
-  assert.match(legacyWorkflow, /\bpush:\s*\n\s*branches: \[testing-environment, main\]/);
+test("CI and standard secret scanning cover every approved PR base", () => {
+  assert.match(ciWorkflow, /\bpull_request:\s*\n\s*branches:\s*\n\s*- testing-v2\s*\n\s*- testing-environment\s*\n\s*- main/);
+  assert.match(legacyWorkflow, /\bpull_request:\s*\n\s*branches: \[testing-v2, testing-environment, main\]/);
+  assert.match(legacyWorkflow, /\bpush:\s*\n\s*branches: \[testing-v2, testing-environment, main\]/);
   assert.match(legacyWorkflow, /\bgitleaks:\s*\n/);
 });
 
 test("trusted job is additive, read-only, and checks out only the PR base", () => {
-  assert.match(trustedWorkflow, /\bpull_request_target:\s*\n\s*branches: \[testing-environment, main\]/);
+  assert.match(trustedWorkflow, /\bpull_request_target:\s*\n\s*branches: \[testing-v2, testing-environment, main\]/);
   assert.match(trustedWorkflow, /\btrusted-gitleaks:\s*\n/);
   assert.doesNotMatch(trustedWorkflow, /^\s*push:\s*$/m);
   assert.match(trustedWorkflow, /permissions:\s*\n\s*contents: read/);
@@ -91,6 +90,16 @@ test("trusted job is additive, read-only, and checks out only the PR base", () =
   assert.match(trustedWorkflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   assert.match(trustedWorkflow, /run: bash scripts\/secret-scan-ci\.sh/);
   assert.doesNotMatch(trustedWorkflow, /run:.*pull_request\.head\.sha/);
+});
+
+test("all approved trusted PR base refs are accepted", (t) => {
+  for (const baseRef of ["testing-v2", "testing-environment", "main"]) {
+    const setup = fixture(t);
+    fs.writeFileSync(path.join(setup.dir, "readme.txt"), `safe ${baseRef} PR\n`);
+    const head = commit(setup.dir, `safe ${baseRef} PR`);
+    const result = checkPr(setup, head, "7", { BASE_REF: baseRef });
+    assert.equal(result.status, 0, result.stderr);
+  }
 });
 
 test("clean PR scans the proposed head from the trusted base checkout", (t) => {
