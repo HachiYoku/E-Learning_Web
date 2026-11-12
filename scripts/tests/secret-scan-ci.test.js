@@ -27,7 +27,7 @@ function commit(cwd, message) {
   git(cwd, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", message);
   return git(cwd, "rev-parse", "HEAD");
 }
-function fixture(t) {
+function fixture(t, { legacyTargetGuard = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "arunthai-trusted-ci-"));
   const remote = fs.mkdtempSync(path.join(os.tmpdir(), "arunthai-trusted-ci-remote-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -38,6 +38,12 @@ function fixture(t) {
   fs.mkdirSync(path.join(dir, "scripts"));
   fs.mkdirSync(path.join(dir, ".github/workflows"), { recursive: true });
   fs.copyFileSync(wrapper, path.join(dir, "scripts/secret-scan-ci.sh"));
+  if (legacyTargetGuard) {
+    fs.writeFileSync(path.join(dir, "scripts/secret-scan-ci.sh"), [
+      "#!/usr/bin/env bash",
+      '[[ "${BASE_REF:-}" == testing-environment || "${BASE_REF:-}" == main ]] || exit 1',
+    ].join("\n") + "\n");
+  }
   fs.copyFileSync(path.join(project, "scripts/secret-scan-blobs.js"),
     path.join(dir, "scripts/secret-scan-blobs.js"));
   fs.writeFileSync(path.join(dir, ".github/workflows/secret-scan.yml"), legacyWorkflow);
@@ -54,16 +60,16 @@ function fixture(t) {
   ].join("\n") + "\n");
   fs.writeFileSync(path.join(dir, "readme.txt"), "baseline\n");
   const base = commit(dir, "trusted base");
-  git(dir, "push", "-q", "origin", "HEAD:refs/heads/testing-environment");
+  git(dir, "push", "-q", "origin", "HEAD:refs/heads/main", "HEAD:refs/heads/testing-environment", "HEAD:refs/heads/testing-v2");
   const log = path.join(dir, "scan.log");
   return { dir, remote, base, log };
 }
 function checkPr(setup, head, number = "7", overrides = {}) {
+  const env = eventEnv(setup, head, { PR_NUMBER: number, ...overrides });
   git(setup.dir, "push", "-q", "origin", `${head}:refs/pull/${number}/head`);
+  git(setup.dir, "push", "-q", "origin", `${setup.base}:refs/heads/${env.BASE_REF}`);
   git(setup.dir, "switch", "-q", "--detach", setup.base);
-  return run(setup.dir, "bash", ["scripts/secret-scan-ci.sh"], {
-    ...eventEnv(setup, head, { PR_NUMBER: number, ...overrides }),
-  });
+  return run(setup.dir, "bash", [wrapper], env);
 }
 function eventEnv(setup, head, overrides = {}) {
   return {
@@ -81,15 +87,24 @@ test("CI and standard secret scanning cover every approved PR base", () => {
   assert.match(legacyWorkflow, /\bgitleaks:\s*\n/);
 });
 
-test("trusted job is additive, read-only, and checks out only the PR base", () => {
+test("trusted job is additive, read-only, and checks out only the trusted default branch", () => {
   assert.match(trustedWorkflow, /\bpull_request_target:\s*\n\s*branches: \[testing-v2, testing-environment, main\]/);
   assert.match(trustedWorkflow, /\btrusted-gitleaks:\s*\n/);
   assert.doesNotMatch(trustedWorkflow, /^\s*push:\s*$/m);
   assert.match(trustedWorkflow, /permissions:\s*\n\s*contents: read/);
   assert.match(trustedWorkflow, /persist-credentials: false/);
-  assert.match(trustedWorkflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
+  assert.match(trustedWorkflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
   assert.match(trustedWorkflow, /run: bash scripts\/secret-scan-ci\.sh/);
   assert.doesNotMatch(trustedWorkflow, /run:.*pull_request\.head\.sha/);
+});
+
+test("first testing-v2 PR uses the trusted scanner despite its legacy target guard", (t) => {
+  const setup = fixture(t, { legacyTargetGuard: true });
+  fs.writeFileSync(path.join(setup.dir, "readme.txt"), "first testing-v2 PR\n");
+  const head = commit(setup.dir, "first testing-v2 PR");
+  const result = checkPr(setup, head, "7", { BASE_REF: "testing-v2" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(setup.log, "utf8").trim(), `${setup.base} ${head}`);
 });
 
 test("all approved trusted PR base refs are accepted", (t) => {
@@ -182,7 +197,7 @@ test("missing and invalid event metadata fail closed before scanning", (t) => {
   assert.equal(fs.existsSync(setup.log), false);
 });
 
-test("a stale PR event SHA or wrong base checkout cannot scan another revision", (t) => {
+test("a stale PR event SHA or base SHA outside the declared target cannot scan another revision", (t) => {
   const setup = fixture(t);
   fs.writeFileSync(path.join(setup.dir, "readme.txt"), "first revision\n");
   const first = commit(setup.dir, "first revision");
@@ -195,8 +210,8 @@ test("a stale PR event SHA or wrong base checkout cannot scan another revision",
   assert.notEqual(stale.status, 0);
   assert.equal(fs.existsSync(setup.log), false);
 
-  git(setup.dir, "switch", "-q", "--detach", first);
-  const wrongBase = run(setup.dir, "bash", ["scripts/secret-scan-ci.sh"], eventEnv(setup, first));
+  const wrongBase = run(setup.dir, "bash", ["scripts/secret-scan-ci.sh"],
+    eventEnv(setup, first, { BASE_SHA: first }));
   assert.notEqual(wrongBase.status, 0);
   assert.equal(fs.existsSync(setup.log), false);
 });

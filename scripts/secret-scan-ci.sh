@@ -15,8 +15,12 @@ sha_pattern='^[0-9a-f]{40}$'
 [[ "${BASE_REF:-}" == testing-v2 || "${BASE_REF:-}" == testing-environment || "${BASE_REF:-}" == main ]] || fail
 [[ "${BASE_SHA:-}" =~ $sha_pattern && "${HEAD_SHA:-}" =~ $sha_pattern ]] || fail
 [[ "${PR_NUMBER:-}" =~ ^[1-9][0-9]*$ ]] || fail
-[[ "$(git rev-parse HEAD)" == "$BASE_SHA" ]] || fail
-
+# The trusted default branch checkout supplies this script, scanner rules, and
+# tooling. Verify the PR base is still part of its declared protected branch;
+# do not execute anything from the PR head.
+git fetch --no-tags origin "refs/heads/${BASE_REF}" || fail
+base_ref_sha=$(git rev-parse FETCH_HEAD) || fail
+git merge-base --is-ancestor "$BASE_SHA" "$base_ref_sha" || fail
 git fetch --no-tags origin "refs/pull/${PR_NUMBER}/head" || fail
 [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD_SHA" ]] || fail
 base=$(git merge-base "$BASE_SHA" "$HEAD_SHA") || fail
