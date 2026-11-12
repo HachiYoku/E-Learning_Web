@@ -12,7 +12,7 @@ sha_pattern='^[0-9a-f]{40}$'
 [[ "${GITHUB_REPOSITORY:-}" == HachiYoku/E-Learning_Web ]] || fail
 [[ "${EVENT_REPOSITORY:-}" == "$GITHUB_REPOSITORY" ]] || fail
 [[ "${EVENT_BASE_REPOSITORY:-}" == "$GITHUB_REPOSITORY" ]] || fail
-[[ "${BASE_REF:-}" == testing-environment || "${BASE_REF:-}" == main ]] || fail
+[[ "${BASE_REF:-}" == testing-v2 || "${BASE_REF:-}" == testing-environment || "${BASE_REF:-}" == main ]] || fail
 [[ "${BASE_SHA:-}" =~ $sha_pattern && "${HEAD_SHA:-}" =~ $sha_pattern ]] || fail
 [[ "${PR_NUMBER:-}" =~ ^[1-9][0-9]*$ ]] || fail
 [[ "$(git rev-parse HEAD)" == "$BASE_SHA" ]] || fail

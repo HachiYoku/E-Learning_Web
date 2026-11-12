@@ -3,6 +3,7 @@ name: Security and builds
 on:
   pull_request:
     branches:
+      - testing-v2
       - testing-environment
       - main
   push:
