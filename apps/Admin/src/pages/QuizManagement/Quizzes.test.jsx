@@ -21,7 +21,7 @@ it("permits only local previews and Cloudinary audio in the Admin CSP", () => {
   expect(directives["media-src"]).toBe("'self' blob: https://res.cloudinary.com");
   expect(directives["default-src"]).toBe("'self'");
   expect(directives["script-src"]).toBe("'self'");
-  expect(directives["connect-src"]).toBe("'self' https://api.arunthaiedu.com wss://api.arunthaiedu.com");
+  expect(directives["connect-src"]).toBe("'self' https://api.arunthaiedu.com wss://api.arunthaiedu.com https://api.testing.arunthaiedu.com wss://api.testing.arunthaiedu.com");
   expect(directives["object-src"]).toBe("'none'");
   expect(directives["frame-ancestors"]).toBe("'none'");
   expect(csp).not.toMatch(/(?:^|[\s;])\*(?:[\s;]|$)/);
