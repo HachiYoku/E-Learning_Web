@@ -27,8 +27,8 @@ function resolveQuestionMediaEnvironment(env = process.env) {
     throw new Error("Question media production database is not approved.");
   }
   if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_KEY || !env.CLOUDINARY_API_SECRET
-    || env.CLOUDINARY_CLOUD_NAME !== TESTING_CLOUD
-    || cloudinary.config().cloud_name !== env.CLOUDINARY_CLOUD_NAME) {
+    || cloudinary.config().cloud_name !== env.CLOUDINARY_CLOUD_NAME
+    || (mode === "testing" && env.CLOUDINARY_CLOUD_NAME !== TESTING_CLOUD)) {
     throw new Error("Question media Cloudinary account is not approved.");
   }
   if (env.CLOUDINARY_URL) {
