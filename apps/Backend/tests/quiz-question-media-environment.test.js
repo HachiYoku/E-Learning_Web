@@ -9,10 +9,13 @@ const base = { NODE_ENV: "test", QUIZ_QUESTION_MEDIA_ENV: "testing",
   CLOUDINARY_API_KEY: "x", CLOUDINARY_API_SECRET: "x" };
 
 test("testing and production question media use distinct server-owned public ID paths", (t) => {
-  t.mock.method(cloudinary, "config", () => ({ cloud_name: "du6lhdq8t" }));
+  let configuredCloud = "du6lhdq8t";
+  t.mock.method(cloudinary, "config", () => ({ cloud_name: configuredCloud }));
   const testing = resolveQuestionMediaEnvironment(base);
+  configuredCloud = "production-cloud";
   const production = resolveQuestionMediaEnvironment({ ...base, NODE_ENV: "production",
-    QUIZ_QUESTION_MEDIA_ENV: "production", MONGO_DB: "mongodb+srv://production.example.test/app_data",
+    QUIZ_QUESTION_MEDIA_ENV: "production", CLOUDINARY_CLOUD_NAME: configuredCloud,
+    MONGO_DB: "mongodb+srv://production.example.test/app_data",
     STANDALONE_QUIZ_EXPECTED_DB: "app_data" });
   assert.equal(publicIdFor(testing, "image", "record-id"), "arun_thai/testing/quiz_media/images/record-id");
   assert.equal(publicIdFor(production, "audio", "record-id"), "arun_thai/production/quiz_media/audio/record-id");
@@ -28,7 +31,17 @@ test("missing, invalid, or inconsistent identity refuses question media", (t) =>
     { ...base, MONGO_DB: "mongodb+srv://production.example.test/english_kafe" },
     { ...base, STANDALONE_QUIZ_EXPECTED_DB: "different" },
     { ...base, CLOUDINARY_CLOUD_NAME: "different" },
+    { ...base, CLOUDINARY_API_KEY: "" },
+    { ...base, CLOUDINARY_URL: "cloudinary://different:x@different" },
   ]) assert.throws(() => resolveQuestionMediaEnvironment(env));
+});
+
+test("production question media rejects an SDK cloud mismatch", (t) => {
+  t.mock.method(cloudinary, "config", () => ({ cloud_name: "different-cloud" }));
+  assert.throws(() => resolveQuestionMediaEnvironment({ ...base, NODE_ENV: "production",
+    QUIZ_QUESTION_MEDIA_ENV: "production", CLOUDINARY_CLOUD_NAME: "production-cloud",
+    MONGO_DB: "mongodb+srv://production.example.test/app_data",
+    STANDALONE_QUIZ_EXPECTED_DB: "app_data" }));
 });
 
 test("ownership URL must identify the configured cloud, resource, and exact public ID", (t) => {
