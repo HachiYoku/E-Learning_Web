@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useCatalogueCurrency } from '../contexts/useCatalogueCurrency'
 import { getAvailableCatalogueCurrencies, getCataloguePrice } from '../utils/catalogueCurrency'
 
-function CourseCard({ course, id, image, title, description, price, originalPrice, hasDiscount = false, priceAvailable = true, currency = 'THB', rating, isEnrolled = false }) {
+function CourseCard({ course, id, image, title, description, price, originalPrice, hasDiscount = false, priceAvailable = true, currency = 'THB', rating, isEnrolled = false, listLayout = false, detailOrigin = '/courses' }) {
   const navigate = useNavigate()
   const { currency: selectedCurrency, setCurrency } = useCatalogueCurrency()
   const displayPrice = course ? getCataloguePrice(course, selectedCurrency) : { price, originalPrice, hasDiscount, available: priceAvailable, currency }
@@ -16,23 +16,31 @@ function CourseCard({ course, id, image, title, description, price, originalPric
   const courseRating = course?.rating ?? rating
 
   const handleViewDetails = () => {
-    navigate(`/courses/${courseId}`)
+    navigate(`/courses/${courseId}`, {
+      state: { courseListingOrigin: detailOrigin },
+    })
   }
 
   const resolvedImage = courseImage && courseImage.startsWith('/src/assets')
     ? new URL(courseImage.replace('/src/assets/', '../assets/'), import.meta.url).href
     : courseImage
+  const thumbnailClass = listLayout
+    ? "relative aspect-video w-full shrink-0 overflow-hidden rounded-[1.75rem] bg-[#E7DCCE] md:w-[42%] md:min-w-72 md:max-w-[30rem] md:self-start lg:w-[44%]"
+    : "relative h-48 w-full shrink-0 overflow-hidden rounded-[1.75rem] bg-[#E7DCCE] md:h-[300px] md:w-[250px]"
+  const imageClass = listLayout
+    ? "h-full w-full object-contain"
+    : "h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
 
   return (
     <article className="group relative flex flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-[#FFFDF8] p-3 shadow-[0_18px_45px_-32px_rgba(80,48,19,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_26px_55px_-32px_rgba(80,48,19,0.45)] md:flex-row md:gap-5 md:p-4">
       <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-[#E58C1A]/65 to-transparent" aria-hidden="true" />
       {/* Image Container - Left */}
-      <div className="relative h-48 w-full shrink-0 overflow-hidden rounded-[1.75rem] bg-[#E7DCCE] md:h-[300px] md:w-[250px]">
+      <div className={thumbnailClass}>
         {resolvedImage ? (
           <img 
             src={resolvedImage} 
             alt={courseTitle}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className={imageClass}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm font-semibold text-gray-500">
