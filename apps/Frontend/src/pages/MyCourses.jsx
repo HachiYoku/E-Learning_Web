@@ -75,7 +75,7 @@ function MyCourses() {
               <Link to="/app/explore" className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2D2E30] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#E58C1A] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20">Explore courses <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
+            <div className="grid grid-cols-1 gap-5 sm:gap-6">
               {enrollments.map((enrollment) => (
                 <MyCourseCard
                   key={enrollment.id}
