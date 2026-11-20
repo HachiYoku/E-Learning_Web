@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, PlayCircle, Star, TvMinimalPlay } from "lucide-react";
 import Navbar from "../components/Navbar";
@@ -19,6 +19,7 @@ const RELATED_COURSES_PER_PAGE = 4;
 function CourseDetail() {
   const { courseId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentPage, setCurrentPage] = useState(1);
   const [course, setCourse] = useState(null);
   const [relatedCourses, setRelatedCourses] = useState([]);
@@ -139,6 +140,10 @@ function CourseDetail() {
   const availableAlternativeCurrency = !displayPrice.available
     ? getAvailableCatalogueCurrencies(course).find((currencyOption) => currencyOption !== currency)
     : null;
+  const courseListingOrigin = location.state?.courseListingOrigin;
+  const backDestination = ["/app/explore", "/courses"].includes(courseListingOrigin)
+    ? courseListingOrigin
+    : "/courses";
 
   const courseSchema = { "@context": "https://schema.org", "@type": "Course", name: course.title, description: course.fullDescription || course.description, provider: { "@type": "EducationalOrganization", name: "Arun Thai Language Center", url: "https://arunthaiedu.com" } };
 
@@ -151,19 +156,27 @@ function CourseDetail() {
         <div className="absolute -left-28 top-0 -z-10 h-80 w-80 rounded-full bg-[#F8C56A]/25 blur-3xl" aria-hidden="true" />
         <div className="absolute -bottom-28 right-0 -z-10 h-96 w-96 rounded-full bg-[#E9A9A0]/25 blur-3xl" aria-hidden="true" />
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8 max-w-2xl sm:mb-10"><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Course library</p><p className="mt-3 text-sm leading-relaxed text-[#765F55] sm:text-base">A practical, self-paced path to more confident Thai conversations.</p></div>
+          <button
+            type="button"
+            onClick={() => navigate(backDestination)}
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl px-1 text-sm font-bold text-[#765F55] transition hover:text-[#C97112] focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back to courses
+          </button>
+          <div className="mb-8 mt-6 max-w-2xl sm:mb-10 sm:mt-7"><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C97112]">Course library</p><p className="mt-3 text-sm leading-relaxed text-[#765F55] sm:text-base">A practical, self-paced path to more confident Thai conversations.</p></div>
           <div className="border border-[#2D2E30]/10 bg-white/90 p-4 shadow-[0_25px_65px_-42px_rgba(80,48,19,0.45)] sm:p-6 lg:p-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 md:gap-10 lg:gap-12">
               <div className="space-y-4 sm:space-y-5">
-                <div className="flex items-start justify-center">
+                <div className="relative aspect-video w-full overflow-hidden bg-[#E7DCCE]">
                   {course.image ? (
                     <img
                       src={course.image}
                       alt={course.title}
-                      className="h-56 w-full object-cover sm:h-72 md:h-80 lg:h-[28rem]"
+                      className="h-full w-full object-contain"
                     />
                   ) : (
-                    <div className="flex h-56 w-full items-center justify-center bg-[#E7DCCE] text-[#765F55]">
+                    <div className="flex h-full w-full items-center justify-center text-[#765F55]">
                       No image
                     </div>
                   )}
@@ -241,13 +254,14 @@ function CourseDetail() {
 
           {currentRelatedCourses.length > 0 ? (
             <>
-              {/* Grid: 1 col → 2 col → 3 col */}
-              <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
+              <div className="grid grid-cols-1 gap-5 sm:gap-6">
                 {currentRelatedCourses.map((relatedCourse) => {
                   return <CourseCard
                     key={relatedCourse.id}
                     course={relatedCourse}
                     isEnrolled={enrolledCourseIds.has(relatedCourse.id)}
+                    listLayout
+                    detailOrigin={backDestination}
                   />
                 })}
               </div>

@@ -17,12 +17,12 @@ function MyCourseCard({ id, image, title, description, progress, buttonText = "L
     <article className="group relative flex flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-[#2D2E30]/10 bg-[#FFFDF8] p-3 shadow-[0_18px_45px_-32px_rgba(80,48,19,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_26px_55px_-32px_rgba(80,48,19,0.45)] md:flex-row md:gap-5 md:p-4">
       <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-[#E58C1A]/65 to-transparent" aria-hidden="true" />
 
-      <div className="relative h-48 w-full shrink-0 overflow-hidden rounded-[1.75rem] bg-[#E7DCCE] md:h-[300px] md:w-[250px]">
+      <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-[1.75rem] bg-[#E7DCCE] md:w-[42%] md:min-w-72 md:max-w-[30rem] md:self-start lg:w-[44%]">
         {image ? (
           <img 
             src={image} 
             alt={title} 
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="h-full w-full object-contain"
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm font-semibold text-[#765F55]">
