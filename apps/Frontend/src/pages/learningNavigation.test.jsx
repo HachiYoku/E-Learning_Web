@@ -4,10 +4,13 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MyCourseCard from '../components/MyCourseCard'
 import StudentDashboard from './StudentDashboard'
+import MyCourses from './MyCourses'
 
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: { name: 'Mali' } }) }))
 vi.mock('../services/enrollmentService', () => ({ fetchMyEnrollments: vi.fn() }))
 vi.mock('../services/flashcardReviewService', () => ({ fetchPersonalReviewSummary: vi.fn() }))
+vi.mock('../components/Navbar', () => ({ default: () => null }))
+vi.mock('../components/Footer', () => ({ default: () => null }))
 
 import { fetchMyEnrollments } from '../services/enrollmentService'
 import { fetchPersonalReviewSummary } from '../services/flashcardReviewService'
@@ -119,5 +122,31 @@ describe('precise continue learning navigation', () => {
 
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByTestId('location').textContent).toBe('/app/learn/course-1?lesson=lesson-3')
+  })
+
+  it('uses a non-cropping 16:9 thumbnail for enrolled courses', () => {
+    const { container } = render(<MemoryRouter><MyCourseCard id="course-1" image="/course-thumbnail.jpg" title="Thai Basics" description="" progress={progress} /></MemoryRouter>)
+    const image = screen.getByRole('img', { name: 'Thai Basics' })
+    const thumbnail = container.querySelector('img')?.parentElement
+
+    expect(image.className).toContain('object-contain')
+    expect(image.className).not.toContain('object-cover')
+    expect(image.className).not.toContain('group-hover:scale-105')
+    expect(thumbnail?.className).toContain('aspect-video')
+    expect(thumbnail?.className).toContain('md:w-[42%]')
+    expect(thumbnail?.className).toContain('lg:w-[44%]')
+    expect(thumbnail?.className).toContain('md:max-w-[30rem]')
+    expect(thumbnail?.className).toContain('md:self-start')
+  })
+
+  it('renders My Courses as a single-column course list', async () => {
+    fetchMyEnrollments.mockResolvedValue([{ id: 'enrollment-1', course: { id: 'course-1', image: '/course-thumbnail.jpg', title: 'Thai Basics', description: 'Course description' }, progress }])
+    render(<MemoryRouter><MyCourses /></MemoryRouter>)
+
+    const card = (await screen.findByRole('button', { name: 'Continue' })).closest('article')
+    const grid = card?.parentElement
+    expect(grid?.className).toContain('grid-cols-1')
+    expect(grid?.className).toContain('sm:gap-6')
+    expect(grid?.className).not.toContain('lg:grid-cols-2')
   })
 })
