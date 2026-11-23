@@ -5,6 +5,7 @@ import { useState } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import { useNotification } from "../contexts/NotificationContext"
 import { getSafeNotificationDestination } from "../utils/notificationLink"
+import { formatNotificationDateTime } from "../utils/dateTime"
 import LogoutConfirmModal from "./LogoutConfirmModal"
 import Avatar from "./Avatar"
 
@@ -115,7 +116,7 @@ function NotificationBell({ compact = false }) {
                     <p className="font-semibold text-[#2D2E30]">{notification.title}</p>
                     <p className="mt-1 text-sm text-[#765F55]">{notification.message}</p>
                     <p className="mt-2 text-[11px] text-[#A09288]">
-                      {new Date(notification.createdAt).toLocaleString()}
+                      {formatNotificationDateTime(notification.createdAt)}
                     </p>
                   </div>
                 </button>

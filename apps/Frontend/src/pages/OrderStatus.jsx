@@ -8,6 +8,7 @@ import { fetchMyPayments, fetchRejectedPaymentProofBlob } from "../services/paym
 import { orderStatusView, rejectedPaymentResubmissionPath, savedPaymentDetails } from "../utils/orderStatusView";
 import { paymentSupportPath } from "../utils/supportFormPreselection";
 import { createProofObjectUrl, proofRequestKey, rejectedProofDisplayState, revokeProofObjectUrl, shouldFetchProof, shouldShowRejectedProof } from "../utils/studentProofViewer";
+import { formatDateTime } from "../utils/dateTime";
 
 function OrderStatus() {
   const { orderId } = useParams(); const navigate = useNavigate();
@@ -16,7 +17,7 @@ function OrderStatus() {
   if (loading) return <Page><div className="flex h-screen items-center justify-center"><LoadingSpinner message="Loading payment status..." /></div></Page>;
   if (!payment || !payment.course) return <Page><div className="flex h-screen items-center justify-center px-4 text-center"><p className="text-lg text-[#765F55] sm:text-2xl">{error || "Order not found"}</p></div></Page>;
   const view = orderStatusView(payment); const details = savedPaymentDetails(payment); const course = payment.course;
-  const submittedAt = payment.createdAt ? new Date(payment.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "Date unavailable";
+  const submittedAt = formatDateTime(payment.createdAt, "Date unavailable");
   const isRejected = payment.status === "rejected"; const isApproved = view.kind === "approved";
   return <Page><main className="flex-1 bg-[#FFF9EA] px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10"><div className="mx-auto max-w-3xl">
     <button onClick={() => navigate("/app/orders")} className="inline-flex items-center gap-2 text-sm font-bold text-[#765F55] transition hover:text-[#C97112]"><ArrowLeft className="h-4 w-4" />Course orders</button>

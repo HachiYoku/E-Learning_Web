@@ -1,4 +1,5 @@
 import { apiClient } from "../api/client";
+import { formatDate as formatDisplayDate } from "../utils/dateTime";
 
 function stripHtml(html = "") {
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -23,7 +24,7 @@ function formatDate(value) {
     return "";
   }
 
-  return new Date(value).toLocaleDateString("en-GB");
+  return formatDisplayDate(value, "");
 }
 
 export function normalizeBlog(blog) {

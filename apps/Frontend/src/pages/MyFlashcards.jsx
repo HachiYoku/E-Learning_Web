@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { createPersonalFlashcardDeck, deletePersonalFlashcardDeck, fetchPersonalFlashcardDecks, updatePersonalFlashcardDeck } from "../services/personalFlashcardService";
 import { fetchPersonalReviewSummary } from "../services/flashcardReviewService";
+import { formatDate } from "../utils/dateTime";
 
-const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)) : "";
 const setMessage = (message) => message === "You already have a flashcard deck with that name." ? "You already have a flashcard set with that name." : message;
 
 function MyFlashcards() {

@@ -32,6 +32,8 @@ export default defineConfig({
       'src/services/generalPracticeAdminService.test.js',
       'src/components/Sidebar.generalPractice.test.jsx',
       'src/utils/adminReturnDestination.test.js',
+      'src/utils/dateTime.test.js',
+      'src/pages/SupportManagement/SupportTickets.test.jsx',
     ],
   },
   server: {

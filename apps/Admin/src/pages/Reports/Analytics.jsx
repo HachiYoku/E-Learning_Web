@@ -8,6 +8,7 @@ import { fetchCourses } from '../../services/courseService'
 import { fetchAllPayments, formatPaymentAmount } from '../../services/paymentService'
 import { downloadReportCsv, fetchReportSummary } from '../../services/reportService'
 import { fetchUsers } from '../../services/userService'
+import { formatWeekdayDateOnly } from '../../utils/dateTime'
 
 const filters = [['All time', 'all'], ['Last 7 days', '7'], ['Last 30 days', '30'], ['Last 90 days', '90']]
 const CURRENCIES = ['THB', 'MMK']
@@ -31,7 +32,7 @@ export default function Analytics() {
   const approved = filtered.filter((payment) => payment.status === 'approved'); const pending = filtered.filter((payment) => payment.status === 'pending')
   const revenue = summary?.revenueByCurrency || { THB: {}, MMK: {} }; const bucket = revenue[currency] || {}; const money = (value, forCurrency = currency) => formatPaymentAmount(value, forCurrency)
   const courseRevenue = useMemo(() => (summary?.coursePerformance || []).filter((row) => row.currency === currency).sort((a, b) => b.revenue - a.revenue), [summary, currency])
-  const trend = useMemo(() => (summary?.revenueTrend || []).filter((row) => row.currency === currency).map((row) => ({ label: new Date(`${row.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }), revenue: row.revenue })), [summary, currency])
+  const trend = useMemo(() => (summary?.revenueTrend || []).filter((row) => row.currency === currency).map((row) => ({ label: formatWeekdayDateOnly(row.date), revenue: row.revenue })), [summary, currency])
   const popularity = useMemo(() => { const counts = new Map(); approved.forEach((payment) => counts.set(payment.courseName, (counts.get(payment.courseName) || 0) + 1)); return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5) }, [approved])
   const visible = useMemo(() => { const query = search.trim().toLowerCase(); return filtered.filter((payment) => (status === 'all' || payment.status === status) && (!query || [payment.userName, payment.userEmail, payment.courseName, payment.paymentMethod].some((item) => String(item || '').toLowerCase().includes(query)))) }, [filtered, search, status])
   const displayed = visible.slice((page - 1) * perPage, page * perPage); const pages = Math.max(1, Math.ceil(visible.length / perPage)); const label = appliedRange.startDate || appliedRange.endDate ? `${appliedRange.startDate || 'Start'} to ${appliedRange.endDate || 'Present'}` : period === 'all' ? 'All time' : `Last ${period} days`

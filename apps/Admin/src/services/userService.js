@@ -1,4 +1,5 @@
 import { apiClient } from "../api/client";
+import { formatDate } from "../utils/dateTime";
 
 export function normalizeUser(user) {
   if (!user) {
@@ -10,7 +11,7 @@ export function normalizeUser(user) {
     name: user.name,
     email: user.email,
     createdAt: user.createdAt || null,
-    dateCreated: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "",
+    dateCreated: formatDate(user.createdAt, ""),
     purchasedCourses: Array.isArray(user.purchasedCourses) ? user.purchasedCourses : [],
     isActive: Boolean(user.isActive),
     recordType: user.recordType || "system",

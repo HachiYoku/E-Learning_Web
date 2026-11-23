@@ -1,10 +1,9 @@
 import { AlertCircle, Clock3, MailCheck, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { fetchPendingVerifications } from '../../services/userService'
+import { formatDateTime } from '../../utils/dateTime'
 
-const formatDate = (value) => value
-  ? new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
-  : 'Not available'
+const formatDate = (value) => formatDateTime(value, 'Not available')
 
 function PendingVerifications() {
   const [users, setUsers] = useState([])
