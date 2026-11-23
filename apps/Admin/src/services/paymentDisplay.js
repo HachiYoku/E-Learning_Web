@@ -1,10 +1,11 @@
+import { formatDate, formatDateTime } from "../utils/dateTime";
+
 export function formatPaymentAmount(amount, currency) {
   const value = Number(amount || 0).toLocaleString();
   // Historic payments created before currencies were captured were THB-only.
   // Never infer MMK from current course or method configuration.
   return currency === "MMK" ? `Ks ${value}` : `฿${value}`;
 }
-
 export function normalizePayment(payment) {
   if (!payment) return null;
 
@@ -14,7 +15,7 @@ export function normalizePayment(payment) {
     userName: payment.userId?.name || "Unknown user",
     userEmail: payment.userId?.email || "",
     userAvatar: payment.userId?.avatar || "",
-    userDate: payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : "",
+    userDate: formatDate(payment.createdAt, ""),
     // Snapshots are the purchase record. Populated documents exist solely for
     // pre-Phase-5 legacy payments that do not have the equivalent snapshot.
     courseName: payment.courseSnapshot?.title || payment.courseId?.title || "Unknown course",
@@ -29,8 +30,8 @@ export function normalizePayment(payment) {
     currency: payment.currency || "THB",
     amount: formatPaymentAmount(payment.amount ?? payment.courseSnapshot?.price ?? payment.courseId?.price ?? 0, payment.currency),
     date: payment.status === "approved" && payment.reviewedAt
-      ? new Date(payment.reviewedAt).toLocaleString()
-      : payment.createdAt ? new Date(payment.createdAt).toLocaleString() : "",
+      ? formatDateTime(payment.reviewedAt, "")
+      : formatDateTime(payment.createdAt, ""),
     paymentMethod: payment.paymentMethodSnapshot?.name || "Uploaded transfer slip",
     paymentMethodType: payment.paymentMethodSnapshot?.type || "",
     cardInfo: payment.userId?.email || "",

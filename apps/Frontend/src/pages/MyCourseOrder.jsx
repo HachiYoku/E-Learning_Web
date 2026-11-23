@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { emailPaymentReceipt, fetchMyPayments } from '../services/paymentService'
+import { formatDate } from '../utils/dateTime'
 
 function MyCourseOrder() {
   const navigate = useNavigate()
@@ -116,8 +117,8 @@ function MyCourseOrder() {
                       {payment.status === 'approved' && payment.paymentReference ? <div className="mt-3"><button type="button" onClick={() => { setReceiptPayment(payment); setReceiptState('confirm'); setReceiptMessage('') }} className="rounded-lg border border-[#2D2E30]/15 bg-white px-3 py-2 text-xs font-bold text-[#2D2E30] transition hover:border-[#E58C1A] hover:bg-[#FFF4D8]">Email receipt</button></div> : null}
 
                       <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#2D2E30]/10 pt-3">
-                        <p className="min-w-0 text-xs text-[#765F55]"><span className="font-bold text-[#2D2E30]">{status.detail}</span><span className="hidden sm:inline"> · Submitted {new Date(payment.createdAt).toLocaleDateString()}</span></p>
-                        <span className="shrink-0 text-xs font-semibold text-[#765F55] sm:hidden">{new Date(payment.createdAt).toLocaleDateString()}</span>
+                        <p className="min-w-0 text-xs text-[#765F55]"><span className="font-bold text-[#2D2E30]">{status.detail}</span><span className="hidden sm:inline"> · Submitted {formatDate(payment.createdAt)}</span></p>
+                        <span className="shrink-0 text-xs font-semibold text-[#765F55] sm:hidden">{formatDate(payment.createdAt)}</span>
                       </div>
 
                       <button

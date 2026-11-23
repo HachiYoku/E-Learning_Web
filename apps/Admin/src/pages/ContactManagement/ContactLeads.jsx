@@ -2,8 +2,8 @@ import { Check, Copy, Mail, MessageSquare, Search, Send, UsersRound, X } from "l
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchContactEnquiries, fetchContactLeads } from "../../services/contactLeadService";
+import { formatDate } from "../../utils/dateTime";
 
-const formatDate = (value) => value ? new Date(value).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }) : "—";
 const statusFor = (lead) => lead.marketingConsent?.status || "never_subscribed";
 const labels = { subscribed: "Subscribed", unsubscribed: "Unsubscribed", never_subscribed: "Never subscribed" };
 const statusStyles = { subscribed: "bg-[#EDF8EE] text-[#246B35]", unsubscribed: "bg-[#FFF1D0] text-[#A94F00]", never_subscribed: "bg-[#F5F1EA] text-[#765F55]" };

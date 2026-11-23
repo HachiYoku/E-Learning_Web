@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { getSafeNotificationDestination } from "../utils/notificationLink";
 import { useNotification } from "../contexts/NotificationContext";
+import { formatNotificationDateTime } from "../utils/dateTime";
 
 const FILTER_OPTIONS = [
   { key: "all", label: "All" },
@@ -133,7 +134,7 @@ function Notifications() {
                       <p className="mt-1.5 text-sm leading-5 text-[#765F55]">{notification.message}</p>
 
                       <p className="mt-2 text-[11px] font-medium text-[#A09288]">
-                        {new Date(notification.createdAt).toLocaleString()}
+                        {formatNotificationDateTime(notification.createdAt)}
                       </p>
                     </div>
                   </div>

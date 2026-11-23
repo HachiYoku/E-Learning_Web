@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { startGeneralPracticeSession, submitGeneralPracticeQuiz } from "../services/generalPracticeService"
 import { generalPracticeErrorMessage, isStandaloneTransactionConflict } from "../utils/generalPracticeErrors"
 import GeneralPracticeQuestionMedia from "../components/GeneralPracticeQuestionMedia"
+import { formatDateTime } from "../utils/dateTime"
 
 function validSession(value) {
   return typeof value?.sessionId === "string" && value.sessionId.length > 0
@@ -205,7 +206,7 @@ function GeneralPracticeTake() {
             <h1 className="mt-2 break-words text-2xl font-bold sm:text-3xl">{session.title || "Practice quiz"}</h1>
             {session.created === false ? <p className="mt-2 text-sm font-semibold text-[#A94F00]">Unfinished session resumed. Previous unsubmitted selections were not saved.</p> : null}
             <div className="mt-5 flex items-center gap-4"><p aria-live="polite" className="shrink-0 text-sm font-bold text-[#C97112]">Question {currentIndex + 1} of {session.questions.length}</p><div className="h-2 flex-1 overflow-hidden rounded-full bg-[#F0E7DC]" role="progressbar" aria-label="Question progress" aria-valuenow={currentIndex + 1} aria-valuemin={0} aria-valuemax={session.questions.length}><div className="h-full rounded-full bg-[#E58C1A] transition-all" style={{ width: `${(currentIndex + 1) / session.questions.length * 100}%` }} /></div></div>
-            <p className="mt-3 text-xs text-[#765F55]">Session expires {new Date(session.expiresAt).toLocaleString()}.</p>
+            <p className="mt-3 text-xs text-[#765F55]">Session expires {formatDateTime(session.expiresAt)}.</p>
           </header>
 
           {expired && uncertain ? <p role="status" className="mt-5 rounded-xl bg-[#FFF1D0] p-4 text-sm text-[#765F55]">The session has expired, but retrying this same submission may still retrieve a saved result.</p> : null}

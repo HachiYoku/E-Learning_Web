@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { startGeneralPracticeSession } from "../services/generalPracticeService"
 import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
 import GeneralPracticeQuestionMedia from "../components/GeneralPracticeQuestionMedia"
+import { formatDateTime } from "../utils/dateTime"
 
 function ReviewQuestion({ question, index }) {
   const selectedIndex = Number.isInteger(question.selectedAnswer) ? question.selectedAnswer : null
@@ -60,7 +61,7 @@ function GeneralPracticeResult({ result, quizId }) {
     <p role="status" className="mt-5 text-3xl font-bold text-[#A94F00]" aria-label={`Score: ${result.score} out of ${result.total}`}>{result.score} / {result.total}</p>
     {Number.isFinite(result.percentage) ? <p className="mt-1 text-sm text-[#765F55]">{Math.round(result.percentage)}% correct</p> : null}
     {Number.isInteger(result.correctCount) ? <p className="mt-2 text-sm text-[#765F55]">{result.correctCount} correct out of {result.total} questions</p> : null}
-    {result.completedAt && !Number.isNaN(Date.parse(result.completedAt)) ? <p className="mt-2 text-sm text-[#765F55]">Completed {new Date(result.completedAt).toLocaleString()}</p> : null}
+    {result.completedAt && !Number.isNaN(Date.parse(result.completedAt)) ? <p className="mt-2 text-sm text-[#765F55]">Completed {formatDateTime(result.completedAt)}</p> : null}
     <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
       <button type="button" onClick={tryAgain} disabled={starting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00]"><RotateCcw className="h-4 w-4" aria-hidden="true" />{starting ? "Opening quiz..." : "Try Again"}</button>
     </div>
