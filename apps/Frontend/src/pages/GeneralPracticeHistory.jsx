@@ -4,6 +4,7 @@ import { Link, useLocation, useParams } from "react-router-dom"
 import LoadingSpinner from "../components/LoadingSpinner"
 import { fetchGeneralPracticeHistory, fetchGeneralPracticeQuiz } from "../services/generalPracticeService"
 import { generalPracticeErrorMessage } from "../utils/generalPracticeErrors"
+import { formatDateTime } from "../utils/dateTime"
 
 function validPage(page) {
   return Array.isArray(page?.attempts)
@@ -94,7 +95,7 @@ function GeneralPracticeHistory() {
       <ol className="mt-6 space-y-3">{currentState.attempts.map((attempt) => <li key={attempt.attemptId} className="flex min-w-0 flex-col gap-4 rounded-2xl border border-[#2D2E30]/10 bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-accent">Attempt {attempt.attemptNumber}</p>
           <p className="mt-2 text-sm text-[#765F55]">Score: {attempt.score} of {attempt.total}{Number.isFinite(attempt.percentage) ? ` · ${Math.round(attempt.percentage)}%` : ""}</p>
-          {attempt.completedAt && !Number.isNaN(Date.parse(attempt.completedAt)) ? <p className="mt-1 text-sm text-[#765F55]">Completed {new Date(attempt.completedAt).toLocaleString()}</p> : null}</div>
+          {attempt.completedAt && !Number.isNaN(Date.parse(attempt.completedAt)) ? <p className="mt-1 text-sm text-[#765F55]">Completed {formatDateTime(attempt.completedAt)}</p> : null}</div>
         <Link to={`/app/practice/general/${encodeURIComponent(quizId)}/complete/${encodeURIComponent(attempt.attemptId)}`} className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-[#F8C56A] px-5 py-3 text-sm font-bold text-[#2D2E30] shadow-sm transition hover:bg-[#E58C1A] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A94F00] sm:w-auto sm:self-center" aria-label={`Review result for attempt ${attempt.attemptNumber}`}>Review result <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
       </li>)}</ol>
       {currentState.loadError ? <p role="alert" className="mt-5 text-sm text-[#A84646]">{currentState.loadError}</p> : null}

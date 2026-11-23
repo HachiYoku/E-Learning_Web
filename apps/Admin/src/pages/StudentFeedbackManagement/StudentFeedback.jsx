@@ -13,6 +13,7 @@ import {
   fetchAdminStudentFeedbackDetail,
   updateAdminStudentFeedbackPublication,
 } from "../../services/adminStudentFeedbackService";
+import { formatDateTime } from "../../utils/dateTime";
 
 const FILTERS = [
   ["awaiting_review", "Awaiting Review"],
@@ -35,13 +36,7 @@ const badgeClasses = {
   not_selected: "bg-sky-100 text-sky-800",
   withdrawn: "bg-slate-100 text-slate-700",
 };
-const formatDate = (value) =>
-  value
-    ? new Intl.DateTimeFormat(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(new Date(value))
-    : "—";
+const formatDate = (value) => formatDateTime(value);
 
 function StudentFeedback() {
   const [status, setStatus] = useState("awaiting_review");

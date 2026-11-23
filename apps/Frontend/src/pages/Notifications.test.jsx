@@ -12,6 +12,7 @@ vi.mock("../components/Footer", () => ({ default: () => null }));
 vi.mock("../contexts/NotificationContext", () => ({
   useNotification: () => ({ notifications: state.notifications, loading: false, markAsRead: state.markAsRead, markAllRead: state.markAllRead }),
 }));
+vi.mock("../utils/dateTime", () => ({ formatNotificationDateTime: () => "FORMATTED NOTIFICATION" }));
 
 function LocationProbe() {
   const location = useLocation();
@@ -58,6 +59,12 @@ describe("Course Final notification links", () => {
     renderNotifications();
     await user.click(screen.getByRole("button", { name: /unsafe/i }));
     expect(screen.queryByTestId("location")).toBeNull();
+  });
+
+  it("uses the dedicated notification date formatter", () => {
+    state.notifications = [{ _id: "formatted", title: "Formatted", message: "Timestamp", isRead: true, createdAt: "2026-11-21T10:00:00.000Z" }];
+    renderNotifications();
+    expect(screen.getByText("FORMATTED NOTIFICATION")).toBeTruthy();
   });
 
   for (const title of ["Extra quiz submission approved", "Extra quiz submission request declined"]) {

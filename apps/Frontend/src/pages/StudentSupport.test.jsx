@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import StudentSupport from "./StudentSupport"
@@ -9,7 +9,8 @@ vi.mock("../services/supportTicketService", () => ({
   replyToSupportTicket: vi.fn(),
 }))
 
-import { fetchMySupportTickets } from "../services/supportTicketService"
+import { fetchMySupportTickets, replyToSupportTicket } from "../services/supportTicketService"
+import { formatDateTime12Hour } from "../utils/dateTime"
 
 function renderSupport(path = "/app/support") {
   return render(<MemoryRouter initialEntries={[path]}><StudentSupport /></MemoryRouter>)
@@ -62,5 +63,60 @@ describe("StudentSupport payment preselection", () => {
 
     await screen.findByText("No support requests yet")
     expect(screen.queryByRole("heading", { name: "Send a support request" })).toBeNull()
+  })
+})
+
+describe("StudentSupport timestamps", () => {
+  const ticket = {
+    _id: "ticket-1",
+    category: "course",
+    subject: "Course access",
+    message: "I cannot open my lesson.",
+    status: "open",
+    createdAt: "2026-10-02T08:45:00.000Z",
+    updatedAt: "2026-10-03T08:45:00.000Z",
+    replies: [
+      { _id: "reply-1", authorRole: "user", message: "My student follow-up.", createdAt: "2026-10-02T09:15:00.000Z" },
+      { _id: "reply-2", authorRole: "admin", message: "Our support reply.", createdAt: "2026-10-02T10:30:00.000Z" },
+    ],
+  }
+
+  it("shows the request and each reply timestamp in the local 12-hour format", async () => {
+    fetchMySupportTickets.mockResolvedValue([ticket])
+
+    renderSupport()
+
+    const submittedAt = formatDateTime12Hour(ticket.createdAt, "")
+    expect(await screen.findByText(`Your request · ${submittedAt}`)).toBeTruthy()
+    expect(screen.getByText(submittedAt)).toBeTruthy()
+    expect(screen.getByText(formatDateTime12Hour(ticket.replies[0].createdAt, ""))).toBeTruthy()
+    expect(screen.getByText(formatDateTime12Hour(ticket.replies[1].createdAt, ""))).toBeTruthy()
+    expect(screen.getByText(formatDateTime12Hour(ticket.replies[1].createdAt, "")).textContent).toMatch(/AM|PM/)
+  })
+
+  it("hides invalid timestamps without changing messages, reply submission, or reopening", async () => {
+    const resolvedTicket = {
+      ...ticket,
+      status: "resolved",
+      createdAt: null,
+      replies: [
+        { _id: "reply-1", authorRole: "user", message: "Still need help.", createdAt: "invalid-date", updatedAt: ticket.updatedAt },
+        { _id: "reply-2", authorRole: "admin", message: "We can help.", createdAt: undefined, updatedAt: ticket.updatedAt },
+      ],
+    }
+    fetchMySupportTickets.mockResolvedValue([resolvedTicket])
+    replyToSupportTicket.mockResolvedValue({ ...resolvedTicket, status: "open" })
+
+    renderSupport()
+
+    expect(await screen.findByText("Still need help.")).toBeTruthy()
+    expect(screen.getByText("We can help.")).toBeTruthy()
+    expect(screen.queryByText(/Your request ·/)).toBeNull()
+    expect(screen.queryByText("Invalid Date")).toBeNull()
+    expect(screen.queryByText(ticket.updatedAt)).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Reopen request" }))
+    fireEvent.change(screen.getByLabelText("Reply to support"), { target: { value: "Please reopen this." } })
+    fireEvent.click(screen.getByRole("button", { name: "Reopen and send" }))
+    await waitFor(() => expect(replyToSupportTicket).toHaveBeenCalledWith("ticket-1", "Please reopen this."))
   })
 })
