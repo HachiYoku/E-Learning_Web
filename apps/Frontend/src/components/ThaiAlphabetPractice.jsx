@@ -107,8 +107,6 @@ const consonantClusters = consonantClusterGroups.flatMap((group) => group.cluste
 const specialRaCombinations = [
   { combination: "สร", sound: "ส", word: "สร้าง", pronunciation: "sâang", meaning: "to build" },
   { combination: "ศร", sound: "ส", word: "ศรี", pronunciation: "sǐi", meaning: "glory / honour" },
-  { combination: "จร", sound: "จ", word: "จริง", pronunciation: "jing", meaning: "true / really" },
-  { combination: "ซร", sound: "ซ", word: "ไซร้", pronunciation: "sái", meaning: "indeed (poetic)" },
   { combination: "ทร", sound: "ซ", word: "ทราบ", pronunciation: "sâap", meaning: "to know" },
 ];
 
@@ -553,7 +551,7 @@ function ThaiAlphabetPractice() {
         </div>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(270px,0.62fr)] lg:items-start">
-          <div className="order-2 grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3 lg:order-1">
+          <div className="order-2 grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 lg:order-1">
             {specialRaCombinations.map((combination) => {
               const isSelected = combination.combination === selectedSpecialRa.combination;
               return <button key={combination.combination} type="button" onClick={() => selectSpecialRa(combination)} aria-pressed={isSelected} aria-label={`${combination.combination}, read as ${combination.sound}`} className={`rounded-xl border px-3 py-3 text-2xl font-bold transition focus:outline-none focus:ring-4 focus:ring-[#E58C1A]/20 sm:py-4 ${isSelected ? "border-[#E58C1A] bg-[#F8C56A] text-[#2D2E30] shadow-[0_8px_18px_-12px_rgba(80,48,19,0.8)]" : "border-[#2D2E30]/10 bg-[#FFFDF8] text-[#2D2E30] hover:border-[#E58C1A]/50 hover:bg-[#FFF1D0]"}`}>{combination.combination}</button>;
