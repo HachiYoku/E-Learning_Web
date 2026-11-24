@@ -10,8 +10,11 @@ import { fetchCourseQuizzes, fetchQuizzesForLesson } from '../services/quizServi
 import { fetchEnrollmentProgress, saveLastOpenedLesson, setLessonCompleted } from '../services/enrollmentService'
 import SaveFlashcardModal from '../components/SaveFlashcardModal'
 import LessonKeyVocabulary from '../components/LessonKeyVocabulary'
+import YouTubeLessonPlayer, { getYouTubeVideoConfig } from '../components/YouTubeLessonPlayer'
 import { deletePersonalFlashcard } from '../services/personalFlashcardService'
 import { findNextIncompleteLesson } from '../utils/lessonProgression'
+import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 
 const VOCABULARY_UNDO_WINDOW_MS = 5000
 
@@ -45,6 +48,8 @@ function CourseLessons() {
   const { courseId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
+  const { showToast } = useToast()
   const [course, setCourse] = useState(null)
   const [lessons, setLessons] = useState([])
   const [courseQuizzes, setCourseQuizzes] = useState([])
@@ -60,8 +65,11 @@ function CourseLessons() {
   const [progress, setProgress] = useState(null)
   const [completionPendingLessonId, setCompletionPendingLessonId] = useState(null)
   const consumedResumeIntent = useRef(null)
+  const lessonPlayerRef = useRef(null)
+  const flashcardResumeIntentRef = useRef(null)
   const isMounted = useRef(true)
   const activeVideoUrl = useMemo(() => getEmbedUrl(activeLesson?.videoUrl), [activeLesson])
+  const activeYouTubeVideo = useMemo(() => getYouTubeVideoConfig(activeLesson?.videoUrl), [activeLesson])
   const activeVideoIsGoogleDrive = useMemo(() => isGoogleDriveUrl(activeLesson?.videoUrl), [activeLesson])
   const requestedLessonId = useMemo(() => new URLSearchParams(location.search).get('lesson'), [location.search])
 
@@ -69,6 +77,11 @@ function CourseLessons() {
     isMounted.current = true
     return () => { isMounted.current = false }
   }, [])
+
+  useEffect(() => {
+    flashcardResumeIntentRef.current = null
+    lessonPlayerRef.current = null
+  }, [activeLesson?.id])
 
   useEffect(() => {
     const timers = Object.entries(savedVocabulary)
@@ -107,6 +120,7 @@ function CourseLessons() {
 
   const handleOpenLesson = useCallback((lesson) => {
     if (!lesson.videoUrl) return
+    flashcardResumeIntentRef.current = null
     setActiveLesson(lesson)
     setSavedFlashcardMessage('')
     setSavedVocabulary({})
@@ -140,13 +154,32 @@ function CourseLessons() {
     try { setProgress(await setLessonCompleted(courseId, lesson.id, !isCompleted)) } catch (progressError) { setError(progressError.message) } finally { setCompletionPendingLessonId(null) }
   }
 
+  const pauseLessonForFlashcardModal = () => {
+    const player = lessonPlayerRef.current
+    const shouldResume = player?.pauseIfPlaying?.() === true
+    flashcardResumeIntentRef.current = shouldResume ? { lessonId: activeLesson?.id, player } : null
+  }
+
+  const resumeLessonAfterFlashcardModal = () => {
+    const intent = flashcardResumeIntentRef.current
+    flashcardResumeIntentRef.current = null
+    if (intent?.lessonId === activeLesson?.id && lessonPlayerRef.current === intent.player) intent.player.resume?.()
+  }
+
+  const closeFlashcardComposer = () => {
+    setIsSaveFlashcardOpen(false)
+    resumeLessonAfterFlashcardModal()
+  }
+
   const openManualFlashcardComposer = () => {
+    pauseLessonForFlashcardModal()
     setFlashcardInitialValues(null)
     setActiveVocabularyForSave(null)
     setIsSaveFlashcardOpen(true)
   }
 
   const openVocabularyFlashcardComposer = (vocabulary, vocabularyId) => {
+    pauseLessonForFlashcardModal()
     setFlashcardInitialValues({
       front: vocabulary.thai || '',
       back: vocabulary.translation || '',
@@ -154,6 +187,17 @@ function CourseLessons() {
     setActiveVocabularyForSave({ vocabularyId: vocabularyId || vocabulary._id })
     setIsSaveFlashcardOpen(true)
   }
+
+  const closeActiveLesson = () => {
+    flashcardResumeIntentRef.current = null
+    lessonPlayerRef.current = null
+    setIsSaveFlashcardOpen(false)
+    setActiveLesson(null)
+  }
+
+  const handlePlayerController = useCallback((controller) => {
+    lessonPlayerRef.current = controller
+  }, [])
 
   const handleVocabularyCardSaved = (deck, card) => {
     if (!activeVocabularyForSave?.vocabularyId || !deck?._id || !card?._id) return
@@ -235,9 +279,9 @@ function CourseLessons() {
       </main>
 
       {activeLesson ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 pb-20 pt-3 sm:py-6" onClick={() => setActiveLesson(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 pb-20 pt-3 sm:py-6" onClick={closeActiveLesson}>
           <div className={`lesson-modal relative w-full max-w-4xl rounded-[1.75rem] bg-[#2D2E30] shadow-2xl ${Array.isArray(activeLesson.keyVocabulary) && activeLesson.keyVocabulary.length > 0 ? 'flex h-[calc(100dvh-6rem)] flex-col overflow-hidden sm:h-[calc(100dvh-3rem)]' : 'overflow-hidden'}`} onClick={(event) => event.stopPropagation()}>
-            <button type="button" onClick={() => setActiveLesson(null)} className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2D2E30] transition hover:bg-[#FFF4D8]" aria-label="Close video"><X className="h-5 w-5" /></button>
+            <button type="button" onClick={closeActiveLesson} className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#2D2E30] transition hover:bg-[#FFF4D8]" aria-label="Close video"><X className="h-5 w-5" /></button>
             {activeVideoIsGoogleDrive ? (
               <div className={`flex aspect-video flex-col items-center justify-center bg-[#FFF9EA] px-6 text-center ${activeLesson.keyVocabulary?.length ? 'h-[min(48vw,38vh)] shrink-0 overflow-y-auto' : ''}`}>
                 <p className="text-lg font-bold text-[#2D2E30]">Open this Google Drive lesson</p>
@@ -245,7 +289,7 @@ function CourseLessons() {
                 <a href={activeLesson.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-6 rounded-xl bg-[#E58C1A] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#C97112]">Open in Google Drive</a>
               </div>
             ) : (
-              <div className={`aspect-video w-full shrink-0 ${activeLesson.keyVocabulary?.length ? 'h-[min(48vw,38vh)]' : ''}`}><iframe src={activeVideoUrl || activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>
+              <div className={`aspect-video w-full shrink-0 ${activeLesson.keyVocabulary?.length ? 'h-[min(48vw,38vh)]' : ''}`}>{activeYouTubeVideo ? <YouTubeLessonPlayer source={activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" onControllerReady={handlePlayerController} /> : <iframe src={activeVideoUrl || activeLesson.videoUrl} title={activeLesson.title} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />}</div>
             )}
             <LessonKeyVocabulary vocabulary={activeLesson.keyVocabulary} onSave={openVocabularyFlashcardComposer} savedVocabulary={savedVocabulary} onUndo={handleUndoVocabularySave} />
             <div className={`shrink-0 border-t border-white/10 p-3 sm:min-h-0 sm:p-4 ${activeLessonIsCompleted ? 'min-h-[20rem]' : ''}`}>
@@ -258,7 +302,7 @@ function CourseLessons() {
           </div>
         </div>
       ) : null}
-      <SaveFlashcardModal isOpen={isSaveFlashcardOpen} initialFront={flashcardInitialValues?.front} initialBack={flashcardInitialValues?.back} readOnly={Boolean(activeVocabularyForSave)} onClose={() => setIsSaveFlashcardOpen(false)} onSaved={(deck) => { setSavedFlashcardMessage(`✓ Saved to ${deck.name}`); setIsSaveFlashcardOpen(false) }} onCardSaved={handleVocabularyCardSaved} />
+      <SaveFlashcardModal isOpen={isSaveFlashcardOpen} initialFront={flashcardInitialValues?.front} initialBack={flashcardInitialValues?.back} userId={user?.id} onClose={closeFlashcardComposer} onSaved={(deck) => { setSavedFlashcardMessage(`✓ Saved to ${deck.name}`); showToast({ title: 'Flashcard saved successfully', message: `Added to ${deck.name}`, type: 'success' }); closeFlashcardComposer() }} onCardSaved={handleVocabularyCardSaved} />
       <Footer />
     </div>
   )
