@@ -5,9 +5,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import CourseLessons from "./CourseLessons";
 import * as personalService from "../services/personalFlashcardService";
 
+const { youtubeController } = vi.hoisted(() => ({ youtubeController: { pauseIfPlaying: vi.fn(), resume: vi.fn() } }));
+
 vi.mock("../components/Navbar", () => ({ default: () => <nav>Student navigation</nav> }));
 vi.mock("../components/Footer", () => ({ default: () => <footer>Student footer</footer> }));
 vi.mock("../components/LoadingSpinner", () => ({ default: () => <p>Loading</p> }));
+vi.mock("../components/YouTubeLessonPlayer", () => ({
+  default: ({ title, onControllerReady }) => { onControllerReady(youtubeController); return <div title={title}>YouTube lesson player</div>; },
+  getYouTubeVideoConfig: (source) => source?.includes("youtube.com") ? { videoId: "youtube-video" } : null,
+}));
+vi.mock("../contexts/AuthContext", () => ({ useAuth: () => ({ user: { id: "student-1" } }) }));
+vi.mock("../contexts/ToastContext", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../services/courseService", () => ({ fetchCourseById: vi.fn() }));
 vi.mock("../services/lessonService", () => ({ fetchLessonsByCourse: vi.fn() }));
 vi.mock("../services/quizService", () => ({ fetchCourseQuizzes: vi.fn(), fetchQuizzesForLesson: vi.fn() }));
@@ -26,6 +34,7 @@ function LocationProbe() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  youtubeController.pauseIfPlaying.mockReturnValue(false);
   fetchCourseById.mockResolvedValue({ id: "course-1", title: "Thai Basics", description: "Learn Thai", features: [] });
   fetchLessonsByCourse.mockResolvedValue([{ id: "lesson-1", title: "Greetings", videoUrl: "https://example.com/greetings", order: 1 }]);
   fetchCourseQuizzes.mockResolvedValue([]);
@@ -38,6 +47,65 @@ beforeEach(() => {
 });
 
 describe("CourseLessons quick save", () => {
+  it("pauses a playing YouTube lesson for manual save and resumes once on dismissal", async () => {
+    const user = userEvent.setup();
+    youtubeController.pauseIfPlaying.mockReturnValue(true);
+    fetchLessonsByCourse.mockResolvedValue([{ id: "lesson-1", title: "Greetings", videoUrl: "https://www.youtube.com/watch?v=abc123", order: 1 }]);
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+    await user.click(await screen.findByRole("button", { name: /greetings/i }));
+    await user.click(screen.getByRole("button", { name: /add to my flashcards/i }));
+    expect(youtubeController.pauseIfPlaying).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(youtubeController.resume).toHaveBeenCalledOnce();
+  });
+
+  it("does not resume an already paused YouTube lesson", async () => {
+    const user = userEvent.setup();
+    fetchLessonsByCourse.mockResolvedValue([{ id: "lesson-1", title: "Greetings", videoUrl: "https://www.youtube.com/watch?v=abc123", order: 1 }]);
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+    await user.click(await screen.findByRole("button", { name: /greetings/i }));
+    await user.click(screen.getByRole("button", { name: /add to my flashcards/i }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(youtubeController.pauseIfPlaying).toHaveBeenCalledOnce();
+    expect(youtubeController.resume).not.toHaveBeenCalled();
+  });
+
+  it("resumes a previously playing YouTube lesson only after a successful save", async () => {
+    const user = userEvent.setup();
+    youtubeController.pauseIfPlaying.mockReturnValue(true);
+    personalService.createPersonalFlashcard.mockResolvedValue({ _id: "saved-card" });
+    fetchLessonsByCourse.mockResolvedValue([{ id: "lesson-1", title: "Greetings", videoUrl: "https://www.youtube.com/watch?v=abc123", order: 1 }]);
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+    await user.click(await screen.findByRole("button", { name: /greetings/i }));
+    await user.click(screen.getByRole("button", { name: /add to my flashcards/i }));
+    await user.type(screen.getByLabelText(/front/i), "สวัสดี");
+    await user.type(screen.getByLabelText(/back/i), "Hello");
+    await user.click(screen.getByRole("button", { name: "Choose a set" }));
+    await user.click(screen.getByRole("option", { name: "Lesson words" }));
+    await user.click(screen.getByRole("button", { name: "Save Flashcard" }));
+    await waitFor(() => expect(personalService.createPersonalFlashcard).toHaveBeenCalled());
+    expect(youtubeController.resume).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a playing YouTube lesson paused after a failed save, then resumes on dismissal", async () => {
+    const user = userEvent.setup();
+    youtubeController.pauseIfPlaying.mockReturnValue(true);
+    personalService.createPersonalFlashcard.mockRejectedValueOnce(new Error("Save failed"));
+    fetchLessonsByCourse.mockResolvedValue([{ id: "lesson-1", title: "Greetings", videoUrl: "https://www.youtube.com/watch?v=abc123", order: 1 }]);
+    render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
+    await user.click(await screen.findByRole("button", { name: /greetings/i }));
+    await user.click(screen.getByRole("button", { name: /add to my flashcards/i }));
+    await user.type(screen.getByLabelText(/front/i), "สวัสดี");
+    await user.type(screen.getByLabelText(/back/i), "Hello");
+    await user.click(screen.getByRole("button", { name: "Choose a set" }));
+    await user.click(screen.getByRole("option", { name: "Lesson words" }));
+    await user.click(screen.getByRole("button", { name: "Save Flashcard" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(youtubeController.resume).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(youtubeController.resume).toHaveBeenCalledOnce();
+  });
+
   it('keeps the course and lessons available when optional Course Final state cannot load', async () => {
     fetchCourseQuizzes.mockRejectedValueOnce(new Error('Quiz is unavailable.'));
     render(<MemoryRouter initialEntries={["/app/learn/course-1"]}><Routes><Route path="/app/learn/:courseId" element={<CourseLessons />} /></Routes></MemoryRouter>);
@@ -320,22 +388,19 @@ describe("CourseLessons quick save", () => {
 
     await user.click(await screen.findByRole('button', { name: /greetings/i }));
     await user.click(screen.getByRole('button', { name: 'Save vocabulary สวัสดี to My Flashcards' }));
-    const vocabularyDialog = await screen.findByRole('dialog', { name: /save to my flashcards/i });
-    expect(within(vocabularyDialog).getByText('สวัสดี')).toBeTruthy();
-    expect(within(vocabularyDialog).getByText('Hello')).toBeTruthy();
-    expect(screen.queryByLabelText(/^front$/i)).toBeNull();
-    expect(screen.queryByLabelText(/^back$/i)).toBeNull();
+    const vocabularyDialog = await screen.findByRole('dialog', { name: /add to my flashcards/i });
+    expect(within(vocabularyDialog).getByLabelText(/front/i).value).toBe('สวัสดี');
+    expect(within(vocabularyDialog).getByLabelText(/back/i).value).toBe('Hello');
 
     await user.click(screen.getByRole('button', { name: /close add to my flashcards/i }));
     await user.click(screen.getByRole('button', { name: 'Save vocabulary ขอบคุณ to My Flashcards' }));
-    expect(within(screen.getByRole('dialog')).getByText('ขอบคุณ')).toBeTruthy();
-    expect(within(screen.getByRole('dialog')).getByText('Thank you')).toBeTruthy();
-    expect(screen.queryByLabelText(/^front$/i)).toBeNull();
+    expect(within(screen.getByRole('dialog')).getByLabelText(/front/i).value).toBe('ขอบคุณ');
+    expect(within(screen.getByRole('dialog')).getByLabelText(/back/i).value).toBe('Thank you');
 
     await user.click(screen.getByRole('button', { name: /close add to my flashcards/i }));
     await user.click(screen.getByRole('button', { name: /add to my flashcards/i }));
-    expect(screen.getByLabelText(/^front$/i).value).toBe('');
-    expect(screen.getByLabelText(/^back$/i).value).toBe('');
+    expect(screen.getByLabelText(/front/i).value).toBe('');
+    expect(screen.getByLabelText(/back/i).value).toBe('');
     expect(screen.getByTitle('Greetings')).toBeTruthy();
   });
 
@@ -350,9 +415,9 @@ describe("CourseLessons quick save", () => {
 
     await user.click(await screen.findByRole('button', { name: /greetings/i }));
     await user.click(screen.getByRole('button', { name: 'Save vocabulary สวัสดี to My Flashcards' }));
-    await user.click(await screen.findByRole('button', { name: /^select a set$/i }));
+    await user.click(screen.getByRole('button', { name: 'Choose a set' }));
     await user.click(screen.getByRole('option', { name: 'Lesson words' }));
-    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await user.click(screen.getByRole('button', { name: /^save flashcard$/i }));
 
     await waitFor(() => expect(personalService.createPersonalFlashcard).toHaveBeenCalledWith('set-1', { prompt: 'สวัสดี', answer: 'Hello' }));
     expect(personalService.createPersonalFlashcard.mock.calls[0][1]).not.toHaveProperty('ownerId');
@@ -374,9 +439,9 @@ describe("CourseLessons quick save", () => {
 
     await user.click(await screen.findByRole('button', { name: /greetings/i }));
     await user.click(screen.getByRole('button', { name: 'Save vocabulary สวัสดี to My Flashcards' }));
-    await user.click(await screen.findByRole('button', { name: /^select a set$/i }));
+    await user.click(screen.getByRole('button', { name: 'Choose a set' }));
     await user.click(screen.getByRole('option', { name: 'Lesson words' }));
-    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await user.click(screen.getByRole('button', { name: /^save flashcard$/i }));
     await screen.findByRole('button', { name: 'Undo' });
 
     await user.click(screen.getByRole('button', { name: 'Undo' }));
@@ -398,9 +463,9 @@ describe("CourseLessons quick save", () => {
 
     await user.click(await screen.findByRole('button', { name: /greetings/i }));
     await user.click(screen.getByRole('button', { name: 'Save vocabulary สวัสดี to My Flashcards' }));
-    await user.click(await screen.findByRole('button', { name: /^select a set$/i }));
+    await user.click(screen.getByRole('button', { name: 'Choose a set' }));
     await user.click(screen.getByRole('option', { name: 'Lesson words' }));
-    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await user.click(screen.getByRole('button', { name: /^save flashcard$/i }));
     await user.click(await screen.findByRole('button', { name: 'Undo' }));
     expect(screen.getByRole('button', { name: 'Undoing...' }).disabled).toBe(true);
     await user.click(screen.getByRole('button', { name: 'Undoing...' }));
@@ -423,9 +488,9 @@ describe("CourseLessons quick save", () => {
 
     await user.click(await screen.findByRole('button', { name: /greetings/i }));
     await user.click(screen.getByRole('button', { name: 'Save vocabulary สวัสดี to My Flashcards' }));
-    await user.click(await screen.findByRole('button', { name: /^select a set$/i }));
+    await user.click(screen.getByRole('button', { name: 'Choose a set' }));
     await user.click(screen.getByRole('option', { name: 'Lesson words' }));
-    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await user.click(screen.getByRole('button', { name: /^save flashcard$/i }));
     await screen.findByText('Saved');
 
     await user.click(screen.getByRole('button', { name: /close video/i }));
@@ -445,9 +510,9 @@ describe("CourseLessons quick save", () => {
 
     await user.click(await screen.findByRole('button', { name: /greetings/i }));
     await user.click(screen.getByRole('button', { name: 'Save vocabulary สวัสดี to My Flashcards' }));
-    await user.click(await screen.findByRole('button', { name: /^select a set$/i }));
+    await user.click(screen.getByRole('button', { name: 'Choose a set' }));
     await user.click(screen.getByRole('option', { name: 'Lesson words' }));
-    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await user.click(screen.getByRole('button', { name: /^save flashcard$/i }));
     await screen.findByRole('button', { name: 'Undo' });
 
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 5100)); });
