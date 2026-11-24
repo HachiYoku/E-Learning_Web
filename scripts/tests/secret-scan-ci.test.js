@@ -66,8 +66,7 @@ function fixture(t, { legacyTargetGuard = false } = {}) {
 }
 function checkPr(setup, head, number = "7", overrides = {}) {
   const env = eventEnv(setup, head, { PR_NUMBER: number, ...overrides });
-  git(setup.dir, "push", "-q", "origin", `${head}:refs/pull/${number}/head`);
-  git(setup.dir, "push", "-q", "origin", `${setup.base}:refs/heads/${env.BASE_REF}`);
+  git(setup.dir, "push", "-q", "origin", `${head}:refs/heads/${env.HEAD_REF}`);
   git(setup.dir, "switch", "-q", "--detach", setup.base);
   return run(setup.dir, "bash", [wrapper], env);
 }
@@ -75,7 +74,8 @@ function eventEnv(setup, head, overrides = {}) {
   return {
     GITHUB_EVENT_NAME: "pull_request_target", GITHUB_REPOSITORY: repository,
     EVENT_REPOSITORY: repository, EVENT_BASE_REPOSITORY: repository,
-    BASE_REF: "testing-environment", BASE_SHA: setup.base, HEAD_SHA: head,
+    EVENT_HEAD_REPOSITORY: repository, BASE_REF: "testing-environment", BASE_SHA: setup.base,
+    HEAD_REF: "release/trusted-test", HEAD_SHA: head,
     PR_NUMBER: "7", SCAN_LOG: setup.log, ...overrides,
   };
 }
@@ -94,6 +94,8 @@ test("trusted job is additive, read-only, and checks out only the trusted defaul
   assert.match(trustedWorkflow, /permissions:\s*\n\s*contents: read/);
   assert.match(trustedWorkflow, /persist-credentials: false/);
   assert.match(trustedWorkflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
+  assert.match(trustedWorkflow, /EVENT_HEAD_REPOSITORY: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}/);
+  assert.match(trustedWorkflow, /HEAD_REF: \$\{\{ github\.event\.pull_request\.head\.ref \}\}/);
   assert.match(trustedWorkflow, /run: bash scripts\/secret-scan-ci\.sh/);
   assert.doesNotMatch(trustedWorkflow, /run:.*pull_request\.head\.sha/);
 });
@@ -107,12 +109,12 @@ test("first testing-v2 PR uses the trusted scanner despite its legacy target gua
   assert.equal(fs.readFileSync(setup.log, "utf8").trim(), `${setup.base} ${head}`);
 });
 
-test("all approved trusted PR base refs are accepted", (t) => {
+test("all approved trusted PR base refs are accepted for same-repository branch heads", (t) => {
   for (const baseRef of ["testing-v2", "testing-environment", "main"]) {
     const setup = fixture(t);
     fs.writeFileSync(path.join(setup.dir, "readme.txt"), `safe ${baseRef} PR\n`);
     const head = commit(setup.dir, `safe ${baseRef} PR`);
-    const result = checkPr(setup, head, "7", { BASE_REF: baseRef });
+    const result = checkPr(setup, head, "7", { BASE_REF: baseRef, HEAD_REF: `release/${baseRef}/head` });
     assert.equal(result.status, 0, result.stderr);
   }
 });
@@ -181,8 +183,14 @@ test("missing and invalid event metadata fail closed before scanning", (t) => {
     { GITHUB_REPOSITORY: "" },
     { EVENT_REPOSITORY: "different/repository" },
     { EVENT_BASE_REPOSITORY: "different/repository" },
+    { EVENT_HEAD_REPOSITORY: "" },
+    { EVENT_HEAD_REPOSITORY: "different/repository" },
     { BASE_REF: "untrusted-branch" },
     { BASE_SHA: "" },
+    { HEAD_REF: "" },
+    { HEAD_REF: "refs/heads/main" },
+    { HEAD_REF: "release/test; exit 0" },
+    { HEAD_REF: "@{-1}" },
     { HEAD_SHA: "not-a-sha" },
     { PR_NUMBER: "" },
     { PR_NUMBER: "7; exit 0" },
@@ -197,21 +205,33 @@ test("missing and invalid event metadata fail closed before scanning", (t) => {
   assert.equal(fs.existsSync(setup.log), false);
 });
 
-test("a stale PR event SHA or base SHA outside the declared target cannot scan another revision", (t) => {
+test("a stale same-repository head branch or base SHA outside its target cannot scan another revision", (t) => {
   const setup = fixture(t);
   fs.writeFileSync(path.join(setup.dir, "readme.txt"), "first revision\n");
   const first = commit(setup.dir, "first revision");
-  git(setup.dir, "push", "-q", "origin", `${first}:refs/pull/7/head`);
+  git(setup.dir, "push", "-q", "origin", `${first}:refs/heads/release/trusted-test`);
   fs.writeFileSync(path.join(setup.dir, "readme.txt"), "second revision\n");
   const second = commit(setup.dir, "second revision");
 
+  git(setup.dir, "push", "-q", "origin", `${second}:refs/heads/release/trusted-test`);
   git(setup.dir, "switch", "-q", "--detach", setup.base);
-  const stale = run(setup.dir, "bash", ["scripts/secret-scan-ci.sh"], eventEnv(setup, second));
+  const stale = run(setup.dir, "bash", ["scripts/secret-scan-ci.sh"], eventEnv(setup, first));
   assert.notEqual(stale.status, 0);
   assert.equal(fs.existsSync(setup.log), false);
 
   const wrongBase = run(setup.dir, "bash", ["scripts/secret-scan-ci.sh"],
-    eventEnv(setup, first, { BASE_SHA: first }));
+    eventEnv(setup, second, { BASE_SHA: first }));
   assert.notEqual(wrongBase.status, 0);
+  assert.equal(fs.existsSync(setup.log), false);
+});
+
+test("missing same-repository head branch fails closed without invoking the scanner", (t) => {
+  const setup = fixture(t);
+  fs.writeFileSync(path.join(setup.dir, "readme.txt"), "safe PR\n");
+  const head = commit(setup.dir, "safe PR");
+  git(setup.dir, "switch", "-q", "--detach", setup.base);
+  const result = run(setup.dir, "bash", ["scripts/secret-scan-ci.sh"],
+    eventEnv(setup, head, { HEAD_REF: "release/missing-head" }));
+  assert.notEqual(result.status, 0);
   assert.equal(fs.existsSync(setup.log), false);
 });
