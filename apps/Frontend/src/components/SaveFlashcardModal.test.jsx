@@ -12,123 +12,147 @@ vi.mock("../services/personalFlashcardService", () => ({
 
 const workSet = { _id: "set-work", name: "Work Vocabulary", cardCount: 2 };
 
+function createStorage() {
+  const values = new Map();
+  return {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+}
+
 function renderModal(props = {}) {
   const onClose = vi.fn();
   const onSaved = vi.fn();
-  const view = render(<SaveFlashcardModal isOpen onClose={onClose} onSaved={onSaved} {...props} />);
+  const view = render(<SaveFlashcardModal isOpen onClose={onClose} onSaved={onSaved} userId="student-1" {...props} />);
   return { ...view, onClose, onSaved };
 }
 
+async function waitForSets() {
+  await waitFor(() => expect(screen.getByRole("button", { name: "Choose a set" }).disabled).toBe(false));
+}
+
 async function fillCard(user, front = "สวัสดี", back = "Hello") {
-  await user.type(screen.getByLabelText(/^front$/i), front);
-  await user.type(screen.getByLabelText(/^back$/i), back);
+  await user.type(screen.getByLabelText(/front/i), front);
+  await user.type(screen.getByLabelText(/back/i), back);
 }
 
-async function chooseSet(user, name = "Work Vocabulary") {
-  await user.click(screen.getByRole("button", { name: /^select a set$/i }));
-  await user.click(screen.getByRole("option", { name }));
-}
-
-async function waitForSets(user) {
-  await waitFor(() => expect(screen.getByRole("button", { name: /^save$/i }).disabled).toBe(false));
-  await user.click(screen.getByRole("button", { name: /^select a set$/i }));
-  await screen.findByRole("option", { name: "Work Vocabulary" });
-  await user.click(screen.getByRole("button", { name: /^select a set$/i }));
+async function chooseWorkSet(user) {
+  await user.click(screen.getByRole("button", { name: "Choose a set" }));
+  await user.click(screen.getByRole("option", { name: "Work Vocabulary" }));
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubGlobal("localStorage", createStorage());
   service.fetchPersonalFlashcardDecks.mockResolvedValue([workSet]);
 });
 
 describe("SaveFlashcardModal", () => {
-  it("loads a student's sets and validates the front, back, and destination", async () => {
+  it("starts manual cards blank with helpful editable fields and validates required values", async () => {
     const user = userEvent.setup();
     renderModal();
-    await waitForSets(user);
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
-    expect(screen.getByRole("alert").textContent).toContain("front and back");
-    expect(service.createPersonalFlashcard).not.toHaveBeenCalled();
+    await waitForSets();
 
-    await fillCard(user);
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
-    expect(screen.getByRole("alert").textContent).toContain("Choose a flashcard set");
+    expect(screen.getByPlaceholderText("Enter a word or phrase")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Enter a meaning or translation")).toBeTruthy();
+    await chooseWorkSet(user);
+    await user.click(screen.getByRole("button", { name: "Save Flashcard" }));
+    expect(screen.getByRole("alert").textContent).toContain("word or phrase");
   });
 
-  it("saves to a selected existing set without sending ownership fields", async () => {
+  it("keeps vocabulary values editable and preserves them while changing set modes", async () => {
+    const user = userEvent.setup();
+    renderModal({ initialFront: "สวัสดี", initialBack: "Hello" });
+    await waitForSets();
+    expect(screen.getByLabelText(/front/i).value).toBe("สวัสดี");
+    await user.clear(screen.getByLabelText(/front/i));
+    await user.type(screen.getByLabelText(/front/i), "Edited greeting");
+    await user.click(screen.getByRole("radio", { name: "Create new set" }));
+    expect(screen.getByLabelText(/front/i).value).toBe("Edited greeting");
+    expect(screen.getByLabelText(/back/i).value).toBe("Hello");
+    await user.click(screen.getByRole("radio", { name: "Existing set" }));
+    expect(screen.getByLabelText(/front/i).value).toBe("Edited greeting");
+  });
+
+  it("defaults to Create new set only when the owned set list is empty", async () => {
+    service.fetchPersonalFlashcardDecks.mockResolvedValueOnce([]);
+    renderModal();
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Create new set" }).getAttribute("aria-checked")).toBe("true"));
+    expect(screen.getByLabelText("New set name")).toBeTruthy();
+  });
+
+  it("restores a valid last-used set only for the current student", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem("arunthai:flashcards:last-set:student-1", "set-work");
+    window.localStorage.setItem("arunthai:flashcards:last-set:another-student", "foreign-set");
+    renderModal();
+    await waitForSets();
+    await user.click(screen.getByRole("button", { name: "Choose a set" }));
+    expect(screen.getByRole("option", { name: "Work Vocabulary" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("does not select a remembered set that is no longer owned", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem("arunthai:flashcards:last-set:student-1", "deleted-set");
+    renderModal();
+    await waitForSets();
+    await user.click(screen.getByRole("button", { name: "Choose a set" }));
+    expect(screen.getByRole("option", { name: "Work Vocabulary" }).getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("saves an existing set, remembers it only after success, and closes", async () => {
     const user = userEvent.setup();
     service.createPersonalFlashcard.mockResolvedValue({ _id: "card-1" });
     const { onClose, onSaved } = renderModal();
-    await waitForSets(user);
+    await waitForSets();
     await fillCard(user);
-    await chooseSet(user);
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await chooseWorkSet(user);
+    await user.click(screen.getByRole("button", { name: "Save Flashcard" }));
 
     await waitFor(() => expect(service.createPersonalFlashcard).toHaveBeenCalledWith("set-work", { prompt: "สวัสดี", answer: "Hello" }));
-    expect(service.createPersonalFlashcard.mock.calls[0][1]).not.toHaveProperty("ownerId");
-    expect(service.createPersonalFlashcard.mock.calls[0][1]).not.toHaveProperty("userId");
     expect(onSaved).toHaveBeenCalledWith(workSet);
     expect(onClose).toHaveBeenCalledOnce();
+    expect(window.localStorage.getItem("arunthai:flashcards:last-set:student-1")).toBe("set-work");
   });
 
-  it("provides the exact created card to an optional post-save callback", async () => {
+  it("creates a set and card in one action", async () => {
     const user = userEvent.setup();
-    const savedCard = { _id: 'card-exact', prompt: 'สวัสดี', answer: 'Hello' };
-    const onCardSaved = vi.fn();
-    service.createPersonalFlashcard.mockResolvedValue(savedCard);
-    renderModal({ onCardSaved });
-    await waitForSets(user);
-    await fillCard(user);
-    await chooseSet(user);
-    await user.click(screen.getByRole('button', { name: /^save$/i }));
-
-    await waitFor(() => expect(onCardSaved).toHaveBeenCalledWith(workSet, savedCard));
-  });
-
-  it("creates a new set and then saves the card", async () => {
-    const user = userEvent.setup();
-    const newSet = { _id: "set-travel", name: "Travel Thai", cardCount: 0 };
+    const newSet = { _id: "set-travel", name: "Travel Thai" };
     service.createPersonalFlashcardDeck.mockResolvedValue(newSet);
     service.createPersonalFlashcard.mockResolvedValue({ _id: "card-2" });
-    const { onSaved } = renderModal();
-    await waitForSets(user);
+    renderModal();
+    await waitForSets();
     await fillCard(user, "ไป", "Go");
-    await user.click(screen.getByRole("button", { name: /create a new set/i }));
-    await user.type(screen.getByLabelText(/new set name/i), "Travel Thai");
-    expect(screen.getByPlaceholderText("Enter set name")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Save" }).disabled).toBe(true);
-    await user.click(screen.getByRole("button", { name: "Create Set" }));
+    await user.click(screen.getByRole("radio", { name: "Create new set" }));
+    await user.type(screen.getByLabelText("New set name"), "Travel Thai");
+    await user.click(screen.getByRole("button", { name: "Create Set & Save" }));
 
     await waitFor(() => expect(service.createPersonalFlashcardDeck).toHaveBeenCalledWith("Travel Thai"));
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
-
     expect(service.createPersonalFlashcard).toHaveBeenCalledWith("set-travel", { prompt: "ไป", answer: "Go" });
-    expect(onSaved).toHaveBeenCalledWith(newSet);
   });
 
-  it("keeps a successfully created set selected when its card save fails, then retries only the card", async () => {
+  it("retries only the card after a new-set card-save failure", async () => {
     const user = userEvent.setup();
-    const newSet = { _id: "set-food", name: "Food", cardCount: 0 };
+    const newSet = { _id: "set-food", name: "Food" };
     service.createPersonalFlashcardDeck.mockResolvedValue(newSet);
     service.createPersonalFlashcard.mockRejectedValueOnce(new Error("Network unavailable")).mockResolvedValueOnce({ _id: "card-3" });
-    const { onSaved } = renderModal();
-    await waitForSets(user);
+    renderModal();
+    await waitForSets();
     await fillCard(user, "ข้าว", "Rice");
-    await user.click(screen.getByRole("button", { name: /create a new set/i }));
-    await user.type(screen.getByLabelText(/new set name/i), "Food");
-    await user.click(screen.getByRole("button", { name: "Create Set" }));
-    await waitFor(() => expect(service.createPersonalFlashcardDeck).toHaveBeenCalledWith("Food"));
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
-    expect((await screen.findByRole("alert")).textContent).toContain("Food” was created");
-    expect(screen.getByText("Food")).toBeTruthy();
+    await user.click(screen.getByRole("radio", { name: "Create new set" }));
+    await user.type(screen.getByLabelText("New set name"), "Food");
+    await user.click(screen.getByRole("button", { name: "Create Set & Save" }));
 
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Food” was created");
+    await user.click(screen.getByRole("button", { name: "Choose a set" }));
+    expect(screen.getByRole("option", { name: "Food" }).getAttribute("aria-selected")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "Save Flashcard" }));
     await waitFor(() => expect(service.createPersonalFlashcard).toHaveBeenCalledTimes(2));
     expect(service.createPersonalFlashcardDeck).toHaveBeenCalledTimes(1);
-    expect(onSaved).toHaveBeenCalledWith(newSet);
   });
 
-  it("shows API errors, lets set loading retry, and prevents duplicate pending submissions", async () => {
+  it("prevents duplicate requests while pending and supports retrying a set-list error", async () => {
     const user = userEvent.setup();
     let resolveSave;
     service.fetchPersonalFlashcardDecks.mockRejectedValueOnce(new Error("Sets unavailable")).mockResolvedValueOnce([workSet]);
@@ -136,79 +160,65 @@ describe("SaveFlashcardModal", () => {
     renderModal();
     expect(await screen.findByText("Sets unavailable")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /try again/i }));
-    await waitForSets(user);
+    await waitForSets();
     await fillCard(user);
-    await chooseSet(user);
-    const save = screen.getByRole("button", { name: /^save$/i });
-    await user.click(save);
-    await user.click(screen.getByRole("button", { name: /saving/i }));
+    await chooseWorkSet(user);
+    await user.click(screen.getByRole("button", { name: "Save Flashcard" }));
+    expect(screen.getByRole("button", { name: "Saving flashcard..." }).disabled).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Saving flashcard..." }));
     expect(service.createPersonalFlashcard).toHaveBeenCalledTimes(1);
     resolveSave({ _id: "card-4" });
-    await waitFor(() => expect(screen.getByRole("button", { name: /^save$/i })).toBeTruthy());
   });
 
-  it("resets its fields after a successful save when opened again", async () => {
+  it("supports Escape dismissal and restores focus to the trigger", async () => {
     const user = userEvent.setup();
-    service.createPersonalFlashcard.mockResolvedValue({ _id: "card-5" });
-    const { rerender } = renderModal();
-    await waitForSets(user);
-    await fillCard(user);
-    await chooseSet(user);
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
-    await waitFor(() => expect(service.createPersonalFlashcard).toHaveBeenCalled());
-    rerender(<SaveFlashcardModal isOpen={false} onClose={vi.fn()} onSaved={vi.fn()} />);
-    rerender(<SaveFlashcardModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
-    await waitForSets(user);
-    expect(screen.getByLabelText(/^front$/i).value).toBe("");
-    expect(screen.getByLabelText(/^back$/i).value).toBe("");
+    const trigger = document.createElement("button");
+    document.body.append(trigger);
+    trigger.focus();
+    const { onClose, unmount } = renderModal();
+    await waitForSets();
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledOnce();
+    unmount();
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
   });
 
-  it("uses optional vocabulary values only for a newly opened composer and keeps edits while open", async () => {
-    const user = userEvent.setup();
-    const { rerender } = renderModal({ initialFront: "สวัสดี", initialBack: "Hello" });
-    await waitForSets(user);
-    expect(screen.getByLabelText(/^front$/i).value).toBe("สวัสดี");
-    expect(screen.getByLabelText(/^back$/i).value).toBe("Hello");
-
-    await user.clear(screen.getByLabelText(/^front$/i));
-    await user.type(screen.getByLabelText(/^front$/i), "Edited greeting");
-    rerender(<SaveFlashcardModal isOpen initialFront="ขอบคุณ" initialBack="Thank you" onClose={vi.fn()} onSaved={vi.fn()} />);
-    expect(screen.getByLabelText(/^front$/i).value).toBe("Edited greeting");
-    expect(screen.getByLabelText(/^back$/i).value).toBe("Hello");
-
-    rerender(<SaveFlashcardModal isOpen={false} onClose={vi.fn()} onSaved={vi.fn()} />);
-    rerender(<SaveFlashcardModal isOpen initialFront="ขอบคุณ" initialBack="Thank you" onClose={vi.fn()} onSaved={vi.fn()} />);
-    await waitForSets(user);
-    expect(screen.getByLabelText(/^front$/i).value).toBe("ขอบคุณ");
-    expect(screen.getByLabelText(/^back$/i).value).toBe("Thank you");
-
-    rerender(<SaveFlashcardModal isOpen={false} onClose={vi.fn()} onSaved={vi.fn()} />);
-    rerender(<SaveFlashcardModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
-    await waitForSets(user);
-    expect(screen.getByLabelText(/^front$/i).value).toBe("");
-    expect(screen.getByLabelText(/^back$/i).value).toBe("");
+  it("uses a scrollable body and separate footer so set selection cannot cover actions", async () => {
+    renderModal();
+    await waitForSets();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("max-h-[calc(100dvh-1.5rem)]");
+    expect(dialog.querySelector("form > div").className).toContain("overflow-y-auto");
+    expect(screen.getByRole("button", { name: "Save Flashcard" }).closest("footer").className).toContain("shrink-0");
   });
 
-  it("shows vocabulary saves as read-only content while retaining manual Front and Back editing", async () => {
+  it("uses an inline accessible set list with keyboard selection and Escape before the modal closes", async () => {
     const user = userEvent.setup();
-    const { rerender } = renderModal({ initialFront: "สวัสดี", initialBack: "Hello", readOnly: true });
-    await waitForSets(user);
+    const { onClose } = renderModal();
+    await waitForSets();
+    const trigger = screen.getByRole("button", { name: "Choose a set" });
+    await user.click(trigger);
+    expect(screen.getByRole("listbox").className).toContain("relative");
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(trigger.textContent).toContain("Work Vocabulary");
+    await user.click(trigger);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
 
-    expect(screen.getByRole("heading", { name: "Save to My Flashcards" })).toBeTruthy();
-    expect(screen.getByText("สวัสดี")).toBeTruthy();
-    expect(screen.getByText("Hello")).toBeTruthy();
-    expect(screen.queryByLabelText(/^front$/i)).toBeNull();
-    expect(screen.queryByLabelText(/^back$/i)).toBeNull();
-    await chooseSet(user);
-    service.createPersonalFlashcard.mockResolvedValue({ _id: "card-vocabulary" });
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
-    await waitFor(() => expect(service.createPersonalFlashcard).toHaveBeenCalledWith("set-work", { prompt: "สวัสดี", answer: "Hello" }));
-
-    rerender(<SaveFlashcardModal isOpen={false} onClose={vi.fn()} onSaved={vi.fn()} />);
-    rerender(<SaveFlashcardModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
-    await waitForSets(user);
-    expect(screen.getByRole("heading", { name: "Add to My Flashcards" })).toBeTruthy();
-    expect(screen.getByLabelText(/^front$/i)).toBeTruthy();
-    expect(screen.getByLabelText(/^back$/i)).toBeTruthy();
+  it("shows Unicode-aware counters and retains over-limit pasted text for correction", async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await waitForSets();
+    const front = screen.getByLabelText(/front/i);
+    await user.type(front, "a".repeat(101));
+    await user.type(screen.getByLabelText(/back/i), "Valid answer");
+    expect(front.value).toHaveLength(101);
+    expect(screen.getByText(/101 \/ 100/)).toBeTruthy();
+    await chooseWorkSet(user);
+    await user.click(screen.getByRole("button", { name: "Save Flashcard" }));
+    expect(screen.getByRole("alert").textContent).toContain("100 characters");
   });
 });

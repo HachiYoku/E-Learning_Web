@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -124,13 +124,31 @@ describe("My Flashcards deck manager", () => {
 });
 
 describe("personal deck card manager", () => {
+  it("keeps the mobile action order and disabled practice protection", async () => {
+    const user = userEvent.setup();
+    renderDeckPage();
+    await screen.findByText("Work Vocabulary");
+    const start = screen.getByRole("link", { name: /start practice/i });
+    expect(start.className).toContain("order-3");
+    expect(start.className).toContain("col-span-2");
+    expect(screen.getByRole("button", { name: /rename set/i }).className).toContain("order-1");
+    expect(screen.getByRole("button", { name: /add card/i }).className).toContain("order-2");
+
+    cleanup();
+    service.fetchPersonalFlashcards.mockResolvedValue([]);
+    renderDeckPage();
+    const disabledStart = await screen.findByRole("link", { name: /start practice/i });
+    await user.click(disabledStart);
+    expect(disabledStart.getAttribute("aria-disabled")).toBe("true");
+  });
+
   it("loads, adds, edits, and deletes cards", async () => {
     const user = userEvent.setup();
     renderDeckPage();
     expect(await screen.findByText("เงินเดือน")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /add card/i }));
-    await user.type(screen.getByLabelText(/^prompt$/i), "หัวหน้า");
-    await user.type(screen.getByLabelText(/^answer$/i), "Manager");
+    await user.type(screen.getByLabelText(/^front/i), "หัวหน้า");
+    await user.type(screen.getByLabelText(/^back/i), "Manager");
     service.createPersonalFlashcard.mockResolvedValue({ _id: "card-2", prompt: "หัวหน้า", answer: "Manager" });
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^add card$/i }));
     expect(await screen.findByText("หัวหน้า")).toBeTruthy();
@@ -138,7 +156,7 @@ describe("personal deck card manager", () => {
     service.updatePersonalFlashcard.mockResolvedValue({ ...card, answer: "Monthly salary" });
     const originalCard = screen.getByText("เงินเดือน").closest("article");
     await user.click(within(originalCard).getByRole("button", { name: /edit/i }));
-    const answer = screen.getByLabelText(/^answer$/i);
+    const answer = screen.getByLabelText(/^back/i);
     await user.clear(answer); await user.type(answer, "Monthly salary");
     await user.click(screen.getByRole("button", { name: /save changes/i }));
     expect(await screen.findByText("Monthly salary")).toBeTruthy();
@@ -155,11 +173,33 @@ describe("personal deck card manager", () => {
     renderDeckPage();
     await screen.findByText("เงินเดือน");
     await user.click(screen.getByRole("button", { name: /add card/i }));
-    await user.type(screen.getByLabelText(/^prompt$/i), "Test");
-    await user.type(screen.getByLabelText(/^answer$/i), "Test answer");
+    await user.type(screen.getByLabelText(/^front/i), "Test");
+    await user.type(screen.getByLabelText(/^back/i), "Test answer");
     service.createPersonalFlashcard.mockRejectedValueOnce(new Error("Could not save card"));
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^add card$/i }));
     expect((await screen.findByRole("alert")).textContent).toContain("Could not save card");
     expect(screen.getByText("เงินเดือน")).toBeTruthy();
+  });
+
+  it("allows an unchanged legacy field while rejecting an edited over-limit field", async () => {
+    const user = userEvent.setup();
+    const legacyCard = { ...card, prompt: "x".repeat(101) };
+    service.fetchPersonalFlashcards.mockResolvedValueOnce([legacyCard]);
+    service.updatePersonalFlashcard.mockResolvedValue({ ...legacyCard, answer: "Updated answer" });
+    renderDeckPage();
+    const legacyArticle = await screen.findByText("x".repeat(101));
+    await user.click(within(legacyArticle.closest("article")).getByRole("button", { name: /edit/i }));
+    expect(screen.getByText(/existing longer text is preserved/i)).toBeTruthy();
+    const back = screen.getByLabelText(/^back/i);
+    await user.clear(back);
+    await user.type(back, "Updated answer");
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(service.updatePersonalFlashcard).toHaveBeenCalled());
+
+    await user.click(within(screen.getByText("x".repeat(101)).closest("article")).getByRole("button", { name: /edit/i }));
+    const front = screen.getByLabelText(/^front/i);
+    await user.type(front, "!");
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(screen.getByRole("alert").textContent).toContain("100 characters");
   });
 });
