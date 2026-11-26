@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import CourseCard from "./CourseCard";
 import StudentExplore from "../pages/StudentExplore";
 import Courses from "../pages/Courses";
+import HomepageCourses from "./Courses";
 import { CatalogueCurrencyContext } from "../contexts/catalogueCurrencyContext";
 
 vi.mock("../services/courseService", () => ({ fetchCourses: vi.fn() }));
@@ -13,7 +14,7 @@ vi.mock("../contexts/AuthContext", () => ({ useAuth: () => ({ isAuthenticated: f
 vi.mock("./Navbar", () => ({ default: () => null }));
 vi.mock("./Footer", () => ({ default: () => null }));
 vi.mock("./Seo", () => ({ default: () => null }));
-vi.mock("./SocialReels", () => ({ default: () => null }));
+vi.mock("./SocialReels", () => ({ default: () => <section>Shared Reels</section> }));
 vi.mock("./ContactSection", () => ({ default: () => null }));
 
 import { fetchCourses } from "../services/courseService";
@@ -159,6 +160,7 @@ describe("CourseCard currency availability", () => {
     );
 
     const image = await screen.findByRole("img", { name: "Thai Foundations" });
+    expect(screen.getByText("Shared Reels")).toBeTruthy();
     const card = image.closest("article");
     const grid = card?.parentElement;
     expect(grid?.className).toContain("grid-cols-1");
@@ -170,5 +172,31 @@ describe("CourseCard currency availability", () => {
     fireEvent.click(screen.getByRole("button", { name: "View details" }));
     expect(screen.getByTestId("location").textContent).toBe("/courses/course-1");
     expect(screen.getByTestId("location-state").textContent).toBe('{"courseListingOrigin":"/courses"}');
+  });
+  it("uses the catalog list layout on the homepage and preserves navigation", async () => {
+    fetchCourses.mockResolvedValue([course]);
+    render(<CatalogueCurrencyContext.Provider value={{ currency: "THB", setCurrency: () => {} }}><MemoryRouter><HomepageCourses /><LocationProbe /></MemoryRouter></CatalogueCurrencyContext.Provider>);
+    const image = await screen.findByRole("img", { name: course.title });
+    const card = image.closest("article");
+    expect(card.parentElement.className).toBe("grid grid-cols-1 gap-5 sm:gap-6");
+    expect(card.className).toContain("flex-col");
+    expect(card.className).toContain("md:flex-row");
+    expect(image.parentElement.className).toContain("aspect-video");
+    expect(image.parentElement.className).toContain("md:w-[42%]");
+    expect(image.parentElement.className).toContain("lg:w-[44%]");
+    expect(image.className).toContain("object-contain");
+    fireEvent.click(screen.getByRole("button", { name: "View details" }));
+    expect(screen.getByTestId("location").textContent).toBe("/courses/course-1");
+    expect(screen.getByTestId("location-state").textContent).toBe('{"courseListingOrigin":"/courses"}');
+    fireEvent.click(screen.getByRole("button", { name: "Enroll Now" }));
+    expect(screen.getByTestId("location").textContent).toBe("/enroll/course-1");
+  });
+
+  it("keeps multiple homepage cards in one column at all breakpoints", async () => {
+    fetchCourses.mockResolvedValue([course, { ...course, id: "course-2", title: "More Thai" }]);
+    render(<CatalogueCurrencyContext.Provider value={{ currency: "THB", setCurrency: () => {} }}><MemoryRouter><HomepageCourses /></MemoryRouter></CatalogueCurrencyContext.Provider>);
+    const cards = await screen.findAllByRole("article");
+    expect(cards).toHaveLength(2);
+    expect(cards[0].parentElement.className).toBe("grid grid-cols-1 gap-5 sm:gap-6");
   });
 });
