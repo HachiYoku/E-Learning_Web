@@ -19,6 +19,15 @@ function renderMore() {
 describe("StudentMore logout", () => {
   beforeEach(() => { logout.mockReset(); });
 
+  it("offers Reels between Blog and Course orders in mobile More navigation", () => {
+    renderMore();
+    const links = screen.getAllByRole("link").map((link) => link.textContent);
+    const index = links.findIndex((text) => text.startsWith("Reels"));
+    expect(links[index - 1]).toContain("Blog");
+    expect(links[index + 1]).toContain("Course orders");
+    expect(screen.getByRole("link", { name: /Reels/ }).getAttribute("href")).toBe("/app/reels");
+  });
+
   it("places Log out below Share feedback and opens the shared confirmation modal", () => {
     renderMore();
     const feedback = screen.getByRole("link", { name: /share feedback/i });

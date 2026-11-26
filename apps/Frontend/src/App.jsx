@@ -42,6 +42,7 @@ import GeneralPracticeHistory from "./pages/GeneralPracticeHistory"
 import StudentExplore from "./pages/StudentExplore"
 import StudentSupport from "./pages/StudentSupport"
 import StudentFeedback from "./pages/StudentFeedback"
+import StudentReels from "./pages/StudentReels"
 import { CookiePolicy, PrivacyPolicy, Terms } from "./pages/LegalPolicy"
 
 const privateRoutePrefixes = ["/app", "/login", "/register", "/forgot-password", "/verification-help", "/reset-password", "/enroll", "/payment", "/my-courses", "/my-course-order", "/my-profile", "/notifications", "/order-status", "/course-lessons", "/course-quiz"]
@@ -131,6 +132,7 @@ function App() {
             <Route path="practice/flashcards/mine/:deckId/practice" element={<PersonalFlashcardPractice />} />
             <Route path="practice/:section" element={<Practice />} />
             <Route path="blog" element={<Blog />} />
+            <Route path="reels" element={<StudentReels />} />
             <Route path="profile" element={<MyProfile />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="orders" element={<MyCourseOrder />} />
