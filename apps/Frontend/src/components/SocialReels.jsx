@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchReels } from "../services/reelService";
+import { fetchReels, reelPlayerUrl } from "../services/reelService";
 
 const platformCopy = {
   youtube: { name: "YouTube" },
@@ -7,30 +7,8 @@ const platformCopy = {
   facebook: { name: "Facebook" },
 };
 
-function playerUrl(reel) {
-  try {
-    const url = new URL(reel.url);
-    if (url.protocol !== "https:" || url.username || url.password || url.port) return "";
-    if (reel.platform === "youtube") {
-      const videoId = url.searchParams.get("v");
-      return ["youtube.com", "www.youtube.com"].includes(url.hostname) && url.pathname === "/watch" && /^[\w-]{11}$/.test(videoId || "") ? `https://www.youtube.com/embed/${videoId}?playsinline=1` : "";
-    }
-    if (reel.platform === "tiktok") {
-      const videoId = url.pathname.split("/").filter(Boolean).at(-1);
-      return ["tiktok.com", "www.tiktok.com"].includes(url.hostname) && /^\/@[\w.]+\/video\/\d+\/?$/.test(url.pathname) && /^\d+$/.test(videoId || "") ? `https://www.tiktok.com/player/v1/${videoId}?autoplay=0` : "";
-    }
-    if (reel.platform === "facebook") {
-      if (!["facebook.com", "www.facebook.com", "m.facebook.com"].includes(url.hostname)) return "";
-      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url.href)}&show_text=false&width=560`;
-    }
-  } catch {
-    return "";
-  }
-  return "";
-}
-
 function ReelPlayer({ reel }) {
-  const src = playerUrl(reel);
+  const src = reelPlayerUrl(reel);
   if (!src) return <div className="flex h-full items-center justify-center bg-[#2D2E30] px-5 text-center text-white">This reel is unavailable</div>;
   return <iframe src={src} title={`${platformCopy[reel.platform].name} reel`} loading="lazy" className="h-full w-full border-0" allow="clipboard-write; encrypted-media; picture-in-picture; web-share; fullscreen" allowFullScreen />;
 }

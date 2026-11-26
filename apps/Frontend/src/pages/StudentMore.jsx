@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, Headphones, MessageCircleHeart, Newspaper, ReceiptText } from "lucide-react"
+import { BookOpen, ChevronRight, Clapperboard, Headphones, MessageCircleHeart, Newspaper, ReceiptText } from "lucide-react"
 import { createElement, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
@@ -8,6 +8,7 @@ import LogoutConfirmModal from "../components/LogoutConfirmModal"
 const destinations = [
   { title: "Explore courses", description: "Browse every Arun Thai course", to: "/app/explore", icon: BookOpen, color: "bg-[#FFF1D0] text-[#C97112]" },
   { title: "Blog", description: "Read Thai learning stories and tips", to: "/app/blog", icon: Newspaper, color: "bg-[#E8F3FA] text-[#367599]" },
+  { title: "Reels", description: "Learn Thai in short videos", to: "/app/reels", icon: Clapperboard, color: "bg-[#FFF1D0] text-[#C97112]" },
   { title: "Course orders", description: "View payments and enrollment status", to: "/app/orders", icon: ReceiptText, color: "bg-[#E9F4EA] text-[#4D7C57]" },
   { title: "Help & support", description: "Send a question to the Arun Thai team", to: "/app/support", icon: Headphones, color: "bg-[#FFF1D0] text-[#C97112]" },
   { title: "Share feedback", description: "Help improve the Arun Thai learning experience", to: "/app/feedback", icon: MessageCircleHeart, color: "bg-[#FFF1D0] text-[#C97112]" },
