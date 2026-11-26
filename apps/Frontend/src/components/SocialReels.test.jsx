@@ -4,7 +4,7 @@ import SocialReels from "./SocialReels";
 import Home from "../pages/Home";
 import { fetchReels } from "../services/reelService";
 
-vi.mock("../services/reelService", () => ({ fetchReels: vi.fn() }));
+vi.mock("../services/reelService", async (importOriginal) => ({ ...(await importOriginal()), fetchReels: vi.fn() }));
 vi.mock("./Navbar", () => ({ default: () => null }));
 vi.mock("./Hero", () => ({ default: () => null }));
 vi.mock("./Courses", () => ({ default: () => null }));

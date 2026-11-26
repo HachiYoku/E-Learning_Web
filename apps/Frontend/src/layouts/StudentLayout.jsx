@@ -1,5 +1,5 @@
 import { createElement, useState } from "react"
-import { Bell, BookOpen, BookOpenText, ChevronDown, ChevronLeft, ChevronRight, CircleUserRound, ClipboardCheck, GalleryVerticalEnd, GraduationCap, Headphones, House, Languages, LayoutDashboard, ListChecks, LogOut, MessageCircleHeart, MoreHorizontal, ReceiptText } from "lucide-react"
+import { Bell, BookOpen, BookOpenText, ChevronDown, ChevronLeft, ChevronRight, CircleUserRound, Clapperboard, ClipboardCheck, GalleryVerticalEnd, GraduationCap, Headphones, House, Languages, LayoutDashboard, ListChecks, LogOut, MessageCircleHeart, MoreHorizontal, ReceiptText } from "lucide-react"
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import { useNotification } from "../contexts/NotificationContext"
@@ -14,6 +14,7 @@ const navigation = [
   { label: "Explore courses", to: "/app/explore", icon: BookOpen },
   { label: "Practice", to: "/app/practice", icon: ClipboardCheck },
   { label: "Blog", to: "/app/blog", icon: BookOpen },
+  { label: "Reels", to: "/app/reels", icon: Clapperboard },
   { label: "Course orders", to: "/app/orders", icon: ReceiptText },
   { label: "Help & support", to: "/app/support", icon: Headphones },
   { label: "Share feedback", to: "/app/feedback", icon: MessageCircleHeart },
