@@ -5,6 +5,7 @@ import Benefits from "../components/Benefits"
 import MotivationBanner from "../components/MotivationBanner"
 import Courses from "../components/Courses"
 import Article from "../components/Article"
+import SocialReels from "../components/SocialReels"
 import StudentReview from "../components/StudentReview"
 import ContactSection from "../components/ContactSection"
 import Footer from "../components/Footer"
@@ -21,6 +22,7 @@ function Home() {
         <Courses />
         <Benefits />
         <Article />
+        <SocialReels />
         <MotivationBanner />
         <OurServices />
         <StudentReview />

@@ -102,11 +102,12 @@ function Courses() {
             <p className="mt-3 max-w-md text-sm leading-relaxed text-[#765F55]">We’re preparing practical Thai lessons for your learning journey. Please check back soon.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
+          <div className="grid grid-cols-1 gap-5 sm:gap-6">
             {courses.map((course) => {
               return <CourseCard
                 key={course.id}
                 course={course}
+                listLayout
                 isEnrolled={enrolledCourseIds.has(course.id)}
               />
             })}
